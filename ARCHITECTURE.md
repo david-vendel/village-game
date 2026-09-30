@@ -23,7 +23,13 @@ horse, people and the landscape are drawn procedurally in code.
     distance travelled, plus idle breathing, head nods, tail swish and hoof pawing.
   - `people.ts`: villagers and chickens. `ui.ts`: HUD, build menu, labels, progress bars, toasts.
   - `scene.ts`: draw order and the camera.
-- `src/main.ts`: canvas sizing (logical height 540, any width), keyboard input, the main loop.
+- `src/viewport.ts`: zoom and coordinate spaces. Zoom 1 fits the 540-unit-tall scene to the
+  screen height, and zooming out shows more street and more sky, with the ground kept at the bottom.
+  Screen UI has its own scale, so it isn't affected by zoom. On portrait touch screens the street
+  is lifted so the buttons sit on meadow. Covered by `viewport.test.ts`.
+- `src/main.ts`: keyboard, pointer input (touch buttons, menu taps, pinch, wheel) and the main loop.
+  UI layout functions in `ui.ts` (`hudLayout`, `menuLayout`) return rectangles that are used both
+  for drawing and for tap hit-testing.
 
 ## Rules
 
@@ -34,4 +40,4 @@ horse, people and the landscape are drawn procedurally in code.
 ## Not done yet / ideas
 
 - No economy (coins/resources); building is free.
-- No sound, no day/night cycle, no save game, no touch controls.
+- No sound, no day/night cycle, no save game.

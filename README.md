@@ -16,13 +16,17 @@ folder by nginx, the same way as ~/hollow. Not deployed yet.
 
 ## Controls
 
-| Key | Action |
-| --- | --- |
-| ← / → | Ride left / right |
-| ↓ or Space (at a pennant plot) | Open the build menu |
-| ← / → or 1–9 (in menu) | Choose building |
-| Enter / Space | Build |
-| Esc / ↑ | Cancel |
-| C | Toggle the construction phase on/off |
+| Keyboard | Touch | Action |
+| --- | --- | --- |
+| ← / → | Hold ◀ / ▶ buttons | Ride left / right |
+| ↓ or Space (at a pennant plot) | Hammer button | Open the build menu |
+| ← / → or 1–9 | Tap a card | Choose building |
+| Enter / Space | Tap the chosen card again, or "Build" | Build |
+| Esc / ↑ | "Cancel" or tap outside | Cancel |
+| C | Tap the Construction pill | Toggle the construction phase on/off |
+| − / + or mouse wheel, 0 to reset | Pinch, or − / + buttons | Zoom out / in |
+
+Touch controls appear automatically on phones and tablets (or after the first
+touch). Portrait phones start zoomed out, with the street lifted above the buttons.
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for how it is put together.

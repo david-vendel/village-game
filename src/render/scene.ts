@@ -1,5 +1,6 @@
-// Composes one frame: backdrop → fields → plots & buildings → people →
-// rider → foreground → UI.
+// Composes the world part of a frame: backdrop → fields → plots & buildings →
+// people → rider → foreground → world-anchored labels. Screen UI (HUD, menu,
+// touch buttons) is drawn separately by main.ts in its own coordinate space.
 
 import { BUILDINGS } from '../game/buildings';
 import { getBuilding, plotAt, WORLD_WIDTH, type World } from '../game/world';
@@ -8,7 +9,7 @@ import { BUILDING_ART, type DrawArgs } from './buildings';
 import { drawConstruction, drawConstructionBehind } from './construction';
 import { drawRider } from './horse';
 import { drawVillager } from './people';
-import { drawBuildingLabel, drawBuildMenu, drawCompletionEffect, drawHud, drawPlotPrompt, drawProgress, drawToasts, type Toast } from './ui';
+import { drawBuildingLabel, drawCompletionEffect, drawPlotPrompt, drawProgress } from './ui';
 import { type Ctx, GROUND_Y, rect, ROAD_Y, VIEW_H } from './util';
 
 const BASE = GROUND_Y + 4;
@@ -18,8 +19,23 @@ export function cameraX(world: World, viewW: number): number {
   return Math.max(0, Math.min(WORLD_WIDTH - viewW, target));
 }
 
-export function drawScene(ctx: Ctx, world: World, viewW: number, camX: number, toasts: Toast[]): void {
-  const v: View = { camX, width: viewW, time: world.time };
+export interface SceneView {
+  camX: number;
+  /** Visible width in world units. */
+  width: number;
+  /** World y at the top of the screen (negative when zoomed out: more sky). */
+  top: number;
+  /** World y at the bottom of the screen. */
+  bottom: number;
+  /** Scale for world-anchored labels so they stay readable when zoomed out. */
+  labelScale: number;
+  /** Text of the "build here" prompt (differs for touch vs keyboard). */
+  promptLabel: string;
+}
+
+export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
+  const { camX, width: viewW, labelScale: k } = sv;
+  const v: View = { camX, width: viewW, top: sv.top, bottom: sv.bottom, time: world.time };
   drawBackground(ctx, v);
 
   const onScreen = (x: number, margin = 280) => x - camX > -margin && x - camX < viewW + margin;
@@ -62,26 +78,22 @@ export function drawScene(ctx: Ctx, world: World, viewW: number, camX: number, t
   }
 
   drawForeground(ctx, v);
-  drawGrade(ctx, viewW);
+  drawGrade(ctx, viewW, sv.top, sv.bottom);
 
   // world-anchored UI
   for (const b of world.buildings) {
     const sx = world.plots[b.plotIndex].x - camX;
     if (!onScreen(world.plots[b.plotIndex].x)) continue;
-    if (b.status === 'constructing') drawProgress(ctx, b, sx, BASE - BUILDINGS[b.type].height - 20);
+    if (b.status === 'constructing') drawProgress(ctx, b, sx, BASE - BUILDINGS[b.type].height - 20, k);
     else if (b.completedAt !== null) drawCompletionEffect(ctx, sx, BASE, BUILDINGS[b.type].height, world.time - b.completedAt, b.id);
   }
   const plot = plotAt(world, world.rider.x);
   if (plot && !world.menu) {
     const sx = plot.x - camX;
     const b = getBuilding(world, plot.buildingId);
-    if (!b) drawPlotPrompt(ctx, sx, BASE, world.time);
-    else if (b.status === 'done') drawBuildingLabel(ctx, b, sx, BASE - BUILDINGS[b.type].height - 18);
+    if (!b) drawPlotPrompt(ctx, sx, BASE, world.time, sv.promptLabel, k);
+    else if (b.status === 'done') drawBuildingLabel(ctx, b, sx, BASE - BUILDINGS[b.type].height - 18, k);
   }
-
-  drawHud(ctx, world, viewW);
-  drawToasts(ctx, toasts, world.time, viewW);
-  drawBuildMenu(ctx, world, viewW);
 }
 
 /** A little stake with a pennant marks each free building plot. */
@@ -100,10 +112,12 @@ function plotMarker(ctx: Ctx, x: number, base: number, index: number): void {
 }
 
 /** Warm colour grade + soft vignette for a painterly finish. */
-function drawGrade(ctx: Ctx, viewW: number): void {
-  const g = ctx.createRadialGradient(viewW * 0.4, VIEW_H * 0.45, VIEW_H * 0.3, viewW * 0.5, VIEW_H * 0.5, Math.max(viewW, VIEW_H) * 0.85);
+function drawGrade(ctx: Ctx, viewW: number, top: number, bottom: number): void {
+  const h = Math.max(VIEW_H, bottom) - top;
+  const cy = top + h * 0.5;
+  const g = ctx.createRadialGradient(viewW * 0.4, cy - h * 0.05, h * 0.3, viewW * 0.5, cy, Math.max(viewW, h) * 0.85);
   g.addColorStop(0, 'rgba(255,220,160,0)');
   g.addColorStop(1, 'rgba(40,24,10,0.45)');
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, viewW, VIEW_H);
+  ctx.fillRect(0, top, viewW, h);
 }

@@ -1,10 +1,15 @@
-// On-screen UI: title/controls, construction toggle, plot prompt, build menu,
-// progress bars and toasts. Everything is drawn in logical view coordinates.
+// On-screen UI. Two coordinate spaces:
+// - Screen UI (HUD, touch buttons, build menu, toasts) is drawn in "UI units"
+//   whose size is independent of the world zoom. Layout functions return the
+//   rectangles so input hit-testing uses exactly what is drawn.
+// - World-anchored labels (plot prompt, progress bars, building names) are drawn
+//   in world coordinates, scaled by `k` around their anchor so they stay
+//   readable when zoomed out.
 
 import { BUILDINGS, BUILDING_TYPES } from '../game/buildings';
 import { constructionStage, STAGE_LABEL, type Building, type World } from '../game/world';
 import { drawBuildingIcon } from './buildings';
-import { type Ctx, VIEW_H } from './util';
+import type { Ctx } from './util';
 
 const SERIF = 'Georgia, "Times New Roman", serif';
 const GOLD = '#e8c872';
@@ -14,13 +19,26 @@ export interface Toast {
   at: number;
 }
 
+export interface Rect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export function hit(r: Rect, x: number, y: number): boolean {
+  return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
+}
+
+// --- Primitives ----------------------------------------------------------------
+
 function panel(ctx: Ctx, x: number, y: number, w: number, h: number, alpha = 0.78): void {
   ctx.save();
-  ctx.globalAlpha = alpha;
+  ctx.globalAlpha *= alpha;
   ctx.fillStyle = '#1e1710';
   roundRect(ctx, x, y, w, h, 8);
   ctx.fill();
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha /= alpha;
   ctx.strokeStyle = 'rgba(232,200,114,0.55)';
   ctx.lineWidth = 1.5;
   roundRect(ctx, x + 0.5, y + 0.5, w - 1, h - 1, 8);
@@ -48,124 +66,292 @@ function text(ctx: Ctx, s: string, x: number, y: number, size: number, color: st
   ctx.fillText(s, x, y);
 }
 
-export function drawHud(ctx: Ctx, world: World, viewW: number): void {
-  text(ctx, 'Village Crown', 18, 34, 24, GOLD, 'left', true);
-  text(ctx, '← → ride   ↓ / Space build   C construction', 18, 54, 12, '#f3ead8');
+/** Font size that makes `s` fit in `maxW`, never larger than `size`. */
+function fitSize(ctx: Ctx, s: string, size: number, maxW: number, bold = false): number {
+  ctx.font = `${bold ? 'bold ' : ''}${size}px ${SERIF}`;
+  const w = ctx.measureText(s).width;
+  return w > maxW ? Math.max(8, (size * maxW) / w) : size;
+}
+
+function button(ctx: Ctx, r: Rect, pressed: boolean, round = false): void {
+  ctx.save();
+  ctx.globalAlpha = pressed ? 0.85 : 0.55;
+  ctx.fillStyle = pressed ? '#5a4526' : '#1e1710';
+  if (round) {
+    ctx.beginPath();
+    ctx.arc(r.x + r.w / 2, r.y + r.h / 2, r.w / 2, 0, Math.PI * 2);
+  } else roundRect(ctx, r.x, r.y, r.w, r.h, 12);
+  ctx.fill();
+  ctx.globalAlpha = 0.9;
+  ctx.strokeStyle = GOLD;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function arrowIcon(ctx: Ctx, r: Rect, dir: -1 | 1): void {
+  const cx = r.x + r.w / 2;
+  const cy = r.y + r.h / 2;
+  const s = r.w * 0.22;
+  ctx.fillStyle = GOLD;
+  ctx.beginPath();
+  ctx.moveTo(cx + dir * s, cy);
+  ctx.lineTo(cx - dir * s * 0.7, cy - s);
+  ctx.lineTo(cx - dir * s * 0.7, cy + s);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function hammerIcon(ctx: Ctx, cx: number, cy: number, s: number): void {
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(-0.6);
+  ctx.fillStyle = '#b98a52';
+  ctx.fillRect(-s * 0.08, -s * 0.2, s * 0.16, s * 0.75);
+  ctx.fillStyle = GOLD;
+  ctx.fillRect(-s * 0.36, -s * 0.42, s * 0.72, s * 0.26);
+  ctx.restore();
+}
+
+function plusMinusIcon(ctx: Ctx, r: Rect, plus: boolean): void {
+  const cx = r.x + r.w / 2;
+  const cy = r.y + r.h / 2;
+  const s = r.w * 0.24;
+  ctx.fillStyle = GOLD;
+  ctx.fillRect(cx - s, cy - 1.5, s * 2, 3);
+  if (plus) ctx.fillRect(cx - 1.5, cy - s, 3, s * 2);
+}
+
+// --- HUD -------------------------------------------------------------------------
+
+export interface HudLayout {
+  construction: Rect;
+  zoomOut: Rect;
+  zoomIn: Rect;
+  left: Rect;
+  right: Rect;
+  build: Rect;
+}
+
+export function hudLayout(uiW: number, uiH: number): HudLayout {
+  const pillW = 176;
+  const z = 38;
+  const b = 76;
+  return {
+    construction: { x: uiW - pillW - 12, y: 12, w: pillW, h: 30 },
+    zoomOut: { x: uiW - 12 - z * 2 - 8, y: 50, w: z, h: z },
+    zoomIn: { x: uiW - 12 - z, y: 50, w: z, h: z },
+    left: { x: 16, y: uiH - 16 - b, w: b, h: b },
+    right: { x: 16 + b + 14, y: uiH - 16 - b, w: b, h: b },
+    build: { x: uiW - 16 - 86, y: uiH - 16 - 86, w: 86, h: 86 },
+  };
+}
+
+export interface HudState {
+  touch: boolean;
+  leftHeld: boolean;
+  rightHeld: boolean;
+  /** Rider stands at an empty plot. */
+  canBuild: boolean;
+}
+
+export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: HudState): void {
+  const L = hudLayout(uiW, uiH);
+  text(ctx, 'Village Crown', 16, 34, 24, GOLD, 'left', true);
+  const lines = st.touch
+    ? ['Hold the arrows to ride, hammer to build', 'Pinch or tap - + to zoom']
+    : ['← → ride   ↓ / Space build   C construction', '- + or mouse wheel to zoom'];
+  const maxW = L.zoomOut.x - 28;
+  let y = 54;
+  for (const s of lines) {
+    text(ctx, s, 16, y, fitSize(ctx, s, 12, maxW), '#f3ead8');
+    y += 16;
+  }
+  const built = world.buildings.filter((b) => b.status === 'done').length;
+  text(ctx, `Buildings: ${built}`, 16, y + 2, 12, '#cbbfa4');
 
   const on = world.constructionEnabled;
-  const label = `Construction: ${on ? 'ON' : 'OFF'}  (C)`;
-  ctx.font = `bold 13px ${SERIF}`;
-  const w = ctx.measureText(label).width + 30;
-  panel(ctx, viewW - w - 16, 16, w, 28, 0.65);
+  const r = L.construction;
+  panel(ctx, r.x, r.y, r.w, r.h, 0.65);
   ctx.fillStyle = on ? '#8fd16a' : '#c9695a';
   ctx.beginPath();
-  ctx.arc(viewW - w - 16 + 13, 30, 4.5, 0, Math.PI * 2);
+  ctx.arc(r.x + 14, r.y + r.h / 2, 4.5, 0, Math.PI * 2);
   ctx.fill();
-  text(ctx, label, viewW - w - 16 + 22, 35, 13, '#f3ead8', 'left', true);
+  text(ctx, `Construction: ${on ? 'ON' : 'OFF'}${st.touch ? '' : '  (C)'}`, r.x + 24, r.y + 20, 13, '#f3ead8', 'left', true);
 
-  const built = world.buildings.filter((b) => b.status === 'done').length;
-  text(ctx, `Buildings: ${built}`, viewW - 18, 64, 12, '#f3ead8', 'right');
+  button(ctx, L.zoomOut, false);
+  plusMinusIcon(ctx, L.zoomOut, false);
+  button(ctx, L.zoomIn, false);
+  plusMinusIcon(ctx, L.zoomIn, true);
+
+  if (st.touch && !world.menu) {
+    button(ctx, L.left, st.leftHeld);
+    arrowIcon(ctx, L.left, -1);
+    button(ctx, L.right, st.rightHeld);
+    arrowIcon(ctx, L.right, 1);
+    ctx.globalAlpha = st.canBuild ? 1 : 0.4;
+    button(ctx, L.build, false, true);
+    hammerIcon(ctx, L.build.x + L.build.w / 2, L.build.y + L.build.h / 2, L.build.w * 0.5);
+    ctx.globalAlpha = 1;
+  }
 }
 
-/** Floating marker over the empty plot the rider stands at. */
-export function drawPlotPrompt(ctx: Ctx, sx: number, base: number, time: number): void {
-  const y = base - 70 + Math.sin(time * 3) * 4;
-  ctx.fillStyle = GOLD;
-  ctx.beginPath();
-  ctx.moveTo(sx - 9, y - 10);
-  ctx.lineTo(sx + 9, y - 10);
-  ctx.lineTo(sx, y);
-  ctx.fill();
-  text(ctx, 'Press ↓ or Space to build', sx, y - 18, 13, '#fff4dc', 'center', true);
-  // glowing footprint on the ground
-  const g = ctx.createRadialGradient(sx, base, 5, sx, base, 110);
-  g.addColorStop(0, 'rgba(255,220,140,0.35)');
-  g.addColorStop(1, 'rgba(255,220,140,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(sx - 110, base - 20, 220, 30);
+export function drawToasts(ctx: Ctx, toasts: Toast[], now: number, uiW: number): void {
+  let y = 124;
+  for (const t of toasts) {
+    const age = now - t.at;
+    if (age > 3) continue;
+    ctx.globalAlpha = Math.min(1, age * 4, (3 - age) * 2);
+    const size = fitSize(ctx, t.text, 16, uiW - 64, true);
+    ctx.font = `bold ${size}px ${SERIF}`;
+    const w = ctx.measureText(t.text).width + 36;
+    panel(ctx, uiW / 2 - w / 2, y - 22, w, 32, 0.7);
+    text(ctx, t.text, uiW / 2, y, size, GOLD, 'center', true);
+    ctx.globalAlpha = 1;
+    y += 40;
+  }
 }
 
-/** Name + purpose label over a finished building the rider is next to. */
-export function drawBuildingLabel(ctx: Ctx, b: Building, sx: number, y: number): void {
-  const def = BUILDINGS[b.type];
-  ctx.font = `12px ${SERIF}`;
-  const w = Math.max(ctx.measureText(def.purpose).width, 60) + 24;
-  panel(ctx, sx - w / 2, y - 44, w, 40, 0.6);
-  text(ctx, def.name, sx, y - 27, 14, GOLD, 'center', true);
-  text(ctx, def.purpose, sx, y - 11, 12, '#f3ead8', 'center');
+// --- Build menu --------------------------------------------------------------------
+
+export interface MenuLayout {
+  panel: Rect;
+  cards: Rect[];
+  build: Rect;
+  cancel: Rect;
+  titleY: number;
+  infoY: number;
 }
 
-export function drawProgress(ctx: Ctx, b: Building, sx: number, y: number): void {
-  const w = 110;
-  const { stage } = constructionStage(b.progress);
-  panel(ctx, sx - w / 2 - 6, y - 30, w + 12, 30, 0.6);
-  ctx.fillStyle = '#3a2e22';
-  ctx.fillRect(sx - w / 2, y - 12, w, 6);
-  ctx.fillStyle = GOLD;
-  ctx.fillRect(sx - w / 2, y - 12, w * b.progress, 6);
-  text(ctx, `${BUILDINGS[b.type].name} — ${STAGE_LABEL[stage]}`, sx, y - 17, 10, '#f3ead8', 'center');
-}
-
-export function drawBuildMenu(ctx: Ctx, world: World, viewW: number): void {
-  if (!world.menu) return;
+export function menuLayout(uiW: number, uiH: number): MenuLayout {
   const n = BUILDING_TYPES.length;
-  const cardW = Math.min(104, (viewW - 60) / n);
-  const cardH = 112;
-  const totalW = cardW * n + 40;
-  const x0 = (viewW - totalW) / 2;
-  const y0 = VIEW_H - cardH - 86;
-
-  // dim the scene behind the menu
-  ctx.fillStyle = 'rgba(20,14,8,0.35)';
-  ctx.fillRect(0, 0, viewW, VIEW_H);
-
-  panel(ctx, x0, y0 - 34, totalW, cardH + 110, 0.88);
-  text(ctx, 'What shall we build?', viewW / 2, y0 - 10, 17, GOLD, 'center', true);
-
+  const cols = Math.min(n, Math.max(3, Math.floor((uiW - 40) / 100)));
+  const rows = Math.ceil(n / cols);
+  const cardW = Math.min(104, (uiW - 40) / cols);
+  const chrome = 44 + 60 + 58; // title + info + buttons
+  const cardH = Math.max(70, Math.min(108, (uiH - 24 - chrome - (rows - 1) * 8) / rows));
+  const pw = cols * cardW + 24;
+  const ph = chrome + rows * cardH + (rows - 1) * 8;
+  const px = (uiW - pw) / 2;
+  const py = Math.max(12, uiH - ph - 12);
+  const cards: Rect[] = [];
   for (let i = 0; i < n; i++) {
+    const c = i % cols;
+    const r = Math.floor(i / cols);
+    // centre a partial last row
+    const inRow = r === rows - 1 ? n - r * cols : cols;
+    const rowX = px + 12 + ((cols - inRow) * cardW) / 2;
+    cards.push({ x: rowX + c * cardW + 3, y: py + 44 + r * (cardH + 8), w: cardW - 6, h: cardH });
+  }
+  const infoY = py + 44 + rows * cardH + (rows - 1) * 8 + 24;
+  const bw = Math.min(150, (pw - 36) / 2);
+  const by = py + ph - 50;
+  return {
+    panel: { x: px, y: py, w: pw, h: ph },
+    cards,
+    build: { x: uiW / 2 + 6, y: by, w: bw, h: 38 },
+    cancel: { x: uiW / 2 - 6 - bw, y: by, w: bw, h: 38 },
+    titleY: py + 30,
+    infoY,
+  };
+}
+
+export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number): void {
+  if (!world.menu) return;
+  const M = menuLayout(uiW, uiH);
+
+  ctx.fillStyle = 'rgba(20,14,8,0.35)';
+  ctx.fillRect(0, 0, uiW, uiH);
+  panel(ctx, M.panel.x, M.panel.y, M.panel.w, M.panel.h, 0.9);
+  text(ctx, 'What shall we build?', uiW / 2, M.titleY, 17, GOLD, 'center', true);
+
+  M.cards.forEach((r, i) => {
     const type = BUILDING_TYPES[i];
     const def = BUILDINGS[type];
-    const cx = x0 + 20 + i * cardW;
-    const sel = i === world.menu.selection;
+    const sel = i === world.menu!.selection;
     ctx.save();
     ctx.fillStyle = sel ? 'rgba(232,200,114,0.22)' : 'rgba(255,240,210,0.06)';
-    roundRect(ctx, cx + 3, y0 + 2, cardW - 6, cardH, 6);
+    roundRect(ctx, r.x, r.y, r.w, r.h, 6);
     ctx.fill();
     if (sel) {
       ctx.strokeStyle = GOLD;
       ctx.lineWidth = 2;
       ctx.stroke();
     }
-    // clip the preview to the card
-    roundRect(ctx, cx + 3, y0 + 2, cardW - 6, cardH - 26, 6);
+    roundRect(ctx, r.x, r.y, r.w, r.h - 24, 6);
     ctx.clip();
-    const scale = Math.min(0.6, (cardW - 14) / (def.width * 1.3), 74 / (def.height + 20));
-    drawBuildingIcon(ctx, type, cx + cardW / 2, y0 + cardH - 32, scale, world.time);
+    const previewH = r.h - 34;
+    const scale = Math.min(0.6, (r.w - 8) / (def.width * 1.3), previewH / (def.height + 20));
+    drawBuildingIcon(ctx, type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time);
     ctx.restore();
-    text(ctx, `${i + 1}. ${def.name}`, cx + cardW / 2, y0 + cardH - 10, cardW < 90 ? 10 : 12, sel ? GOLD : '#f3ead8', 'center', sel);
-  }
+    const label = `${i + 1}. ${def.name}`;
+    text(ctx, label, r.x + r.w / 2, r.y + r.h - 8, fitSize(ctx, label, 12, r.w - 6, sel), sel ? GOLD : '#f3ead8', 'center', sel);
+  });
 
   const def = BUILDINGS[BUILDING_TYPES[world.menu.selection]];
-  text(ctx, def.purpose, viewW / 2, y0 + cardH + 26, 14, '#f3ead8', 'center');
+  text(ctx, def.purpose, uiW / 2, M.infoY, fitSize(ctx, def.purpose, 14, M.panel.w - 24), '#f3ead8', 'center');
   const time = world.constructionEnabled ? `Builds in ${def.buildTime}s` : 'Builds instantly (construction off)';
-  text(ctx, time, viewW / 2, y0 + cardH + 46, 12, '#cbbfa4', 'center');
-  text(ctx, '← → choose   Enter / Space build   Esc / ↑ cancel', viewW / 2, y0 + cardH + 66, 12, GOLD, 'center');
+  text(ctx, time, uiW / 2, M.infoY + 20, 12, '#cbbfa4', 'center');
+
+  button(ctx, M.cancel, false);
+  text(ctx, 'Cancel', M.cancel.x + M.cancel.w / 2, M.cancel.y + 25, 15, '#f3ead8', 'center', true);
+  button(ctx, M.build, true);
+  text(ctx, `Build ${def.name}`, M.build.x + M.build.w / 2, M.build.y + 25, fitSize(ctx, `Build ${def.name}`, 15, M.build.w - 12, true), GOLD, 'center', true);
 }
 
-export function drawToasts(ctx: Ctx, toasts: Toast[], now: number, viewW: number): void {
-  let y = 110;
-  for (const t of toasts) {
-    const age = now - t.at;
-    if (age > 3) continue;
-    const a = Math.min(1, age * 4, (3 - age) * 2);
-    ctx.globalAlpha = a;
-    ctx.font = `bold 16px ${SERIF}`;
-    const w = ctx.measureText(t.text).width + 36;
-    panel(ctx, viewW / 2 - w / 2, y - 22, w, 32, 0.7);
-    text(ctx, t.text, viewW / 2, y, 16, GOLD, 'center', true);
-    ctx.globalAlpha = 1;
-    y += 40;
-  }
+// --- World-anchored labels ------------------------------------------------------------
+
+function around(ctx: Ctx, x: number, y: number, k: number, draw: () => void): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(k, k);
+  ctx.translate(-x, -y);
+  draw();
+  ctx.restore();
+}
+
+/** Floating marker over the empty plot the rider stands at. */
+export function drawPlotPrompt(ctx: Ctx, sx: number, base: number, time: number, label: string, k: number): void {
+  const g = ctx.createRadialGradient(sx, base, 5, sx, base, 110);
+  g.addColorStop(0, 'rgba(255,220,140,0.35)');
+  g.addColorStop(1, 'rgba(255,220,140,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(sx - 110, base - 20, 220, 30);
+  const y = base - 70 + Math.sin(time * 3) * 4;
+  around(ctx, sx, y, k, () => {
+    ctx.fillStyle = GOLD;
+    ctx.beginPath();
+    ctx.moveTo(sx - 9, y - 10);
+    ctx.lineTo(sx + 9, y - 10);
+    ctx.lineTo(sx, y);
+    ctx.fill();
+    text(ctx, label, sx, y - 18, 13, '#fff4dc', 'center', true);
+  });
+}
+
+/** Name + purpose label over a finished building the rider is next to. */
+export function drawBuildingLabel(ctx: Ctx, b: Building, sx: number, y: number, k: number): void {
+  const def = BUILDINGS[b.type];
+  around(ctx, sx, y, k, () => {
+    ctx.font = `12px ${SERIF}`;
+    const w = Math.max(ctx.measureText(def.purpose).width, 60) + 24;
+    panel(ctx, sx - w / 2, y - 44, w, 40, 0.6);
+    text(ctx, def.name, sx, y - 27, 14, GOLD, 'center', true);
+    text(ctx, def.purpose, sx, y - 11, 12, '#f3ead8', 'center');
+  });
+}
+
+export function drawProgress(ctx: Ctx, b: Building, sx: number, y: number, k: number): void {
+  const w = 110;
+  const { stage } = constructionStage(b.progress);
+  around(ctx, sx, y, k, () => {
+    panel(ctx, sx - w / 2 - 6, y - 30, w + 12, 30, 0.6);
+    ctx.fillStyle = '#3a2e22';
+    ctx.fillRect(sx - w / 2, y - 12, w, 6);
+    ctx.fillStyle = GOLD;
+    ctx.fillRect(sx - w / 2, y - 12, w * b.progress, 6);
+    text(ctx, `${BUILDINGS[b.type].name} — ${STAGE_LABEL[stage]}`, sx, y - 17, 10, '#f3ead8', 'center');
+  });
 }
 
 /** Golden sparkle burst over a building that just finished. */
@@ -181,7 +367,6 @@ export function drawCompletionEffect(ctx: Ctx, sx: number, base: number, height:
     ctx.fillStyle = i % 3 ? GOLD : '#fff6de';
     ctx.fillRect(x - 1.5, y - 1.5, 3, 3);
   }
-  // dust settling at the base
   ctx.globalAlpha = (1 - t) * 0.4;
   ctx.fillStyle = '#d8c7a0';
   for (let i = 0; i < 8; i++) {

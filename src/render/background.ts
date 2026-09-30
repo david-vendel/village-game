@@ -13,6 +13,10 @@ const CASTLE_FACTOR = 0.14;
 export interface View {
   camX: number;
   width: number;
+  /** World y at the top of the screen; below 0 when zoomed out. */
+  top: number;
+  /** World y at the bottom of the screen; beyond VIEW_H when the street is lifted. */
+  bottom: number;
   time: number;
 }
 
@@ -31,13 +35,18 @@ export function drawBackground(ctx: Ctx, v: View): void {
 // --- Sky -------------------------------------------------------------------
 
 function drawSky(ctx: Ctx, v: View): void {
-  const g = ctx.createLinearGradient(0, 0, 0, 380);
-  g.addColorStop(0, '#5f7fb3');
-  g.addColorStop(0.35, '#9fb3c9');
-  g.addColorStop(0.7, '#ecd3a6');
+  // Stops are defined in world y so the horizon stays put; extra sky above y=0
+  // (when zoomed out) deepens towards the zenith.
+  const top = Math.min(0, v.top);
+  const at = (y: number) => (y - top) / (380 - top);
+  const g = ctx.createLinearGradient(0, top, 0, 380);
+  g.addColorStop(0, top < 0 ? '#3f5f99' : '#5f7fb3');
+  g.addColorStop(at(0), '#5f7fb3');
+  g.addColorStop(at(133), '#9fb3c9');
+  g.addColorStop(at(266), '#ecd3a6');
   g.addColorStop(1, '#f6ddb0');
   ctx.fillStyle = g;
-  ctx.fillRect(0, 0, v.width, VIEW_H);
+  ctx.fillRect(0, top, v.width, VIEW_H - top);
 
   // Low sun slightly to the left; it barely moves (very far away).
   const sx = v.width * 0.3 - v.camX * 0.01;
@@ -48,7 +57,7 @@ function drawSky(ctx: Ctx, v: View): void {
   glow.addColorStop(0.35, 'rgba(255,205,140,0.25)');
   glow.addColorStop(1, 'rgba(255,200,140,0)');
   ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, v.width, VIEW_H);
+  ctx.fillRect(0, Math.min(0, v.top), v.width, VIEW_H - Math.min(0, v.top));
   circle(ctx, sx, sy, 22, '#fff6de');
 }
 
@@ -58,7 +67,8 @@ function drawClouds(ctx: Ctx, v: View): void {
   const i0 = Math.floor(off / T) - 1;
   for (let i = i0; i < i0 + v.width / T + 3; i++) {
     const x = i * T - off + hash(i, 1) * 200;
-    const y = 50 + hash(i, 2) * 110;
+    // when zoomed out, some clouds drift higher into the extra sky
+    const y = 50 + hash(i, 2) * 110 + Math.min(0, v.top) * hash(i, 5) * 0.8;
     const s = 0.6 + hash(i, 3) * 0.8;
     ctx.globalAlpha = 0.55 + hash(i, 4) * 0.3;
     // shaded underside, lit top
@@ -311,11 +321,13 @@ function drawStreetGround(ctx: Ctx, v: View): void {
   }
 
   // foreground meadow below the street
-  const f = ctx.createLinearGradient(0, 498, 0, VIEW_H);
+  const bottom = Math.max(VIEW_H, v.bottom);
+  const f = ctx.createLinearGradient(0, 498, 0, bottom);
   f.addColorStop(0, '#6d8236');
-  f.addColorStop(1, '#4d6127');
+  f.addColorStop(Math.min(1, (VIEW_H - 498) / (bottom - 498)), '#4d6127');
+  f.addColorStop(1, '#3a4a1d');
   ctx.fillStyle = f;
-  ctx.fillRect(0, 498, v.width, VIEW_H - 498);
+  ctx.fillRect(0, 498, v.width, bottom - 498);
 }
 
 /** Tall grass, flowers and fence posts in front of everything. */
