@@ -1,20 +1,18 @@
 // The village economy. The village's materials are whatever its warehouses
 // hold: builders fetch wood and stone from them for construction sites
-// (site.ts), and goods produced elsewhere (a farm's sheaves) are collected from
-// those buildings' own stores into a warehouse, one of each every
-// COLLECT_EVERY seconds. That also keeps production going, since a full store
-// stops e.g. the harvest.
+// (site.ts), and producers carry their goods there themselves (a farmer
+// hauls sheaves when the fields need nothing). Every load is picked up from,
+// and put down at, its own place in a warehouse's stacks (warehouseSlot).
 
 import { BUILDINGS, type BuildingType } from './buildings';
+import { pileItems, STAND_Y, warehouseSlot, type Spot } from './layout';
 import { room, RESOURCES, shortfall, stockOf, type Amounts, type Load, type Resource, type Stock } from './resources';
 import { owed } from './site';
+import type { Depot } from './worker';
 import type { Building, World } from './world';
 
 /** What the starting village's warehouse holds. */
 export const WAREHOUSE_START: Stock = stockOf({ wood: 50, stone: 50 });
-
-/** How often (s) the village collects from each building's store. */
-export const COLLECT_EVERY = 30;
 
 const xOf = (world: World, b: Building) => world.plots[b.plotIndex].x;
 
@@ -100,16 +98,38 @@ export function putAway(world: World, load: Load, x: number): number {
   return load.amount - left;
 }
 
-/** Move goods from producers' stores into the warehouses, one of each every COLLECT_EVERY s. */
-export function collectGoods(world: World, dt: number): void {
-  for (const b of world.buildings) {
-    if (b.type === 'warehouse') continue;
-    b.collectIn -= dt;
-    if (b.collectIn > 0) continue;
-    b.collectIn += COLLECT_EVERY;
-    for (const r of RESOURCES) {
-      if (b.stock[r] <= 0) continue;
-      b.stock[r] -= putAway(world, { resource: r, amount: 1 }, xOf(world, b));
-    }
-  }
+/**
+ * Where someone stands at a warehouse to reach its stack of r: `top` for the
+ * item they would pick up, else where the next one goes down. x relative to `fromX`.
+ */
+export function warehouseSpot(world: World, wh: Building, r: Resource, fromX: number, top: boolean): Spot {
+  const n = pileItems(wh.stock[r]);
+  return { dx: xOf(world, wh) + warehouseSlot(r, top ? n - 1 : n).dx - fromX, y: STAND_Y };
+}
+
+/** The warehouses as a place for a workplace at `fromX` to take its goods. */
+export function depotFor(world: World, fromX: number): Depot {
+  const capacity = BUILDINGS.warehouse.storage;
+  const find = (id: number) => warehouses(world).find((w) => w.id === id) ?? null;
+  return {
+    find(r) {
+      let best: Building | null = null;
+      for (const w of warehouses(world)) {
+        if (room(w.stock, capacity, r) <= 0) continue;
+        if (!best || Math.abs(xOf(world, w) - fromX) < Math.abs(xOf(world, best) - fromX)) best = w;
+      }
+      return best?.id ?? null;
+    },
+    spot(id, r) {
+      const wh = find(id);
+      return wh ? warehouseSpot(world, wh, r, fromX, false) : null;
+    },
+    put(id, load) {
+      const wh = find(id);
+      const n = wh ? Math.min(load.amount, room(wh.stock, capacity, load.resource)) : 0;
+      if (wh) wh.stock[load.resource] += n;
+      // it filled up while they walked: whatever doesn't fit goes to the next one with room
+      if (n < load.amount) putAway(world, { resource: load.resource, amount: load.amount - n }, fromX);
+    },
+  };
 }

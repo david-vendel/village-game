@@ -70,3 +70,83 @@ export function workY(zone: FieldZone, row: number): number {
 export const HOME = { dx: -19, y: BASE_Y + 3 };
 /** The grain store, between the farmhouse and the street. */
 export const STORE = { dx: -76, y: BASE_Y + 3 };
+
+// --- Where things lie ----------------------------------------------------------------
+// Every stored thing has its own place on the ground: each sheaf in a farm's
+// store, each log, block and sack at a warehouse, each piece in a construction
+// site's pile. Workers walk to the exact place to put a thing down or pick it
+// up, and the art draws it right there. Positions: dx from the building's
+// centre; `lift` is how far up the stack an item sits (px above the ground).
+
+/** A place on the ground: dx from a building's centre, and world y (depth). */
+export interface Spot {
+  dx: number;
+  y: number;
+}
+
+export interface Slot {
+  dx: number;
+  lift: number;
+}
+
+/** Where someone stands to reach things lying along the building line. */
+export const STAND_Y = BASE_Y + 3;
+
+/** How much of a resource one item in a pile stands for: a log, a block of stone, a sack. */
+export const PILE_UNIT = 10;
+
+/** Items in a pile holding `amount` (a part-filled item counts). */
+export const pileItems = (amount: number) => Math.ceil(amount / PILE_UNIT - 1e-9);
+
+/** Where each sheaf stands in the farm's grain store, in the order they are stacked. */
+export const SHEAF_SLOTS: readonly Slot[] = [
+  { dx: STORE.dx - 15, lift: 0 },
+  { dx: STORE.dx, lift: 0 },
+  { dx: STORE.dx + 15, lift: 0 },
+  { dx: STORE.dx - 7.5, lift: 13 },
+  { dx: STORE.dx + 7.5, lift: 13 },
+];
+
+/** Row sizes of a pile stacked in a pyramid (bottom row first). */
+function pyramid(i: number, rows: readonly number[]): { row: number; col: number } {
+  let start = 0;
+  for (let row = 0; row < rows.length; row++) {
+    if (i < start + rows[row] || row === rows.length - 1) return { row, col: Math.min(i - start, rows[row] - 1) };
+    start += rows[row];
+  }
+  return { row: 0, col: 0 };
+}
+
+/** Most items a warehouse shows outside, per resource (the rest is indoors). */
+export const WAREHOUSE_SHOWN = { wood: 12, stone: 10, grain: 4 } as const;
+
+/**
+ * The warehouse's stacks: logs piled against the right-hand wall, a stone heap
+ * on the left, sacks of grain along the front. Item i (0 = bottom of the stack).
+ */
+export function warehouseSlot(r: 'wood' | 'stone' | 'grain', i: number): Slot {
+  const n = Math.max(0, Math.min(i, WAREHOUSE_SHOWN[r] - 1));
+  if (r === 'wood') {
+    const { row, col } = pyramid(n, [5, 4, 2, 1]);
+    return { dx: 48 + col * 7 + row * 3.5, lift: 3 + row * 6 };
+  }
+  if (r === 'stone') {
+    const { row, col } = pyramid(n, [4, 3, 2, 1]);
+    return { dx: -110.75 + col * 7 + row * 3.5, lift: 2.5 + row * 5 };
+  }
+  return { dx: -72 + n * 8, lift: 0 };
+}
+
+/** Most items a construction site's pile shows, per resource. */
+export const SITE_SHOWN = { wood: 8, stone: 12 } as const;
+
+/** A construction site's pile, just past the right end of a building `width` wide: logs, then stones. */
+export function siteSlot(width: number, r: 'wood' | 'stone', i: number): Slot {
+  const x = width / 2 + 14;
+  if (r === 'wood') {
+    const { row, col } = pyramid(Math.max(0, Math.min(i, SITE_SHOWN.wood - 1)), [4, 3, 1]);
+    return { dx: x + col * 9 + row * 4 + 11, lift: row * 8 - 4 };
+  }
+  const n = Math.max(0, Math.min(i, SITE_SHOWN.stone - 1));
+  return { dx: x + 50 + (n % 3) * 8, lift: Math.floor(n / 3) * 6 - 3 };
+}

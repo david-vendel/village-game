@@ -8,6 +8,7 @@ import { installAutosave, loadGame, openSaveStore } from './app/persistence';
 import { createScreen } from './app/screen';
 import { createSound } from './app/sound';
 import { installTuning } from './app/tuning';
+import { installWorkersPanel } from './app/workers';
 import { update } from './game/world';
 import { cameraX, renderFrame, type Toast } from './render';
 
@@ -27,6 +28,7 @@ const sound = createSound();
 const actions = createActions(world, notify, () => screen.touch, sound);
 const controls = installControls(world, screen, actions);
 const display = installTuning(world, sound, { onNewVillage: () => void autosave.newGame() });
+installWorkersPanel(world);
 if (restored) notify('Welcome back to your village');
 
 let camX = cameraX(world, screen.vp.viewW);

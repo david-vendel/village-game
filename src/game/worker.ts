@@ -5,9 +5,12 @@
 // takes, and what it produces.
 //
 // Positions are relative to the workplace's centre (dx) and in world y.
+// Nothing moves by magic: a worker walks to the exact spot where a thing lies
+// to pick it up, and to the exact spot where it will lie to put it down.
 
 import type { TimeOfDay } from './daynight';
-import type { Load } from './resources';
+import type { Spot } from './layout';
+import type { Load, Resource } from './resources';
 
 /** A job at a workplace: what to do (its own vocabulary, e.g. 'sow') and to which of its things. */
 export interface JobTicket {
@@ -17,6 +20,7 @@ export interface JobTicket {
 
 export type WorkerTask =
   | { kind: 'idle'; wait: number }
+  /** Walking somewhere; `job` is the job to do there, or (for a delivery) the job the load came from. */
   | { kind: 'walk'; toDx: number; toY: number; then: 'job' | 'deliver' | 'home'; job: JobTicket | null }
   /** Doing a job: t seconds done out of duration. */
   | { kind: 'job'; job: JobTicket; t: number; duration: number }
@@ -48,22 +52,37 @@ export interface Workplace {
    */
   dayLabour?: boolean;
   /** The front door, where workers go in and out and wait for work. */
-  door: { dx: number; y: number };
-  /** Where carried goods are dropped off. */
-  store: { dx: number; y: number };
+  door: Spot;
   /** The next job for this worker (not one in `taken`, which others are on), with where to do it. */
   nextJob(worker: Worker, taken: JobTicket[]): { job: JobTicket; dx: number; y: number } | null;
+  /**
+   * Where a job is done now, if that can change while the worker walks there
+   * (picking up the top item of a pile others take from too).
+   */
+  jobSpot?(job: JobTicket): Spot | null;
   /** Arrived at a job: start it and return how long it takes (s), or null if it no longer needs doing. */
   begin(job: JobTicket): number | null;
-  /** A job is done: returns what the worker now carries to the store, if anything. */
+  /** A job is done: returns what the worker now carries, if anything. */
   finish(job: JobTicket): Load | null;
-  /** A load dropped off at the store. */
-  deliver(load: Load): void;
+  /** The exact spot where the load from `job` will lie once put down (asked again on the way, as piles change). */
+  dropSpot(job: JobTicket, load: Load): Spot;
+  /** The worker has carried the load from `job` to its drop spot and puts it down. */
+  deliver(load: Load, job: JobTicket): void;
+}
+
+/** Where a workplace sends its goods: the village's warehouses, seen from the workplace. */
+export interface Depot {
+  /** The warehouse to take a load of r to (the nearest with room), if any. */
+  find(r: Resource): number | null;
+  /** Where the next load of r goes down at that warehouse, relative to the workplace. */
+  spot(id: number, r: Resource): Spot | null;
+  /** Put a load down in that warehouse. */
+  put(id: number, load: Load): void;
 }
 
 /** Walking speed with a load, and with empty hands (px/s). */
 export const WALK_SPEED = 42;
-export const WALK_SPEED_EMPTY = 66;
+export const WALK_SPEED_EMPTY = WALK_SPEED * 2;
 /** Seconds to step through a door, in or out. */
 export const DOOR_TIME = 0.9;
 /** Workers head home for lunch from this hour (finishing the job in hand first)… */
@@ -87,6 +106,12 @@ export function currentJob(w: Worker): JobTicket | null {
   if (t.kind === 'job') return t.job;
   if (t.kind === 'walk' && t.then === 'job') return t.job;
   return null;
+}
+
+/** The job the load a worker is carrying came from, while they carry it to its place. */
+export function delivering(w: Worker): JobTicket | null {
+  const t = w.task;
+  return t.kind === 'walk' && t.then === 'deliver' ? t.job : null;
 }
 
 /** Point a worker's current job somewhere else (its target moved), or drop it (null: walk home). */
@@ -175,6 +200,12 @@ export function updateWorker(w: Worker, place: Workplace, dt: number, now: TimeO
   }
 
   if (task.kind === 'walk') {
+    // piles change while the worker walks: head for where the thing lies (or will lie) now
+    const at = task.job && (task.then === 'deliver' ? (w.carrying ? place.dropSpot(task.job, w.carrying) : null) : task.then === 'job' ? place.jobSpot?.(task.job) : null);
+    if (at) {
+      task.toDx = at.dx;
+      task.toY = at.y;
+    }
     const ddx = task.toDx - w.dx;
     const ddy = task.toY - w.y;
     const d = Math.hypot(ddx, ddy);
@@ -194,7 +225,7 @@ export function updateWorker(w: Worker, place: Workplace, dt: number, now: TimeO
       // the job changed on the way (someone else did it, the land was built on): pick another
       w.task = duration === null ? { kind: 'idle', wait: 0.3 } : { kind: 'job', job: task.job, t: 0, duration };
     } else if (task.then === 'deliver') {
-      if (w.carrying) place.deliver(w.carrying);
+      if (w.carrying && task.job) place.deliver(w.carrying, task.job);
       w.carrying = null;
       w.task = { kind: 'idle', wait: 0.8 };
     } else if (off) {
@@ -211,7 +242,8 @@ export function updateWorker(w: Worker, place: Workplace, dt: number, now: TimeO
   const goods = place.finish(task.job);
   if (goods) {
     w.carrying = goods;
-    walkTo(w, place.store.dx + 16, place.store.y, 'deliver', null);
+    const to = place.dropSpot(task.job, goods);
+    walkTo(w, to.dx, to.y, 'deliver', task.job);
   } else {
     w.task = { kind: 'idle', wait: 0.4 }; // straight on to the next job from here
   }

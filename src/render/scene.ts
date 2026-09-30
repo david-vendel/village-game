@@ -4,6 +4,7 @@
 // touch buttons) is drawn separately by main.ts in its own coordinate space.
 
 import { employees } from '../game/people';
+import type { Worker } from '../game/worker';
 import { onSite } from '../game/site';
 import { getBuilding, plotAt, WORLD_WIDTH, type Building, type World } from '../game/world';
 import { drawBackground, drawForeground, type View } from './background';
@@ -15,7 +16,7 @@ import { groundX } from './ground';
 import { drawSkyBehind, lightAt, tintLand } from './sky';
 import { drawRider } from './horse';
 import { drawVillager, walker } from './people';
-import { drawBuildingLabel, drawCompletionEffect, drawPlotPrompt, drawProgress } from './ui';
+import { drawBuildingLabel, drawCompletionEffect, drawPlotGlow, drawPlotPrompt, drawProgress } from './ui';
 import { type Ctx, GROUND_Y, rect, ROAD_Y, VIEW_H } from './util';
 
 const BASE = GROUND_Y + 4;
@@ -65,16 +66,15 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     const b = p.job && getBuilding(world, p.job.buildingId);
     // builders fetching from a far warehouse can be anywhere along the street
     const x = b ? world.plots[b.plotIndex].x : 0;
-    return b && onScreen(x + p.job!.worker.dx, 300) ? [{ w: p.job!.worker, role: p.job!.role, who: p, x }] : [];
+    return b && onScreen(x + p.job!.worker.dx, 300) ? [{ w: p.job!.worker, seed: p.seed, x }] : [];
   });
   /** Draw workers whose y satisfies `pred` (depth decides which layer they are in). */
   const farmers = (pred: (y: number) => boolean) => {
-    for (const { w, role, who, x } of atWork) {
-      // they walk on the ground, so they follow its perspective like the fields do
-      if (pred(w.y)) drawWorker(ctx, w, role, who, groundX(x + w.dx - camX, w.y, viewW / 2), w.y, world.time);
-    }
+    for (const { w, seed, x } of atWork) if (pred(w.y)) drawAtWork(w, seed, x);
   };
-  // the unemployed and the animals stroll the street (odd ids on the far side)
+  // they walk on the ground, so they follow its perspective like the fields do
+  const drawAtWork = (w: Worker, seed: number, x: number) => drawWorker(ctx, w, seed, groundX(x + w.dx - camX, w.y, viewW / 2), w.y, world.time);
+  // the unemployed and the animals stroll the street, each at their own depth
   const strollers = [...world.people.filter((p) => !p.job), ...world.animals];
 
   // things that spread behind buildings (farm fields)
@@ -91,6 +91,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   for (const p of world.plots) {
     if (p.buildingId !== null || !onScreen(p.x)) continue;
     plotMarker(ctx, p.x - camX, BASE, p.index);
+    if (!world.menu && plotAt(world, world.rider.x) === p) drawPlotGlow(ctx, p.x - camX, BASE);
   }
 
   // buildings
@@ -108,19 +109,17 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     if (b.status === 'done') BUILDING_ART[b.type].front?.(ctx, a);
     else drawConstructionFront(ctx, b.type, a, b.progress);
   }
-  farmers((y) => y >= BASE - 4 && y < ROAD_Y);
 
-  // villagers behind the rider (odd ids walk the far side of the street)
-  for (const who of strollers) {
-    const x = who.stroll.x;
-    if (who.id % 2 === 1 && onScreen(x)) drawVillager(ctx, walker(who), onGround(x, ROAD_Y - 14), ROAD_Y - 14, world.time);
-  }
-  drawRider(ctx, world.rider, onGround(world.rider.x, ROAD_Y), ROAD_Y, world.time);
-  for (const who of strollers) {
-    const x = who.stroll.x;
-    if (who.id % 2 === 0 && onScreen(x)) drawVillager(ctx, walker(who), onGround(x, ROAD_Y + 12), ROAD_Y + 12, world.time);
-  }
-  farmers((y) => y >= ROAD_Y);
+  // everyone on the street and the land in front of it, far to near, so
+  // whoever stands nearer the viewer is drawn over whoever is behind them
+  const standing: Array<{ y: number; draw: () => void }> = [
+    ...atWork.filter(({ w }) => w.y >= BASE - 4).map(({ w, seed, x }) => ({ y: w.y, draw: () => drawAtWork(w, seed, x) })),
+    ...strollers
+      .filter((who) => onScreen(who.stroll.x))
+      .map((who) => ({ y: who.stroll.y, draw: () => drawVillager(ctx, walker(who), onGround(who.stroll.x, who.stroll.y), who.stroll.y, world.time) })),
+    { y: ROAD_Y, draw: () => drawRider(ctx, world.rider, onGround(world.rider.x, ROAD_Y), ROAD_Y, world.time) },
+  ];
+  for (const s of standing.sort((a, b) => a.y - b.y)) s.draw();
 
   drawForeground(ctx, v);
   // daylight: tint the land, then put the sky behind it

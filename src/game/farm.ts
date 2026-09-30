@@ -2,13 +2,15 @@
 // plots, crops and growth, and which land they lie on (from the land grid, see
 // land.ts; plots fill free cells around the farmstead and change when a
 // neighbour builds). It is also a workplace (worker.ts): farmers sow fallow
-// plots and harvest ripe ones, and carry the sheaves to the farm's store (the
-// building's stock). Everything else about a farmer's day is the generic
-// worker routine.
+// plots and harvest ripe ones, and stack each sheaf in its own place in the
+// farm's store (the building's stock, see SHEAF_SLOTS). When the fields need
+// nothing, or the store is full, the farmer takes the top sheaf off the stack
+// and carries it to a warehouse. Everything else about a farmer's day is the
+// generic worker routine.
 import { BUILDINGS } from './buildings';
-import { CELL_W, FIELD_REACH, FIELD_ROWS, HOME, PLOT_CELLS, PLOT_SPACING, STORE, workY, type FieldZone } from './layout';
+import { CELL_W, FIELD_REACH, FIELD_ROWS, HOME, PLOT_CELLS, PLOT_SPACING, SHEAF_SLOTS, STAND_Y, workY, type FieldZone, type Spot } from './layout';
 import { room, type Load, type Stock } from './resources';
-import { currentJob, retarget, type JobTicket, type Worker, type Workplace } from './worker';
+import { currentJob, retarget, type Depot, type JobTicket, type Worker, type Workplace } from './worker';
 
 export type { FieldZone };
 export type PlotState = 'fallow' | 'growing' | 'ripe';
@@ -32,7 +34,16 @@ export interface FieldPlot extends FieldSpot {
   age: number;
 }
 
-export type FarmAction = 'sow' | 'harvest';
+/** haul: take the top sheaf from the store to a warehouse (target: the warehouse's id). */
+export type FarmAction = 'sow' | 'harvest' | 'haul';
+
+/** Seconds to lift a sheaf off the stack. */
+const PICK_UP_TIME = 0.8;
+
+/** Where the farmer stands to put down or pick up sheaf number i of the store (0 = first stacked). */
+export function sheafSpot(i: number): Spot {
+  return { dx: SHEAF_SLOTS[Math.max(0, Math.min(i, SHEAF_SLOTS.length - 1))].dx, y: STAND_Y };
+}
 
 export interface FarmState {
   plots: FieldPlot[];
@@ -143,7 +154,7 @@ export function setFieldSpots(farm: FarmState, spots: FieldSpot[], workers: Work
   // farmers' jobs follow their plots; a job whose plot is gone is dropped
   for (const w of workers) {
     const job = currentJob(w);
-    if (!job) continue;
+    if (!job || job.action === 'haul') continue; // not a field job
     const next = successor.get(farm.plots[job.target]);
     if (!next) retarget(w, { door: HOME }, null);
     else retarget(w, { door: HOME }, { ...job, target: plots.indexOf(next) }, { dx: next.dx, y: workY(next.zone, next.row) });
@@ -171,7 +182,7 @@ export function repairFarm(farm: FarmState, workers: Worker[]): void {
   }
   for (const w of workers) {
     const job = currentJob(w);
-    if (job && !jobFits(farm.plots[job.target], job.action)) w.task = { kind: 'idle', wait: 0.3 };
+    if (job && job.action !== 'haul' && !jobFits(farm.plots[job.target], job.action)) w.task = { kind: 'idle', wait: 0.3 };
   }
 }
 
@@ -198,13 +209,16 @@ export function updateCrops(farm: FarmState, dt: number): void {
 /**
  * The farm as a workplace. Next job: harvest a ripe plot while the store has
  * room, else sow a fallow one, the farm's own land before borrowed land;
- * nearest first. Work takes time in proportion to the plot's width.
+ * nearest first. Work takes time in proportion to the plot's width. With a
+ * `depot` (the village's warehouses), sheaves are hauled there when the store
+ * is full, and whenever the fields need nothing.
  */
-export function farmWorkplace(farm: FarmState, stock: Stock, work: FarmWork = DEFAULT_WORK): Workplace {
+export function farmWorkplace(farm: FarmState, stock: Stock, work: FarmWork = DEFAULT_WORK, depot?: Depot): Workplace {
   const capacity = BUILDINGS.farm.storage;
+  /** The top sheaf of the stack, after those others are already fetching. */
+  const top = (fetching: number) => stock.grain - 1 - fetching;
   return {
     door: HOME,
-    store: STORE,
     nextJob(w: Worker, taken: JobTicket[]) {
       const busy = new Set(taken.map((j) => j.target));
       const dist = (p: FieldPlot) => Math.hypot(p.dx - w.dx, workY(p.zone, p.row) - w.y);
@@ -219,17 +233,31 @@ export function farmWorkplace(farm: FarmState, stock: Stock, work: FarmWork = DE
         const p = farm.plots[i];
         return { job: { action, target: i }, dx: p.dx, y: workY(p.zone, p.row) };
       };
+      const haul = () => {
+        const fetching = taken.filter((j) => j.action === 'haul').length;
+        const to = depot && top(fetching) >= 0 ? depot.find('grain') : null;
+        return to === null ? null : { job: { action: 'haul', target: to }, ...sheafSpot(top(fetching)) };
+      };
       // sheaves already on their way count against the room in the store
       const incoming = taken.filter((j) => j.action === 'harvest').length;
-      if (room(stock, capacity, 'grain') > incoming) {
+      const space = room(stock, capacity, 'grain') > incoming;
+      if (space) {
         const ripe = pick('ripe');
         if (ripe >= 0) return at(ripe, 'harvest');
+      } else if (pick('ripe') >= 0) {
+        // a full store holds up the harvest: make room first
+        const h = haul();
+        if (h) return h;
       }
       const own = pick('fallow', (p) => !isBorrowed(p));
       const fallow = own >= 0 ? own : pick('fallow');
-      return fallow >= 0 ? at(fallow, 'sow') : null;
+      return fallow >= 0 ? at(fallow, 'sow') : haul();
+    },
+    jobSpot(job) {
+      return job.action === 'haul' ? sheafSpot(top(0)) : null;
     },
     begin(job) {
+      if (job.action === 'haul') return stock.grain > 0 ? PICK_UP_TIME : null;
       const p = farm.plots[job.target];
       if (!jobFits(p, job.action)) return null;
       p.tilled = true; // first work on a plot turns grass into a field
@@ -237,6 +265,11 @@ export function farmWorkplace(farm: FarmState, stock: Stock, work: FarmWork = DE
       return (p.width / CELL_W) * perCell;
     },
     finish(job): Load | null {
+      if (job.action === 'haul') {
+        if (stock.grain < 1) return null;
+        stock.grain -= 1;
+        return { resource: 'grain', amount: 1 };
+      }
       const p = farm.plots[job.target];
       if (!p) return null;
       p.age = 0;
@@ -248,8 +281,14 @@ export function farmWorkplace(farm: FarmState, stock: Stock, work: FarmWork = DE
       if (isBorrowed(p)) p.tilled = false; // borrowed land goes back to grass
       return { resource: 'grain', amount: 1 }; // a sheaf
     },
-    deliver(load) {
-      stock[load.resource] = Math.min(capacity[load.resource] ?? 0, stock[load.resource] + load.amount);
+    dropSpot(job, load) {
+      // a hauled sheaf goes to the warehouse (if it went, the farmer turns back for the store)
+      if (job.action === 'haul') return depot?.spot(job.target, load.resource) ?? sheafSpot(stock.grain);
+      return sheafSpot(stock.grain);
+    },
+    deliver(load, job) {
+      if (job.action === 'haul' && depot?.spot(job.target, load.resource)) depot.put(job.target, load);
+      else stock[load.resource] = Math.min(capacity[load.resource] ?? 0, stock[load.resource] + load.amount);
     },
   };
 }

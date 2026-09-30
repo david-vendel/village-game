@@ -32,6 +32,14 @@ src/app      input, screen/zoom, actions     main.ts wires it all into the loop
 2. **`src/game/layout.ts`**: world positions that art and logic must agree on, such as the
    road line, where the farm plots are, the farmhouse door and the grain store. If you
    redraw the farmhouse wider, move `HOME`/`STORE` there, and the farmer walks to the new spots.
+   It also says where every stored thing lies (`SHEAF_SLOTS`, `warehouseSlot`, `siteSlot`,
+   one item per `PILE_UNIT`): the art draws each item there, and workers walk to that exact
+   spot to put it down or pick it up.
+
+**Nothing jumps.** People are always somewhere (x and depth y) and only ever walk: hired,
+they set off from where they stand; let go (a site finished, nightfall), they stay put and
+walk back to their lane of the street. Goods move only in someone's arms, from the place
+they lie to the place they will lie. Keep it that way when adding a mechanic.
 
 **Enforced.** `npm test` includes `tests/architecture.test.ts`, which fails if:
 - a game file imports render/app code or uses browser APIs;
@@ -81,24 +89,28 @@ src/app      input, screen/zoom, actions     main.ts wires it all into the loop
   of them, e.g. a cost), with affordability and payment helpers.
 - `economy.ts`: the village's materials are what its warehouses hold (the starting warehouse
   has `WAREHOUSE_START`: 50 wood, 50 stone). A new building can start only if the warehouses
-  hold its cost beyond what other sites are still owed. Goods from producers' stores (a farm's
-  sheaves) are collected into a warehouse, one of each every `COLLECT_EVERY` s.
+  hold its cost beyond what other sites are still owed. `depotFor` gives a workplace the
+  warehouses as somewhere to carry its goods, with the exact spot each load goes down.
 - `site.ts`: construction. A placed building is a site that hires up to `BUILDERS_PER_SITE`
   idle villagers as builders (day labour: no lunch, let go at nightfall, hired again in the
-  morning). They fetch its cost from the nearest warehouse `LOAD_SIZE` at a time, carry it over
-  and build with it in `BUILD_CHUNK`s of labour (`buildTime` in all, scaled by the build-speed
-  slider); progress never runs ahead of the materials delivered. With construction off,
+  morning). They take its cost off the nearest warehouse's stacks `LOAD_SIZE` at a time and
+  lay it on the site's pile; then carry loads from the pile to spots along the front of the
+  building, put them in place and build with them in `BUILD_CHUNK`s of labour (`buildTime` in
+  all, scaled by the build-speed slider); progress never runs ahead of the materials put in
+  place (`Site`: delivered, taken, placed). With construction off,
   buildings are finished at once from the warehouses' stock.
 - `people.ts`: every villager is a `Person` with an id number, a name, a look and a `job` (a
-  building and role, plus their `Worker` state) or none. The unemployed stroll the street;
+  building and role, plus their `Worker` state) or none. The unemployed stroll the street on
+  their lane (`laneY`: odd ids the far side, even the near side);
   `staffBuildings` fills open jobs (a finished building's own, builders at sites) with the
   nearest of them, who walk over from where they are. A new village has six: one farmer and
   five free hands. Chickens are `Animal`s.
 - `worker.ts`: the working day, the same for every job: work in daylight, go home at 11:30
   (`LUNCH_AT`) and eat for an hour (`LUNCH_HOURS`) once inside, once a day; sleep at night; step
   in and out of the door (`DOOR_TIME`); carry loads (walking faster with empty hands,
-  `WALK_SPEED_EMPTY`). What the work *is* comes from the
-  building as a `Workplace`: its door and store, the next job, how long a job takes, what it yields.
+  `WALK_SPEED_EMPTY`) to the exact spot they go down. What the work *is* comes from the
+  building as a `Workplace`: its door, the next job and where it is done, how long a job takes,
+  what it yields and where that goes down (`dropSpot`, asked again on the way as piles change).
 - `farm.ts`: the farm's fields, and the farm as a `Workplace`. Tested by `farm.test.ts`. Plots lie
   on the free land-grid cells around it (see `land.ts`) in rows (`FIELD_ROWS` in `layout.ts`): one
   behind the road, two in front of it. A new farm is just the farmstead: a plot stays grass until
@@ -106,7 +118,9 @@ src/app      input, screen/zoom, actions     main.ts wires it all into the loop
   returns to grass after each harvest. Each plot keeps its own state (fallow → growing → ripe) and
   age (150 s to ripe). Jobs: harvest while the farm store has room for the sheaf, else sow, own
   land before borrowed, nearest first; each takes `sowPerCell` / `harvestPerCell` seconds per grid
-  cell of plot width (tuning sliders). A harvest yields a sheaf of grain for the store.
+  cell of plot width (tuning sliders). A harvest yields a sheaf, stacked in its own place in the
+  store (`SHEAF_SLOTS`). When the store is full, or the fields need nothing, the farmer takes the
+  top sheaf to a warehouse (`haul`).
 - `daynight.ts`: time of day, from `world.dayClock`, which runs at the `timeSpeed` knob (a day is
   `DAY_LENGTH` = 300 s at 1×). The `nightHours` knob (0–12) shapes the sun's path: fewer hours
   lift it, like a summer far north; 0 is the midnight sun. `timeOfDay` gives villagers what they plan
@@ -177,8 +191,11 @@ src/app      input, screen/zoom, actions     main.ts wires it all into the loop
   above the buttons.
 - `sound.ts`: synthesised Web Audio effects, no audio files. It reads game state each frame:
   hoofbeats in step with the gait, menu clicks, a thunk when a building is placed and a chime when
-  it's done, hammering during construction, each building's everyday sound, and the farmer's
-  sowing, scything and stacking. World sounds pan and fade with distance from the rider. M mutes.
+  it's done, each builder's hammer blow, each building's everyday sound, the farmer's sowing and
+  scything, and every load picked up or put down. A sound that goes with something drawn plays
+  on the frame it is seen (the hammer lands, the bucket reaches the water), using the same rates
+  as the animations in `src/render`, so change both together. World sounds pan and fade with
+  distance from the rider. M mutes.
 - `tuning.ts`: slider panel on the right (horse speed/accel/braking, build speed, time speed,
   night length, sowing and harvest time per cell, volume), the
   land-grid toggle and the "new village" button (wipes the save and reloads).
@@ -194,7 +211,6 @@ src/app      input, screen/zoom, actions     main.ts wires it all into the loop
 ## Not done yet / ideas
 
 - Wood and stone can't be produced yet (no woodcutter or quarry), so the starting warehouse is
-  all there is. Grain piles up in the warehouse with nothing to use it. Farm grain is moved to
-  the warehouse by an invisible collection, not carried. New people don't arrive
+  all there is. Grain piles up in the warehouse with nothing to use it. New people don't arrive
   (houses could house newcomers), and there is no way to fire or reassign a worker.
 - No music. No lit windows or lanterns at night yet. One save slot; no offline progress while the page is closed.

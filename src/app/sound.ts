@@ -3,13 +3,20 @@
 // changes it. Covers:
 //   - the horse's hoofbeats, in step with the drawn walk / trot
 //   - build menu clicks, a thunk when a building is placed, a chime when done
-//   - hammering on anything under construction
+//   - each builder's hammer blow
 //   - each finished building's everyday work (anvil, bell, creaking mill…)
-//   - the farmer sowing, scything and stacking sheaves
+//   - the farmer sowing and scything
+//   - anything carried being picked up or put down (a sheaf, logs, stone)
+// A sound that goes with something drawn happens on the frame it is seen:
+// the hammer hits, the scythe sweeps, the bucket reaches the water. Those
+// beats come from the same clock and rates as the animations in src/render
+// (see `beat`), so change them together. Sounds with nothing to see (a
+// house's fire, the tavern) just come now and then.
 // World sounds are positioned relative to the rider: they pan left/right and
 // fade out beyond EARSHOT.
 
 import type { BuildingType } from '../game/buildings';
+import type { Resource } from '../game/resources';
 import { employees } from '../game/people';
 import { RIDER_MAX_SPEED, getBuilding, type World } from '../game/world';
 import { HORSE_STRIDE } from '../render';
@@ -195,31 +202,51 @@ export function createSound(initialVolume = 0.6): Sound {
     swish(x: number) {
       noise({ x, dur: 0.3, gain: 0.18, filter: 'bandpass', freq: 1200, to: 3500, q: 2, attack: 0.12 });
     },
-    thud(x: number) {
-      tone({ x, dur: 0.18, gain: 0.3, freq: 90, to: 50 });
-      noise({ x, dur: 0.12, gain: 0.25, filter: 'lowpass', freq: 300 });
+    /** A load put down (or, softer, picked up): a sheaf, logs or a block of stone. */
+    setDown(x: number, r: Resource, k = 1) {
+      if (r === 'grain') {
+        noise({ x, dur: 0.12, gain: 0.2 * k, filter: 'bandpass', freq: 1800, attack: 0.02 });
+        tone({ x, dur: 0.14, gain: 0.15 * k, freq: 90, to: 55 });
+      } else if (r === 'wood') {
+        tone({ x, dur: 0.12, gain: 0.3 * k, freq: rnd(170, 200), to: 110 });
+        tone({ x, dur: 0.1, gain: 0.2 * k, freq: rnd(230, 260), to: 150, delay: 0.07 });
+        noise({ x, dur: 0.05, gain: 0.15 * k, filter: 'bandpass', freq: 900, q: 3 });
+      } else {
+        noise({ x, dur: 0.06, gain: 0.3 * k, filter: 'bandpass', freq: rnd(2600, 3200), q: 5 });
+        tone({ x, dur: 0.12, gain: 0.25 * k, freq: 110, to: 60 });
+      }
     },
   };
 
-  /** Everyday work of a finished building: how often (s) and what it sounds like. */
+  /** Everyday sounds of a finished building with nothing drawn to go with them: how often (s), and what. */
   const AMBIENT: Partial<Record<BuildingType, { every: [number, number]; play: (x: number) => void }>> = {
     house: { every: [3, 7], play: sfx.crackle },
-    mill: { every: [2.5, 4], play: sfx.creak },
-    blacksmith: { every: [1.4, 2.4], play: (x) => (sfx.anvil(x), sfx.anvil(x, 0.35)) },
     market: { every: [1.5, 3.5], play: (x) => sfx.clink(x) },
-    chapel: { every: [14, 22], play: (x) => [0, 1.4, 2.8].forEach((d) => sfx.bell(x, d)) },
     tavern: { every: [5, 9], play: (x) => (Math.random() < 0.3 ? sfx.clink(x, 1600) : sfx.lute(x)) },
     watchtower: { every: [18, 30], play: sfx.horn },
-    well: { every: [5, 9], play: sfx.splash },
   };
 
   // --- Per-frame state ------------------------------------------------------------
 
   let clock = 0;
   let lastGait: number | null = null;
-  /** Next time (clock s) each building makes its ambient / construction sound. */
+  /** Next time (clock s) each building makes its ambient sound. */
   const next = new Map<number, number>();
-  const farms = new Map<number, { storage: number; nextWork: number }>();
+  /** World time at the previous frame, for `beat`. */
+  let prevTime: number | null = null;
+  /** What each person carried at the previous frame. */
+  const carried = new Map<number, Resource | null>();
+
+  /**
+   * Whether an animation passed one of its beats this frame. The animation's
+   * cycle value is `world.time * rate + offset` (as in src/render); a beat
+   * falls at every multiple of `every` of it, shifted by `at`.
+   */
+  function beat(world: World, rate: number, every: number, at = 0, offset = 0): boolean {
+    if (prevTime === null || world.time <= prevTime) return false;
+    const n = (t: number) => Math.floor((t * rate + offset - at) / every);
+    return n(world.time) > n(prevTime);
+  }
 
   function horse(world: World): void {
     const r = world.rider;
@@ -243,6 +270,7 @@ export function createSound(initialVolume = 0.6): Sound {
       listenerX = world.rider.x;
       if (!live()) {
         lastGait = world.rider.gait;
+        prevTime = world.time;
         return;
       }
       horse(world);
@@ -257,40 +285,54 @@ export function createSound(initialVolume = 0.6): Sound {
         else sfx.chime(x);
       }
 
+      const PI = Math.PI;
       for (const b of world.buildings) {
         const x = world.plots[b.plotIndex].x;
-        const near = Math.abs(x - listenerX) < EARSHOT;
-        if (b.status === 'constructing') {
-          if (clock >= (next.get(b.id) ?? 0)) {
-            next.set(b.id, clock + rnd(0.3, 0.7));
-            if (near) sfx.knock(x + rnd(-40, 40));
-          }
-          continue;
+        const near = Math.abs(x - listenerX) < EARSHOT + 300;
+
+        // people at work here: the blows and sweeps of their tools (render/farm.ts drawWorker)
+        for (const p of employees(world, b)) {
+          const w = p.job!.worker;
+          const wx = x + w.dx;
+          if (w.task.kind !== 'job' || !near) continue;
+          const action = w.task.job.action;
+          // hammer: the arm is lowest when |sin(6t)| peaks
+          if (action === 'build' && beat(world, 6, PI, PI / 2)) sfx.knock(wx);
+          // seed cast at the start of each arm cycle (5t over 2π)
+          else if (action === 'sow' && beat(world, 5, 2 * PI)) sfx.rustle(wx);
+          // the scythe passes through the crop twice a swing (sin(4t) crosses 0)
+          else if (action === 'harvest' && beat(world, 4, PI)) sfx.swish(wx);
         }
+
+        if (b.status !== 'done' || !near) continue;
+        // buildings whose art shows the work (render/buildings.ts)
+        const seed = b.id * 97; // the art's per-building seed (render/scene.ts)
+        if (b.type === 'blacksmith' && beat(world, 5, PI)) sfx.anvil(x + 34); // sparks fly as the hammer lands
+        else if (b.type === 'well' && beat(world, 0.6, 2 * PI, PI / 2)) sfx.splash(x); // the bucket at the bottom
+        else if (b.type === 'mill' && beat(world, 0.9, PI / 2, 0, seed)) sfx.creak(x); // each quarter turn of the sails
+        else if (b.type === 'chapel' && beat(world, 1.3, PI, PI / 2)) sfx.bell(x); // the bell at each end of its swing
         const amb = AMBIENT[b.type];
         if (amb) {
           if (!next.has(b.id)) next.set(b.id, clock + rnd(0, amb.every[1]));
           if (clock >= next.get(b.id)!) {
             next.set(b.id, clock + rnd(...amb.every));
-            if (near) amb.play(x);
-          }
-        }
-        if (b.farm) {
-          let s = farms.get(b.id);
-          if (!s) farms.set(b.id, (s = { storage: b.stock.grain, nextWork: 0 }));
-          // a sheaf stacked in the store (not one collected by the village)
-          if (b.stock.grain > s.storage && near) sfx.thud(x);
-          s.storage = b.stock.grain;
-          for (const p of employees(world, b)) {
-            const w = p.job!.worker;
-            if (w.task.kind === 'job' && clock >= s.nextWork) {
-              const sow = w.task.job.action === 'sow';
-              s.nextWork = clock + (sow ? 0.6 : 0.75);
-              if (near) (sow ? sfx.rustle : sfx.swish)(x + w.dx);
-            }
+            amb.play(x);
           }
         }
       }
+
+      // a load picked up or put down, where the person stands
+      for (const p of world.people) {
+        const b = p.job && getBuilding(world, p.job.buildingId);
+        const now = p.job?.worker.carrying?.resource ?? null;
+        const before = carried.get(p.id);
+        carried.set(p.id, now);
+        if (!b || before === undefined || before === now) continue;
+        const wx = world.plots[b.plotIndex].x + p.job!.worker.dx;
+        if (before) sfx.setDown(wx, before);
+        if (now) sfx.setDown(wx, now, 0.5);
+      }
+      prevTime = world.time;
     },
 
     ui(name) {

@@ -35,7 +35,8 @@ touch). Portrait phones start zoomed out, with the street lifted above the butto
 A finished farm has fields behind the farmstead and in front of the road. Its farmer
 sows one plot at a time and goes back to the farm between plots. Each plot grows on
 its own clock, from sprouts to ripe gold. Ripe plots are harvested, and the sheaves
-are stacked in front of the house (up to 5). Ride up to a farm to see its store and
+are stacked in front of the house (up to 5), each in its own place. When the
+fields need nothing, the farmer carries them to the warehouse one by one. Ride up to a farm to see its store and
 crop counts.
 
 ## Code layout

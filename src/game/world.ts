@@ -3,16 +3,20 @@
 // and the rider, and runs each part's update in turn.
 // What is specific to one kind of thing lives in its own module: farm.ts
 // (fields), people.ts (villagers, hiring), worker.ts (the working day),
-// economy.ts (warehouses, costs, collection), site.ts (construction by
-// builders), land.ts (who uses which land).
+// economy.ts (warehouses, costs), site.ts (construction by builders),
+// land.ts (who uses which land).
+//
+// Nobody and nothing ever jumps: people walk everywhere from where they
+// stand (hired, let go, or done for the day), and goods only move in
+// someone's arms, from the place they lie to the place they will lie.
 
 import { BUILDINGS, BUILDING_TYPES, type BuildingType } from './buildings';
 import { timeOfDay } from './daynight';
-import { buildShortfall, collectGoods, COLLECT_EVERY, putAway, takeFromWarehouses, WAREHOUSE_START } from './economy';
+import { buildShortfall, depotFor, putAway, takeFromWarehouses, WAREHOUSE_START } from './economy';
 import { createFarm, DEFAULT_WORK, farmWorkplace, updateCrops, type FarmState } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
 import { PLOT_SPACING } from './layout';
-import { employees, nameFor, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
+import { employees, laneY, nameFor, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
 import { BUILDERS_PER_SITE, createSite, siteWorkplace, type Site } from './site';
 import { RESOURCES, stockOf, type Stock } from './resources';
 import { createWorker, currentJob, offDuty, updateWorker, type Worker, type Workplace } from './worker';
@@ -74,8 +78,6 @@ export interface Building {
   completedAt: number | null;
   /** The building's own store (capacities in its BuildingDef). */
   stock: Stock;
-  /** Seconds until the village next collects from the store (economy.ts). */
-  collectIn: number;
   /** While under construction: the materials brought so far (site.ts). */
   site?: Site;
   /** Fields — farms only, once finished. */
@@ -182,19 +184,21 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
       if (type === 'warehouse') b.stock = { ...WAREHOUSE_START };
     }
     world.events.length = 0;
-    // six villagers: one takes the farm, five are free to build
-    const kinds: Array<Look | 'chicken'> = ['peasant', 'woman', 'monk', 'peasant', 'chicken', 'chicken', 'woman', 'peasant'];
+    // six workers with a fixed profession for life (one farmer, five builders) and two townsfolk who never work
+    const kinds: Array<Look | 'chicken'> = ['peasant', 'woman', 'monk', 'peasant', 'chicken', 'chicken', 'peasant', 'peasant', 'peasant', 'peasant'];
+    let peasants = 0;
     for (const kind of kinds) {
       const id = world.nextId++;
       const stroll = {
         x: FIRST_PLOT_X + rand(world) * 16 * PLOT_SPACING,
+        y: laneY(id),
         dir: (rand(world) < 0.5 ? -1 : 1) as 1 | -1,
         speed: kind === 'chicken' ? 22 + rand(world) * 14 : 26 + rand(world) * 18,
         idle: rand(world) * 3,
       };
       const seed = Math.floor(rand(world) * 1e6);
       if (kind === 'chicken') world.animals.push({ id, kind, seed, stroll });
-      else world.people.push({ id, name: nameFor(kind, seed, new Set(world.people.map((p) => p.name))), look: kind, seed, job: null, stroll });
+      else world.people.push({ id, name: nameFor(kind, seed, new Set(world.people.map((p) => p.name))), look: kind, seed, job: null, stroll, ...(kind === 'peasant' ? { profession: peasants++ === 0 ? ('farmer' as const) : ('builder' as const) } : {}) });
     }
     staff(world);
   }
@@ -244,7 +248,6 @@ export function placeBuilding(
     status: instant ? 'done' : 'constructing',
     completedAt: instant ? world.time : null,
     stock: stockOf(),
-    collectIn: COLLECT_EVERY,
   };
   // builders bring the materials and build it (a free one has its materials on site already)
   if (!instant) b.site = createSite(opts.free ? BUILDINGS[type].cost : {});
@@ -281,7 +284,9 @@ function complete(world: World, b: Building): void {
   b.status = 'done';
   b.completedAt = world.time;
   delete b.site;
-  // the builders are done here; anything still in their arms goes back to a warehouse
+  // the builders are done here and walk off from where they stand (nobody
+  // carries anything by then: every load was put in place before the last
+  // of the work, unless construction was just switched off, which is instant)
   for (const p of employees(world, b)) {
     const load = p.job!.worker.carrying;
     if (load) putAway(world, load, world.plots[b.plotIndex].x + p.job!.worker.dx);
@@ -336,14 +341,13 @@ export function update(world: World, dt: number, input: MoveInput): void {
   updateWorkers(world, dt);
   // a site whose builders have done all the work is finished
   for (const b of world.buildings) if (b.status === 'constructing' && b.progress >= 1) complete(world, b);
-  collectGoods(world, dt);
   updateStrolls(world, dt, () => rand(world));
 }
 
 /** A building as a workplace for the people it employs; null if it has no work to give. */
 export function workplaceOf(world: World, b: Building): Workplace | null {
   if (b.site) return siteWorkplace(world, b, world.params.buildSpeed);
-  if (b.farm) return farmWorkplace(b.farm, b.stock, world.params);
+  if (b.farm) return farmWorkplace(b.farm, b.stock, world.params, depotFor(world, world.plots[b.plotIndex].x));
   return null;
 }
 
@@ -353,11 +357,12 @@ function staff(world: World): void {
   staffBuildings(world, (b, _role, who) => newWorker(world, b, who), { buildersPerSite: BUILDERS_PER_SITE, dayLabour });
 }
 
-/** A new hand walks over from wherever they are on the street. */
+/** A new hand walks over from exactly where they are on the street. */
 function newWorker(world: World, b: Building, who: Person): Worker {
   const place = workplaceOf(world, b)!;
   const w = createWorker(place);
   w.dx = who.stroll.x - world.plots[b.plotIndex].x;
+  w.y = who.stroll.y;
   w.facing = w.dx > 0 ? -1 : 1;
   w.task = { kind: 'idle', wait: 0.2 };
   return w;

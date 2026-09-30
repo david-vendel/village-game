@@ -73,10 +73,10 @@ function drawPerson(ctx: Ctx, v: Walker, phase: number, walking: boolean, time: 
   line(ctx, 0, -14 - bob, Math.sin(swing) * 9, 0, '#3d3128', 3);
   line(ctx, 0, -14 - bob, Math.sin(-swing) * 9, 0, '#4d3f33', 3);
   // body
-  if (v.kind === 'woman') {
+  if (look === 'woman') {
     poly(ctx, [-8, -2 - bob, 8, -2 - bob, 4, -26 - bob, -4, -26 - bob], tunic);
     poly(ctx, [-4, -14 - bob, 5, -14 - bob, 6, -2 - bob, -3, -2 - bob], '#e9e1d2'); // apron
-  } else if (v.kind === 'monk') {
+  } else if (look === 'monk') {
     poly(ctx, [-7, 0 - bob, 7, 0 - bob, 5, -27 - bob, -5, -27 - bob], tunic);
     line(ctx, -5, -14 - bob, 5, -14 - bob, '#c9b07a', 1.5);
   } else {

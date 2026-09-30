@@ -16,18 +16,20 @@
 // 3. update SavedWorld and the validator below. Old saves then load through the
 //    migration chain; a save newer than this code is refused, never overwritten.
 
-import { BUILDING_TYPES, BUILDINGS, ROLES, type BuildingType } from './buildings';
-import { COLLECT_EVERY } from './economy';
+import { BUILDING_TYPES, BUILDINGS, ROLES, type BuildingType, type Role } from './buildings';
 import { createFarm, repairFarm, type FarmState, type FieldPlot } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
 import { FIELD_ROWS, type FieldZone } from './layout';
-import { BUILDERS_PER_SITE, createSite } from './site';
-import { employees, nameFor, openings, type Animal, type Job, type Look, type Person, type Stroll } from './people';
+import { BUILDERS_PER_SITE, createSite, type Site } from './site';
+import { employees, laneY, nameFor, openings, type Animal, type Job, type Look, type Person, type Stroll } from './people';
 import { RESOURCES, type Load, type Resource, type Stock } from './resources';
 import type { Worker, WorkerTask } from './worker';
 import { createWorld, type Building, type Rider, type World } from './world';
 
-export const SAVE_VERSION = 8;
+export const SAVE_VERSION = 9;
+
+/** How often (s) the village used to collect goods from stores (until v9); old migrations need it. */
+const OLD_COLLECT_EVERY = 30;
 
 /** The persisted part of the world. */
 export type SavedWorld = Pick<
@@ -78,7 +80,7 @@ const MIGRATIONS: Record<number, (world: unknown) => unknown> = {
     const buildings = rec(world)?.buildings;
     for (const b of Array.isArray(buildings) ? buildings : []) {
       const farm = rec(rec(b)?.farm);
-      if (farm) farm.grainUse = COLLECT_EVERY;
+      if (farm) farm.grainUse = OLD_COLLECT_EVERY;
     }
     return world;
   },
@@ -144,7 +146,7 @@ const MIGRATIONS: Record<number, (world: unknown) => unknown> = {
       if (!b) continue;
       const farm = rec(b.farm);
       b.stock = { wood: 0, stone: 0, grain: typeof farm?.storage === 'number' ? farm.storage : 0 };
-      b.collectIn = typeof farm?.grainUse === 'number' ? farm.grainUse : COLLECT_EVERY;
+      b.collectIn = typeof farm?.grainUse === 'number' ? farm.grainUse : OLD_COLLECT_EVERY;
       const f = rec(farm?.farmer);
       if (farm && f) {
         const id = nextId++;
@@ -203,11 +205,49 @@ const MIGRATIONS: Record<number, (world: unknown) => unknown> = {
           status: 'done',
           completedAt: -100,
           stock: { wood: amount('wood'), stone: amount('stone'), grain: amount('grain') },
-          collectIn: COLLECT_EVERY,
+          collectIn: OLD_COLLECT_EVERY,
         });
       }
     }
     delete w.stock;
+    return world;
+  },
+  // v9: things have places and people have depth. Strollers keep a y (their
+  // lane); the invisible collection from stores is gone (collectIn); a site
+  // records what builders took off its pile and put in place (until now the
+  // pile was used up by progress); a delivery remembers the job its load
+  // came from (builders only carried fetched materials, farmers sheaves).
+  8: (world) => {
+    const list = (v: unknown) => (Array.isArray(v) ? (v as unknown[]) : []);
+    const rec = (v: unknown) => (typeof v === 'object' && v !== null ? (v as Raw) : undefined);
+    const w = rec(world);
+    if (!w) return world;
+    for (const who of [...list(w.people), ...list(w.animals)]) {
+      const s = rec(rec(who)?.stroll);
+      const id = rec(who)?.id;
+      if (s && typeof id === 'number') s.y = laneY(id);
+    }
+    for (const b of list(w.buildings).map(rec)) {
+      if (!b) continue;
+      delete b.collectIn;
+      const site = rec(b.site);
+      const delivered = rec(site?.delivered);
+      if (!site || !delivered) continue;
+      const cost = BUILDINGS[b.type as BuildingType]?.cost ?? {};
+      const progress = typeof b.progress === 'number' ? b.progress : 0;
+      const used: Raw = {};
+      for (const r of RESOURCES) used[r] = Math.min(typeof delivered[r] === 'number' ? (delivered[r] as number) : 0, progress * (cost[r] ?? 0));
+      site.taken = { ...used };
+      site.placed = { ...used };
+    }
+    for (const p of list(w.people)) {
+      const worker = rec(rec(rec(p)?.job)?.worker);
+      const task = rec(worker?.task);
+      const load = rec(worker?.carrying);
+      if (task?.kind === 'walk' && task.then === 'deliver' && !task.job) {
+        task.job = load?.resource === 'grain' ? { action: 'harvest', target: 0 } : { action: `fetch-${String(load?.resource ?? 'wood')}`, target: 0 };
+      }
+    }
     return world;
   },
 };
@@ -358,10 +398,20 @@ function building(v: unknown, path: string): Building {
     status: oneOf(b.status, ['constructing', 'done'] as const, `${path}.status`),
     completedAt: b.completedAt === null ? null : num(b.completedAt, `${path}.completedAt`),
     stock: stock(b.stock, `${path}.stock`),
-    collectIn: num(b.collectIn, `${path}.collectIn`),
   };
-  if (b.site !== undefined) out.site = { delivered: stock(obj(b.site, `${path}.site`).delivered, `${path}.site.delivered`) };
+  if (b.site !== undefined) out.site = site(b.site, `${path}.site`);
   if (b.farm !== undefined) out.farm = farm(b.farm, `${path}.farm`);
+  return out;
+}
+
+function site(v: unknown, path: string): Site {
+  const s = obj(v, path);
+  const out = { delivered: stock(s.delivered, `${path}.delivered`), taken: stock(s.taken, `${path}.taken`), placed: stock(s.placed, `${path}.placed`) };
+  // nothing can be taken off the pile that wasn't brought, or put in place that wasn't taken
+  for (const r of RESOURCES) {
+    out.taken[r] = Math.min(out.taken[r], out.delivered[r]);
+    out.placed[r] = Math.min(out.placed[r], out.taken[r]);
+  }
   return out;
 }
 
@@ -379,7 +429,14 @@ function stock(v: unknown, path: string): Stock {
 
 function stroll(v: unknown, path: string): Stroll {
   const s = obj(v, path);
-  return { x: num(s.x, `${path}.x`), dir: dir(s.dir, `${path}.dir`), speed: num(s.speed, `${path}.speed`), idle: num(s.idle, `${path}.idle`) };
+  return { x: num(s.x, `${path}.x`), y: num(s.y, `${path}.y`), dir: dir(s.dir, `${path}.dir`), speed: num(s.speed, `${path}.speed`), idle: num(s.idle, `${path}.idle`) };
+}
+
+/** Saved profession; older saves without one: whatever they work as, else builder (for peasants). */
+function professionOf(p: Raw, path: string): { profession?: Role } {
+  if (p.profession !== undefined) return { profession: oneOf(p.profession, ROLES, `${path}.profession`) };
+  if (p.job) return { profession: oneOf(obj(p.job, `${path}.job`).role, ROLES, `${path}.job.role`) };
+  return p.look === 'peasant' ? { profession: 'builder' } : {};
 }
 
 function person(v: unknown, path: string): Person {
@@ -390,6 +447,7 @@ function person(v: unknown, path: string): Person {
     look: oneOf(p.look, ['peasant', 'woman', 'monk'] as const, `${path}.look`),
     seed: num(p.seed, `${path}.seed`),
     job: p.job === null ? null : job(p.job, `${path}.job`),
+    ...professionOf(p, path),
     stroll: stroll(p.stroll, `${path}.stroll`),
   };
 }
@@ -458,7 +516,7 @@ function task(v: unknown, path: string): WorkerTask {
         toDx: num(t.toDx, `${path}.toDx`),
         toY: num(t.toY, `${path}.toY`),
         then,
-        job: then === 'job' ? ticket(t.job, `${path}.job`) : null,
+        job: then === 'home' ? null : ticket(t.job, `${path}.job`),
       };
     }
     case 'job':

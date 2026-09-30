@@ -5,11 +5,9 @@
 // (ground.ts), the same projection the land-grid overlay uses.
 
 import { type FarmState, type FieldPlot, growth } from '../game/farm';
-import type { Role } from '../game/buildings';
-import type { Look } from '../game/people';
 import { drawHead, tunicOf } from './people';
 import { DOOR_TIME, WALK_SPEED, type Worker } from '../game/worker';
-import { BACK_FIELD, BASE_Y, FIELD_ROWS, FRONT_FIELD, STORE, VIEW_H } from '../game/layout';
+import { BACK_FIELD, BASE_Y, FIELD_ROWS, FRONT_FIELD, SHEAF_SLOTS, STORE, VIEW_H } from '../game/layout';
 import { groundX } from './ground';
 import { circle, clamp01, type Ctx, ellipse, hash, lerp, line, mix, poly, rect } from './util';
 
@@ -143,14 +141,6 @@ function plotsOf(farm: FarmState | undefined, zone: FieldPlot['zone']): FieldPlo
 
 // --- Grain store -----------------------------------------------------------------------
 
-const SHEAF_SLOTS: Array<[number, number]> = [
-  [-15, 0],
-  [0, 0],
-  [15, 0],
-  [-7.5, -13],
-  [7.5, -13],
-];
-
 function sheaf(ctx: Ctx, x: number, y: number): void {
   // bundle of stalks tied at the waist, ears fanning out on top
   poly(ctx, [x - 5, y, x + 5, y, x + 3, y - 10, x + 7, y - 20, x - 7, y - 20, x - 3, y - 10], '#caa24a');
@@ -165,7 +155,8 @@ export function drawStore(ctx: Ctx, a: Anchor, sheaves: number): void {
   // wooden pallet the sheaves stand on
   poly(ctx, [cx - 24, y, cx + 24, y, cx + 28, y - 4, cx - 20, y - 4], '#6b4f35');
   line(ctx, cx - 24, y, cx + 24, y, '#4d3826', 1.5);
-  for (let i = 0; i < Math.min(sheaves, SHEAF_SLOTS.length); i++) sheaf(ctx, cx + SHEAF_SLOTS[i][0], y - 3 + SHEAF_SLOTS[i][1]);
+  // each sheaf in its own place (game/layout.ts), where the farmer put it down
+  for (let i = 0; i < Math.min(sheaves, SHEAF_SLOTS.length); i++) sheaf(ctx, a.x + SHEAF_SLOTS[i].dx, y - 3 - SHEAF_SLOTS[i].lift);
 }
 
 // --- Farmer ------------------------------------------------------------------------------
@@ -187,11 +178,12 @@ export function doorProgress(f: Worker): number {
  * A villager at work: the farmer (straw hat) or a builder (cap), walking,
  * sowing, scything, hammering, loading up, or carrying a load.
  */
-export function drawWorker(ctx: Ctx, f: Worker, role: Role, who: { look: Look; seed: number }, x: number, y: number, time: number): void {
+export function drawWorker(ctx: Ctx, f: Worker, seed: number, x: number, y: number, time: number): void {
   const inDoor = doorProgress(f);
   if (inDoor >= 1) return; // indoors
   const s = farmerScale(f.y) * (1 - 0.15 * inDoor); // a step back into the doorway
   const task = f.task;
+  const tunic = tunicOf('peasant', seed);
   const stepping = task.kind === 'enter' || task.kind === 'exit';
   const walking = task.kind === 'walk' || stepping;
   const phase = (stepping ? time * WALK_SPEED : f.stride) * 0.22;
@@ -219,20 +211,9 @@ export function drawWorker(ctx: Ctx, f: Worker, role: Role, who: { look: Look; s
   ctx.save();
   ctx.translate(0, -14 - bob);
   ctx.rotate(bend);
-  // their own clothes (the same as on the street), with a hat for the job
-  const builder = role === 'builder';
-  const tunic = tunicOf(who.look, who.seed);
-  if (who.look === 'woman') {
-    poly(ctx, [-8, 12, 8, 12, 4, -12, -4, -12], tunic); // dress
-    poly(ctx, [-4, 0, 5, 0, 6, 12, -3, 12], '#e9e1d2'); // apron
-  } else if (who.look === 'monk') {
-    poly(ctx, [-7, 14, 7, 14, 5, -13, -5, -13], tunic); // robe
-    line(ctx, -5, 0, 5, 0, '#c9b07a', 1.5); // cord
-  } else {
-    poly(ctx, [-6, 2, 6, 2, 5, -13, -5, -13], tunic); // tunic
-    line(ctx, -6, -1, 6, -1, '#5a4330', 1.5); // belt
-  }
-  drawHead(ctx, who.look, 0, -17, builder ? 'cap' : 'straw');
+  // the same clothes and head as on the street: nobody ever changes outfit
+  poly(ctx, [-6, 2, 6, 2, 5, -13, -5, -13], tunic);
+  drawHead(ctx, 'peasant', 0, -17);
 
   if (job && action === 'sow') {
     // seed bag at the hip; the arm casts seed in an arc

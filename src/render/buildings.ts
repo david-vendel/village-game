@@ -4,6 +4,7 @@
 
 import type { BuildingType } from '../game/buildings';
 import { demoFarm, type FarmState } from '../game/farm';
+import { pileItems, WAREHOUSE_SHOWN, warehouseSlot } from '../game/layout';
 import { stockOf, type Amounts, type Stock } from '../game/resources';
 import type { Worker } from '../game/worker';
 import { doorProgress, drawBackFences, drawBackField, drawFrontField, drawStore } from './farm';
@@ -350,30 +351,24 @@ function drawWarehouse(ctx: Ctx, a: DrawArgs): void {
   line(ctx, x0 + 36, a.base - 30, x0 + 68, a.base - 8, '#4a3322', 1.5); // bracing
   gableRoof(ctx, x0 - 4, a.base - 58, w + 8, d, 40, '#8e4a33', '#9a7650', 'tile', a.seed);
 
-  // what's inside shows in the stacks outside: a log pile and a stone heap, and sacks of grain
+  // what's inside shows in the stacks outside: a log pile and a stone heap, and
+  // sacks of grain; each item in its own place (game/layout.ts), where builders
+  // take it from and carriers put it down
   const stock = a.stock;
-  const logs = Math.min(12, Math.ceil((stock?.wood ?? 0) / 10));
-  const px = x0 + w + d * OX + 6;
-  for (let i = 0; i < logs; i++) {
-    const row = i < 5 ? 0 : i < 9 ? 1 : i < 11 ? 2 : 3;
-    const inRow = [0, 5, 9, 11][row];
-    const lx = px + (i - inRow) * 7 + row * 3.5;
-    const ly = a.base - 3 - row * 6;
-    ellipse(ctx, lx, ly, 3.4, 3.2, '#8b6440');
-    ellipse(ctx, lx, ly, 2.2, 2, '#c9a577');
+  const shown = (r: keyof typeof WAREHOUSE_SHOWN) => Math.min(WAREHOUSE_SHOWN[r], pileItems(stock?.[r] ?? 0));
+  for (let i = 0; i < shown('wood'); i++) {
+    const s = warehouseSlot('wood', i);
+    ellipse(ctx, a.x + s.dx, a.base - s.lift, 3.4, 3.2, '#8b6440');
+    ellipse(ctx, a.x + s.dx, a.base - s.lift, 2.2, 2, '#c9a577');
   }
-  const stones = Math.min(10, Math.ceil((stock?.stone ?? 0) / 10));
-  const sx = x0 - 30;
-  for (let i = 0; i < stones; i++) {
-    const row = i < 4 ? 0 : i < 7 ? 1 : i < 9 ? 2 : 3;
-    const inRow = [0, 4, 7, 9][row];
-    const bx = sx + (i - inRow) * 7 + row * 3.5;
-    const by = a.base - 5 - row * 5;
+  for (let i = 0; i < shown('stone'); i++) {
+    const s = warehouseSlot('stone', i);
+    const bx = a.x + s.dx - 3.25;
+    const by = a.base - s.lift - 2.5;
     rect(ctx, bx, by, 6.5, 5, shade('#aaa398', -hash(a.seed, i) * 0.15));
     rect(ctx, bx, by, 6.5, 1.5, '#c4beb3');
   }
-  const sacks = Math.min(4, Math.ceil((stock?.grain ?? 0) / 10));
-  for (let i = 0; i < sacks; i++) ellipse(ctx, x0 + 12 + i * 8, a.base - 5, 4, 5.5, '#d8c79a');
+  for (let i = 0; i < shown('grain'); i++) ellipse(ctx, a.x + warehouseSlot('grain', i).dx, a.base - 5, 4, 5.5, '#d8c79a');
 }
 
 function drawMill(ctx: Ctx, a: DrawArgs): void {

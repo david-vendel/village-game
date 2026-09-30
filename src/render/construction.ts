@@ -5,6 +5,7 @@
 import { BUILDINGS, type BuildingType } from '../game/buildings';
 import { constructionStage } from '../game/world';
 import { BUILDING_ART, type DrawArgs } from './buildings';
+import { pileItems, SITE_SHOWN, siteSlot } from '../game/layout';
 import type { Amounts } from '../game/resources';
 import { circle, clamp01, type Ctx, ellipse, hash, line, rect } from './util';
 
@@ -39,7 +40,7 @@ export function drawConstruction(ctx: Ctx, type: BuildingType, a: DrawArgs, prog
   const left = a.x - W / 2;
   const { stage, t } = constructionStage(progress);
 
-  materials(ctx, a.x + W / 2 + 14, a.base, a.onSite ?? {}, a.seed);
+  materials(ctx, a.x, W, a.base, a.onSite ?? {}, a.seed);
 
   // 1. stakes and rope marking the footprint
   const stakes = 6;
@@ -111,21 +112,24 @@ export function drawConstruction(ctx: Ctx, type: BuildingType, a: DrawArgs, prog
 }
 
 /**
- * The materials lying on the site: delivered by the builders and not yet built
- * with. An unsupplied site has none; each delivery adds to the pile, and
- * building uses it up.
+ * The materials lying on the site's pile: delivered by the builders and not
+ * yet taken to the building. An unsupplied site has none; each delivery adds
+ * a log or block in its own place (game/layout.ts), and builders take them
+ * off the top.
  */
-function materials(ctx: Ctx, x: number, base: number, onSite: Amounts, seed: number): void {
-  const logs = Math.min(8, Math.ceil((onSite.wood ?? 0) / 10));
+function materials(ctx: Ctx, x: number, width: number, base: number, onSite: Amounts, seed: number): void {
+  const logs = Math.min(SITE_SHOWN.wood, pileItems(onSite.wood ?? 0));
   for (let i = 0; i < logs; i++) {
-    const row = i < 4 ? 0 : i < 7 ? 1 : 2;
-    const col = i - [0, 4, 7][row];
-    const cx = x + col * 9 + row * 4;
-    const cy = base + 4 - row * 8;
-    rect(ctx, cx - 4, cy - 8, 30, 8, '#7b5634');
-    circle(ctx, cx - 4, cy - 4, 4, '#c9a06a');
-    circle(ctx, cx - 4, cy - 4, 1.5, '#8a6440');
+    const s = siteSlot(width, 'wood', i);
+    const cx = x + s.dx - 15;
+    const cy = base - s.lift;
+    rect(ctx, cx, cy - 8, 30, 8, '#7b5634');
+    circle(ctx, cx, cy - 4, 4, '#c9a06a');
+    circle(ctx, cx, cy - 4, 1.5, '#8a6440');
   }
-  const stones = Math.min(12, Math.ceil((onSite.stone ?? 0) / 10));
-  for (let i = 0; i < stones; i++) ellipse(ctx, x + 50 + (i % 3) * 8, base + 3 - Math.floor(i / 3) * 6, 5, 3.5, hash(seed, i) < 0.5 ? '#a89c88' : '#948877');
+  const stones = Math.min(SITE_SHOWN.stone, pileItems(onSite.stone ?? 0));
+  for (let i = 0; i < stones; i++) {
+    const s = siteSlot(width, 'stone', i);
+    ellipse(ctx, x + s.dx, base - s.lift, 5, 3.5, hash(seed, i) < 0.5 ? '#a89c88' : '#948877');
+  }
 }
