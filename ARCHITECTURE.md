@@ -124,7 +124,8 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
 - `daynight.ts`: time of day, from `world.dayClock`, which runs at the `timeSpeed` knob (a day is
   `DAY_LENGTH` = 300 s at 1×). The `nightHours` knob (0–12) shapes the sun's path: fewer hours
   lift it, like a summer far north; 0 is the midnight sun. `timeOfDay` gives villagers what they plan
-  by: daylight (enough light to work), day number, hour, and game hours per second.
+  by: daylight (enough light to work: from half an hour after sunrise to half an hour before
+  sunset, `WORK_MARGIN`), day number, hour, and game hours per second.
 - `land.ts`: the land grid, tested by `land.test.ts`. The street is cut into 25 px cells in two
   rows: `back` (behind the road, where buildings stand) and `front` (between the road and the
   viewer). A building claims its footprint cells (its `width` rounded up to whole cells, centred on

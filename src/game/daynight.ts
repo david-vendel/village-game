@@ -15,8 +15,12 @@ export const DAY_LENGTH = 300;
 export const GAME_HOUR = DAY_LENGTH / 24;
 /** Phase at dayClock 0: a new village starts early in the morning. */
 const START_PHASE = 0.28;
-/** Sun altitude above which there is enough light to work the fields. */
-const WORK_LIGHT = 0.15;
+/**
+ * Game hours after sunrise, and before sunset, when it is still too dim to
+ * work outdoors. Work hours follow the real sunrise and sunset, so with short
+ * nights people work late into the long evening.
+ */
+const WORK_MARGIN = 0.5;
 
 /** 0..1 through the day. */
 export function dayPhase(world: World): number {
@@ -33,14 +37,22 @@ export function sunAltitude(phase: number, nightHours: number): number {
   return (-Math.cos(phase * Math.PI * 2) + lift) / (1 + lift);
 }
 
+/** Sunrise and sunset (game hours) with this many hours of night, centred on midnight. */
+export function sunHours(nightHours: number): { rise: number; set: number } {
+  const n = Math.min(12, Math.max(0, nightHours));
+  return { rise: n / 2, set: 24 - n / 2 };
+}
+
 /** The sun's height right now. */
 export function sunNow(world: World): number {
   return sunAltitude(dayPhase(world), world.params.nightHours);
 }
 
-/** Whether there is light enough for outdoor work. */
+/** Whether there is light enough for outdoor work: from just after sunrise to just before sunset. */
 export function isWorkTime(world: World): boolean {
-  return sunNow(world) > WORK_LIGHT;
+  const hour = dayPhase(world) * 24;
+  const { rise, set } = sunHours(world.params.nightHours);
+  return hour > rise + WORK_MARGIN && hour < set - WORK_MARGIN;
 }
 
 /** Day number (from 1) and clock time, for display. */
