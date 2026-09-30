@@ -6,6 +6,7 @@ import { timeOfDay } from '../game/daynight';
 import { PLOT_SPACING } from '../game/layout';
 import { laneY, type Person } from '../game/people';
 import { offDuty } from '../game/worker';
+import { makeCollapsible } from './panel';
 import { getBuilding, type Building, type World } from '../game/world';
 
 function occupation(p: Person): string {
@@ -110,7 +111,7 @@ export function installWorkersPanel(world: World): void {
     'border-radius:8px;padding:8px 12px 10px;user-select:none;pointer-events:none';
   const table = document.createElement('table');
   table.style.cssText = 'border-collapse:collapse';
-  root.append(table);
+  makeCollapsible(root, table, 'left', 'village-game:workers-open');
   document.body.appendChild(root);
 
   const render = () => {

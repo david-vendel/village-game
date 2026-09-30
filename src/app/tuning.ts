@@ -5,6 +5,7 @@
 
 import { DAY_LENGTH } from '../game/daynight';
 import { DEFAULT_PARAMS, type World, type WorldParams } from '../game/world';
+import { makeCollapsible } from './panel';
 import type { Sound } from './sound';
 
 interface Knob {
@@ -85,6 +86,7 @@ export function installTuning(world: World, sound: Sound, opts: { onNewVillage: 
     'background:rgba(20,14,8,0.78);border:1px solid rgba(232,200,114,0.25);' +
     'border-radius:8px;padding:8px 12px 10px;user-select:none;text-align:right';
 
+  const content = document.createElement('div');
   for (const k of knobs) {
     k.set(k.def);
     const fromUrl = Number(params.get(k.param) ?? NaN);
@@ -108,7 +110,7 @@ export function installTuning(world: World, sound: Sound, opts: { onNewVillage: 
     });
     // hand the arrow keys back to the horse once the drag ends
     input.addEventListener('change', () => input.blur());
-    root.append(label, input);
+    content.append(label, input);
   }
 
   const display: DisplayOptions = { grid: params.get('grid') === '1' };
@@ -124,7 +126,7 @@ export function installTuning(world: World, sound: Sound, opts: { onNewVillage: 
     box.blur();
   });
   toggle.append('land grid', box);
-  root.append(toggle);
+  content.append(toggle);
 
   // the game autosaves; this is the way back to a fresh start
   const reset = document.createElement('button');
@@ -136,8 +138,9 @@ export function installTuning(world: World, sound: Sound, opts: { onNewVillage: 
     reset.blur();
     if (window.confirm('Start a new village? Your saved village will be lost.')) opts.onNewVillage();
   });
-  root.append(reset);
+  content.append(reset);
 
+  makeCollapsible(root, content, 'right', 'village-game:tuning-open');
   document.body.appendChild(root);
   return display;
 }

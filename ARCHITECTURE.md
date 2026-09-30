@@ -219,6 +219,8 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   night length, sowing and harvest time per cell, volume), the
   land-grid toggle and the "new village" button (wipes the save and reloads).
   Non-default values are kept in the URL query.
+- `panel.ts`: makes the side panels (workers list, tuning) collapsible to a small expand chip,
+  remembered per browser.
 - `src/main.ts`: bootstrap and the frame loop.
 
 ## Rules
