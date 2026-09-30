@@ -12,8 +12,9 @@ import { VIEW_H } from './render/util';
 export const ZOOM_MAX = 1;
 /** Narrow (portrait) screens start zoomed out until this much street is visible. */
 const MIN_DEFAULT_VIEW_W = 460;
-/** UI is laid out for at least this many UI units across. */
+/** UI is laid out for at least this many UI units across / down. */
 const MIN_UI_W = 440;
+const MIN_UI_H = 540;
 /** Space kept under the street for touch buttons on portrait screens (UI units). */
 const TOUCH_PAD_UI = 118;
 
@@ -34,7 +35,7 @@ export interface Viewport {
 }
 
 function uiScaleFor(cw: number, ch: number): number {
-  return Math.min(ch / VIEW_H, cw / MIN_UI_W);
+  return Math.min(ch / MIN_UI_H, cw / MIN_UI_W);
 }
 
 /** Canvas px under the street reserved for touch controls. */

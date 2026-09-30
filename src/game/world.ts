@@ -1,6 +1,7 @@
 // Pure game state + update logic. No DOM, no canvas — unit-tested in world.test.ts.
 
 import { BUILDINGS, BUILDING_TYPES, type BuildingType } from './buildings';
+import { createFarm, updateFarm, type FarmState } from './farm';
 
 export const WORLD_WIDTH = 6400;
 export const PLOT_WIDTH = 200;
@@ -31,6 +32,8 @@ export interface Building {
   status: BuildingStatus;
   /** World time (s) at which the building was completed; used for the completion effect. */
   completedAt: number | null;
+  /** Fields, farmer and grain store — farms only, once finished. */
+  farm?: FarmState;
 }
 
 export interface Rider {
@@ -130,7 +133,9 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
   if (opts.village ?? true) {
     for (const [plotIndex, type] of STARTING_VILLAGE) {
       const b = placeBuilding(world, plotIndex, type, { instant: true });
-      if (b) b.completedAt = -100; // no completion effect for the starting village
+      if (!b) continue;
+      b.completedAt = -100; // no completion effect for the starting village
+      if (b.farm) b.farm = createFarm({ established: true });
     }
     world.events.length = 0;
     const kinds: Villager['kind'][] = ['peasant', 'woman', 'monk', 'peasant', 'chicken', 'chicken', 'woman'];
@@ -185,6 +190,7 @@ export function placeBuilding(
     status: instant ? 'done' : 'constructing',
     completedAt: instant ? world.time : null,
   };
+  if (instant && type === 'farm') b.farm = createFarm();
   world.buildings.push(b);
   plot.buildingId = b.id;
   world.events.push({ kind: 'placed', buildingId: b.id });
@@ -209,6 +215,7 @@ function complete(world: World, b: Building): void {
   b.progress = 1;
   b.status = 'done';
   b.completedAt = world.time;
+  if (b.type === 'farm') b.farm = createFarm();
   world.events.push({ kind: 'completed', buildingId: b.id });
 }
 
@@ -252,6 +259,7 @@ export function update(world: World, dt: number, input: MoveInput): void {
   world.time += dt;
   updateRider(world, dt, world.menu ? { left: false, right: false } : input);
   updateConstruction(world, dt);
+  for (const b of world.buildings) if (b.farm) updateFarm(b.farm, dt);
   updateVillagers(world, dt);
 }
 

@@ -1,11 +1,6 @@
 // Shared drawing helpers and scene constants.
 
-/** Logical view height; the canvas is scaled so this always fills the screen. */
-export const VIEW_H = 540;
-/** Top of the road; buildings stand just behind it. */
-export const GROUND_Y = 432;
-/** Rider / villager foot line on the road. */
-export const ROAD_Y = 474;
+export { BASE_Y, GROUND_Y, ROAD_BOTTOM, ROAD_Y, VIEW_H } from '../game/layout';
 
 export type Ctx = CanvasRenderingContext2D;
 

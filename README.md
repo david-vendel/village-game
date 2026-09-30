@@ -29,4 +29,12 @@ folder by nginx, the same way as ~/hollow. Not deployed yet.
 Touch controls appear automatically on phones and tablets (or after the first
 touch). Portrait phones start zoomed out, with the street lifted above the buttons.
 
+## Farms
+
+A finished farm has fields behind the farmstead and in front of the road. Its farmer
+sows one plot at a time and goes back to the farm between plots. Each plot grows on
+its own clock, from sprouts to ripe gold. Ripe plots are harvested, and the sheaves
+are stacked in front of the house (up to 5). Ride up to a farm to see its store and
+crop counts.
+
 See [ARCHITECTURE.md](ARCHITECTURE.md) for how it is put together.

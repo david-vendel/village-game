@@ -3,6 +3,8 @@
 // roof. The sun is to the left, so right-hand faces are in shadow.
 
 import type { BuildingType } from '../game/buildings';
+import { demoFarm, type FarmState } from '../game/farm';
+import { drawBackField, drawFrontField, drawStore } from './farm';
 import { circle, type Ctx, ellipse, hash, line, poly, rect, shade, smoke } from './util';
 
 export interface DrawArgs {
@@ -13,12 +15,16 @@ export interface DrawArgs {
   time: number;
   /** Stable per-building seed for colour/detail variation. */
   seed: number;
+  /** Live farm state (fields, store) — farms only. */
+  farm?: FarmState;
 }
 
 export interface BuildingArt {
   /** Drawn for all buildings before any building body (e.g. farm fields). */
   behind?: (ctx: Ctx, a: DrawArgs) => void;
   draw: (ctx: Ctx, a: DrawArgs) => void;
+  /** Drawn on the land in front of the road (e.g. the farm's front field). */
+  front?: (ctx: Ctx, a: DrawArgs) => void;
 }
 
 // Oblique projection for depth: back edges shift right and up.
@@ -266,65 +272,14 @@ function drawHouse(ctx: Ctx, a: DrawArgs): void {
 }
 
 function drawFarmField(ctx: Ctx, a: DrawArgs): void {
-  // A wheat field stretching back behind the farmstead, rows converging in perspective.
-  const back = a.base - 64;
-  const front = a.base - 2;
-  const xl = a.x - 190;
-  const xr = a.x + 190;
-  const skew = 40;
-  const pts = [xl, front, xr, front, xr + skew - 20, back, xl + skew + 10, back];
-  const g = ctx.createLinearGradient(0, back, 0, front);
-  g.addColorStop(0, '#c9a94e');
-  g.addColorStop(1, '#d9b85a');
-  poly(ctx, pts, undefined);
-  ctx.fillStyle = g;
-  ctx.fill();
-  ctx.save();
-  ctx.clip();
-  // furrows
-  for (let i = -12; i <= 12; i++) {
-    const fx = a.x + i * 16;
-    ctx.globalAlpha = 0.35;
-    line(ctx, fx, front, fx + skew * 0.6 + i * 3, back, '#9b7f35', 2);
-  }
-  // swaying wheat heads
-  ctx.globalAlpha = 1;
-  for (let row = 0; row < 11; row++) {
-    const y = back + 3 + row * 5.5;
-    for (let k = 0; k < 60; k++) {
-      const fx = xl + k * 7 + row * 3 + hash(k, row) * 4 + (skew * (1 - row / 11)) * 0.5;
-      const sway = Math.sin(a.time * 1.8 + fx * 0.05 + row) * 1.6;
-      line(ctx, fx, y + 6, fx + sway, y, row % 2 ? '#b8973e' : '#e4c46a', 1.3);
-    }
-  }
-  ctx.restore();
-  // second field: green crop patch behind
-  poly(ctx, [xl + skew + 10, back, xr + skew - 20, back, xr + skew - 34, back - 12, xl + skew + 24, back - 12], '#8ea24b');
-  ctx.globalAlpha = 0.4;
-  for (let i = 0; i < 40; i++) rect(ctx, xl + skew + 20 + i * 9, back - 11, 5, 10, '#6f8a36');
-  ctx.globalAlpha = 1;
+  drawBackField(ctx, a, a.farm, a.seed);
+}
+
+function drawFarmFrontField(ctx: Ctx, a: DrawArgs): void {
+  drawFrontField(ctx, a, a.farm, a.seed);
 }
 
 function drawFarm(ctx: Ctx, a: DrawArgs): void {
-  // haystacks
-  for (const [dx, s] of [
-    [-140, 1],
-    [118, 0.8],
-  ] as const) {
-    const hx = a.x + dx;
-    ctx.fillStyle = '#d7b35c';
-    ctx.beginPath();
-    ctx.moveTo(hx - 20 * s, a.base);
-    ctx.quadraticCurveTo(hx - 20 * s, a.base - 34 * s, hx, a.base - 40 * s);
-    ctx.quadraticCurveTo(hx + 20 * s, a.base - 34 * s, hx + 20 * s, a.base);
-    ctx.fill();
-    ctx.fillStyle = '#b8923f';
-    ctx.beginPath();
-    ctx.moveTo(hx + 4 * s, a.base);
-    ctx.quadraticCurveTo(hx + 18 * s, a.base - 20 * s, hx + 8 * s, a.base - 36 * s);
-    ctx.quadraticCurveTo(hx + 20 * s, a.base - 34 * s, hx + 20 * s, a.base);
-    ctx.fill();
-  }
   // small cottage with a lean-to barn
   const w = 80;
   const d = 40;
@@ -343,20 +298,17 @@ function drawFarm(ctx: Ctx, a: DrawArgs): void {
   line(ctx, bx + 10, a.base - 30, bx + 34, a.base, '#8b6440', 2.5);
   line(ctx, bx + 34, a.base - 30, bx + 10, a.base, '#8b6440', 2.5);
   poly(ctx, [bx - 4, a.base - 38, bx + 50, a.base - 38, bx + 50, a.base - 52, bx - 4, a.base - 58], '#8e4a33');
-  // fence in front of the field
-  for (let fx = a.x - 185; fx < a.x + 190; fx += 18) {
-    if (fx > x0 - 12 && fx < bx + 60) continue;
-    rect(ctx, fx, a.base - 16, 3, 16, '#6b4f35');
-  }
-  ctx.globalAlpha = 0.9;
-  for (const [s, e] of [
-    [a.x - 185, x0 - 12],
-    [bx + 60, a.x + 190],
+  // low fences in front of the side plots
+  for (const [s0, e0] of [
+    [a.x - 212, a.x - 150],
+    [a.x + 88, a.x + 212],
   ]) {
-    rect(ctx, s, a.base - 13, e - s, 2, '#7d5d3f');
-    rect(ctx, s, a.base - 7, e - s, 2, '#7d5d3f');
+    for (let fx = s0; fx <= e0; fx += 16) rect(ctx, fx, a.base - 14, 3, 14, '#6b4f35');
+    rect(ctx, s0, a.base - 12, e0 - s0 + 3, 2, '#7d5d3f');
+    rect(ctx, s0, a.base - 6, e0 - s0 + 3, 2, '#7d5d3f');
   }
-  ctx.globalAlpha = 1;
+  // the grain store between the house and the street
+  drawStore(ctx, a, a.farm);
 }
 
 function drawMill(ctx: Ctx, a: DrawArgs): void {
@@ -746,7 +698,7 @@ function drawWell(ctx: Ctx, a: DrawArgs): void {
 
 export const BUILDING_ART: Record<BuildingType, BuildingArt> = {
   house: { draw: drawHouse },
-  farm: { behind: drawFarmField, draw: drawFarm },
+  farm: { behind: drawFarmField, draw: drawFarm, front: drawFarmFrontField },
   mill: { draw: drawMill },
   blacksmith: { draw: drawBlacksmith },
   market: { draw: drawMarket },
@@ -756,13 +708,15 @@ export const BUILDING_ART: Record<BuildingType, BuildingArt> = {
   well: { draw: drawWell },
 };
 
+const DEMO_FARM = demoFarm();
+
 /** Small icon-sized preview for the build menu (draws the real art, scaled). */
 export function drawBuildingIcon(ctx: Ctx, type: BuildingType, x: number, base: number, scale: number, time: number): void {
   ctx.save();
   ctx.translate(x, base);
   ctx.scale(scale, scale);
   const art = BUILDING_ART[type];
-  const args = { x: 0, base: 0, time, seed: 7 };
+  const args: DrawArgs = { x: 0, base: 0, time, seed: 7, farm: type === 'farm' ? DEMO_FARM : undefined };
   if (art.behind) art.behind(ctx, args);
   art.draw(ctx, args);
   ctx.restore();

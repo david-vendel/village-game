@@ -339,7 +339,7 @@ export function drawForeground(ctx: Ctx, v: View): void {
   for (let i = i0; i < i0 + v.width / T + 4; i++) {
     const sx = i * T - off + hash(i, 120) * 10;
     const base = VIEW_H + 4;
-    const h = 18 + hash(i, 121) * 26;
+    const h = 10 + hash(i, 121) * 16;
     const sway = Math.sin(v.time * 1.6 + i * 0.7) * 3;
     ctx.fillStyle = hash(i, 122) < 0.5 ? '#3f5222' : '#56692b';
     ctx.beginPath();
@@ -355,11 +355,6 @@ export function drawForeground(ctx: Ctx, v: View): void {
     if (hash(i, 123) < 0.18) {
       const fc = ['#e8d36a', '#d9795f', '#f2efe6', '#b98ad6'][Math.floor(hash(i, 124) * 4)];
       circle(ctx, sx + sway, base - h - 2, 3, fc);
-    }
-    if (hash(i, 125) < 0.05) {
-      // old fence post
-      rect(ctx, sx, base - 46, 7, 46, '#5a4330');
-      rect(ctx, sx, base - 46, 2, 46, '#7a5d43');
     }
   }
 }

@@ -21,6 +21,16 @@ export function drawConstructionBehind(ctx: Ctx, type: BuildingType, a: DrawArgs
   ctx.globalAlpha = 1;
 }
 
+export function drawConstructionFront(ctx: Ctx, type: BuildingType, a: DrawArgs, progress: number): void {
+  const art = BUILDING_ART[type];
+  if (!art.front) return;
+  const t = clamp01((progress - 0.5) / 0.5);
+  if (t <= 0) return;
+  ctx.globalAlpha = t;
+  art.front(ctx, a);
+  ctx.globalAlpha = 1;
+}
+
 export function drawConstruction(ctx: Ctx, type: BuildingType, a: DrawArgs, progress: number): void {
   const def = BUILDINGS[type];
   const W = def.width;

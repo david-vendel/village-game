@@ -3,10 +3,11 @@
 // touch buttons) is drawn separately by main.ts in its own coordinate space.
 
 import { BUILDINGS } from '../game/buildings';
-import { getBuilding, plotAt, WORLD_WIDTH, type World } from '../game/world';
+import { getBuilding, plotAt, WORLD_WIDTH, type Building, type World } from '../game/world';
 import { drawBackground, drawForeground, type View } from './background';
 import { BUILDING_ART, type DrawArgs } from './buildings';
-import { drawConstruction, drawConstructionBehind } from './construction';
+import { drawConstruction, drawConstructionBehind, drawConstructionFront } from './construction';
+import { drawFarmer } from './farm';
 import { drawRider } from './horse';
 import { drawVillager } from './people';
 import { drawBuildingLabel, drawCompletionEffect, drawPlotPrompt, drawProgress } from './ui';
@@ -39,20 +40,31 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   drawBackground(ctx, v);
 
   const onScreen = (x: number, margin = 280) => x - camX > -margin && x - camX < viewW + margin;
-  const args = (plotIndex: number, seed: number): DrawArgs => ({
-    x: world.plots[plotIndex].x - camX,
+  const args = (b: Building): DrawArgs => ({
+    x: world.plots[b.plotIndex].x - camX,
     base: BASE,
     time: world.time,
-    seed,
+    seed: b.id * 97,
+    farm: b.farm,
   });
+  const farms = world.buildings.filter((b) => b.farm && onScreen(world.plots[b.plotIndex].x, 300));
+  /** Draw farmers whose y satisfies `pred` (depth decides which layer they are in). */
+  const farmers = (pred: (y: number) => boolean) => {
+    for (const b of farms) {
+      const f = b.farm!.farmer;
+      if (pred(f.y)) drawFarmer(ctx, f, world.plots[b.plotIndex].x + f.dx - camX, f.y, world.time);
+    }
+  };
 
   // things that spread behind buildings (farm fields)
   for (const b of world.buildings) {
     if (!onScreen(world.plots[b.plotIndex].x, 400)) continue;
-    const a = args(b.plotIndex, b.id * 97);
+    const a = args(b);
     if (b.status === 'done') BUILDING_ART[b.type].behind?.(ctx, a);
     else drawConstructionBehind(ctx, b.type, a, b.progress);
   }
+  // farmers out in the back fields are hidden by the farmhouse when behind it
+  farmers((y) => y < BASE - 4);
 
   // empty plot markers
   for (const p of world.plots) {
@@ -63,10 +75,19 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   // buildings
   for (const b of world.buildings) {
     if (!onScreen(world.plots[b.plotIndex].x)) continue;
-    const a = args(b.plotIndex, b.id * 97);
+    const a = args(b);
     if (b.status === 'done') BUILDING_ART[b.type].draw(ctx, a);
     else drawConstruction(ctx, b.type, a, b.progress);
   }
+
+  // land in front of the road (farm front fields)
+  for (const b of world.buildings) {
+    if (!onScreen(world.plots[b.plotIndex].x, 300)) continue;
+    const a = args(b);
+    if (b.status === 'done') BUILDING_ART[b.type].front?.(ctx, a);
+    else drawConstructionFront(ctx, b.type, a, b.progress);
+  }
+  farmers((y) => y >= BASE - 4 && y < ROAD_Y);
 
   // villagers behind the rider (odd ids walk the far side of the street)
   for (const vl of world.villagers) {
@@ -76,6 +97,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   for (const vl of world.villagers) {
     if (vl.id % 2 === 0 && onScreen(vl.x)) drawVillager(ctx, vl, vl.x - camX, ROAD_Y + 12, world.time);
   }
+  farmers((y) => y >= ROAD_Y);
 
   drawForeground(ctx, v);
   drawGrade(ctx, viewW, sv.top, sv.bottom);

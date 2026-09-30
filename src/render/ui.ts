@@ -7,6 +7,7 @@
 //   readable when zoomed out.
 
 import { BUILDINGS, BUILDING_TYPES } from '../game/buildings';
+import { STORAGE_MAX } from '../game/farm';
 import { constructionStage, STAGE_LABEL, type Building, type World } from '../game/world';
 import { drawBuildingIcon } from './buildings';
 import type { Ctx } from './util';
@@ -332,12 +333,18 @@ export function drawPlotPrompt(ctx: Ctx, sx: number, base: number, time: number,
 /** Name + purpose label over a finished building the rider is next to. */
 export function drawBuildingLabel(ctx: Ctx, b: Building, sx: number, y: number, k: number): void {
   const def = BUILDINGS[b.type];
+  const lines = [def.purpose];
+  if (b.farm) {
+    const n = (st: string) => b.farm!.plots.filter((p) => p.state === st).length;
+    lines.push(`Grain store ${b.farm.storage}/${STORAGE_MAX} · ${n('ripe')} ripe · ${n('growing')} growing · ${n('fallow')} to sow`);
+  }
   around(ctx, sx, y, k, () => {
     ctx.font = `12px ${SERIF}`;
-    const w = Math.max(ctx.measureText(def.purpose).width, 60) + 24;
-    panel(ctx, sx - w / 2, y - 44, w, 40, 0.6);
-    text(ctx, def.name, sx, y - 27, 14, GOLD, 'center', true);
-    text(ctx, def.purpose, sx, y - 11, 12, '#f3ead8', 'center');
+    const w = Math.max(60, ...lines.map((l) => ctx.measureText(l).width)) + 24;
+    const h = 24 + lines.length * 16;
+    panel(ctx, sx - w / 2, y - h - 4, w, h, 0.6);
+    text(ctx, def.name, sx, y - h + 13, 14, GOLD, 'center', true);
+    lines.forEach((l, i) => text(ctx, l, sx, y - h + 29 + i * 16, 12, i ? '#e8d9a8' : '#f3ead8', 'center'));
   });
 }
 

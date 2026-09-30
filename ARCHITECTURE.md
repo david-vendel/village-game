@@ -10,6 +10,16 @@ horse, people and the landscape are drawn procedurally in code.
 - `src/game/world.ts`: pure game state and logic: plots, building entities, rider physics,
   villagers, build menu, construction progress and stages, and the construction toggle.
   It doesn't use the DOM, and `world.test.ts` covers it.
+- `src/game/farm.ts`: farm simulation (pure, covered by `farm.test.ts`). A finished farm has
+  4 plots behind the farmstead (either side of the house) and 4 in front of the road, a farmer
+  and a grain store holding 0–5 sheaves. Each plot keeps its own state (fallow → growing → ripe)
+  and age. The farmer works one plot at a time. To sow, he walks out, sows (2.5 s), then walks
+  back to the farm, and the plot grows on its own clock (30 s to ripe). When a plot is ripe and
+  the store has room, he walks out, harvests (3 s), carries the sheaf back and stacks it.
+  Harvesting takes priority over sowing, and the nearest plot is picked first. A full store stops
+  harvesting.
+- `src/game/layout.ts`: the vertical layout of the scene (road, ground, 600-unit scene height)
+  shared by logic and rendering.
 - `src/render/`: everything visual.
   - `background.ts`: parallax layers: sky and sun, clouds, mountains, the castle on its hill,
     patchwork fields, the distant village, the tree line, the street and the foreground grass.
@@ -21,6 +31,9 @@ horse, people and the landscape are drawn procedurally in code.
     bottom up, behind scaffolding with builders.
   - `horse.ts`: the monarch on horseback: 4-beat walk and diagonal trot leg cycles driven by
     distance travelled, plus idle breathing, head nods, tail swish and hoof pawing.
+  - `farm.ts`: back/front field plots with crops drawn by growth stage (sprouts → green → golden
+    → ripe with ears), the farmer (walking, sowing with seed cast, scything, carrying a sheaf,
+    drawn larger the closer he is to the viewer) and the sheaf store.
   - `people.ts`: villagers and chickens. `ui.ts`: HUD, build menu, labels, progress bars, toasts.
   - `scene.ts`: draw order and the camera.
 - `src/viewport.ts`: zoom and coordinate spaces. Zoom 1 fits the 540-unit-tall scene to the
@@ -39,5 +52,7 @@ horse, people and the landscape are drawn procedurally in code.
 
 ## Not done yet / ideas
 
-- No economy (coins/resources); building is free.
+- No economy (coins/resources); building is free. Grain isn't used by anything yet, so a farm
+  with a full store (5 sheaves) just keeps sowing until every plot is ripe, then waits. A mill
+  or market taking grain would be the natural next step.
 - No sound, no day/night cycle, no save game.
