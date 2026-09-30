@@ -6,8 +6,12 @@
 //   in world coordinates, scaled by `k` around their anchor so they stay
 //   readable when zoomed out.
 
-import { BUILDINGS, BUILDING_TYPES } from '../game/buildings';
-import { STORAGE_MAX } from '../game/farm';
+import { BUILDINGS, BUILDING_TYPES, ROLES, type Role } from '../game/buildings';
+import { clock } from '../game/daynight';
+import { buildShortfall } from '../game/economy';
+import { isBorrowed } from '../game/farm';
+import { employees } from '../game/people';
+import { RESOURCES, type Amounts } from '../game/resources';
 import { constructionStage, type Building, type ConstructionStage, type World } from '../game/world';
 import { BUILDING_ART, drawBuildingIcon } from './buildings';
 import type { Ctx } from './util';
@@ -24,6 +28,15 @@ const STAGE_LABEL: Record<ConstructionStage, string> = {
   roof: 'Putting on the roof',
   done: 'Finished',
 };
+
+/** On-screen names of the jobs. */
+const ROLE_NAME: Record<Role, string> = { farmer: 'Farmer' };
+
+/** "50 wood · 20 stone" (only the resources present). */
+function amounts(a: Amounts): string {
+  const parts = RESOURCES.filter((r) => a[r]).map((r) => `${a[r]} ${r}`);
+  return parts.length ? parts.join(' · ') : 'nothing';
+}
 
 export interface Toast {
   text: string;
@@ -169,7 +182,7 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
   text(ctx, 'Village Crown', 16, 34, 24, GOLD, 'left', true);
   const lines = st.touch
     ? ['Hold the arrows to ride, hammer to build', 'Pinch or tap - + to zoom']
-    : ['← → ride   ↓ / Space build   C construction   M sound', '- + or mouse wheel to zoom'];
+    : ['A D / ← → ride   S / ↓ / Space build   C construction   M sound', 'In the menu: WASD choose, Space build, Esc / Q close   - + zoom'];
   const maxW = L.zoomOut.x - 28;
   let y = 54;
   for (const s of lines) {
@@ -177,7 +190,12 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
     y += 16;
   }
   const built = world.buildings.filter((b) => b.status === 'done').length;
-  text(ctx, `Buildings: ${built}`, 16, y + 2, 12, '#cbbfa4');
+  const c = clock(world);
+  const hhmm = `${String(c.hours).padStart(2, '0')}:${String(c.minutes).padStart(2, '0')}`;
+  text(ctx, `Day ${c.day} · ${hhmm}   Buildings: ${built}`, 16, y + 2, 12, '#cbbfa4');
+  const working = world.people.filter((p) => p.job).length;
+  const stockLine = `${amounts(world.stock)}   People ${world.people.length} (${working} at work)`;
+  text(ctx, stockLine, 16, y + 18, fitSize(ctx, stockLine, 12, maxW), '#e8d9a8');
 
   button(ctx, L.zoomOut, false);
   plusMinusIcon(ctx, L.zoomOut, false);
@@ -280,6 +298,8 @@ export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number):
     }
     roundRect(ctx, r.x, r.y, r.w, r.h - 24, 6);
     ctx.clip();
+    // what the village can't afford is shown faded
+    if (Object.keys(buildShortfall(world, type)).length) ctx.globalAlpha = 0.4;
     const previewH = r.h - 34;
     const scale = Math.min(0.6, (r.w - 8) / (def.width * 1.3), previewH / (BUILDING_ART[type].height + 20));
     drawBuildingIcon(ctx, type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time);
@@ -291,7 +311,10 @@ export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number):
   const def = BUILDINGS[BUILDING_TYPES[world.menu.selection]];
   text(ctx, def.purpose, uiW / 2, M.infoY, fitSize(ctx, def.purpose, 14, M.panel.w - 24), '#f3ead8', 'center');
   const time = world.constructionEnabled ? `Builds in ${+(def.buildTime / world.params.buildSpeed).toFixed(1)}s` : 'Builds instantly (construction off)';
-  text(ctx, time, uiW / 2, M.infoY + 20, 12, '#cbbfa4', 'center');
+  const lack = buildShortfall(world, def.type);
+  const cost = `Costs ${amounts(def.cost)}` + (Object.keys(lack).length ? ` — need ${amounts(lack)} more` : '');
+  const info = `${cost}   ·   ${time}`;
+  text(ctx, info, uiW / 2, M.infoY + 20, fitSize(ctx, info, 12, M.panel.w - 24), Object.keys(lack).length ? '#e89a7a' : '#cbbfa4', 'center');
 
   button(ctx, M.cancel, false);
   text(ctx, 'Cancel', M.cancel.x + M.cancel.w / 2, M.cancel.y + 25, 15, '#f3ead8', 'center', true);
@@ -329,13 +352,23 @@ export function drawPlotPrompt(ctx: Ctx, sx: number, base: number, time: number,
   });
 }
 
-/** Name + purpose label over a finished building the rider is next to. */
-export function drawBuildingLabel(ctx: Ctx, b: Building, sx: number, y: number, k: number, viewW: number): void {
+/** Name, purpose, store and workers: the label over a finished building the rider is next to. */
+export function drawBuildingLabel(ctx: Ctx, world: World, b: Building, sx: number, y: number, k: number, viewW: number): void {
   const def = BUILDINGS[b.type];
   const lines = [def.purpose];
+  const stored = RESOURCES.filter((r) => def.storage[r]);
+  if (stored.length) lines.push(`Store: ${stored.map((r) => `${r} ${b.stock[r]}/${def.storage[r]}`).join(' · ')}`);
+  for (const role of ROLES) {
+    const slots = def.jobs[role] ?? 0;
+    if (!slots) continue;
+    const staff = employees(world, b).filter((p) => p.job!.role === role);
+    const names = staff.map((p) => `${p.name} (#${p.id})`).join(', ');
+    lines.push(`${ROLE_NAME[role]}: ${names || 'nobody free to hire'}${slots > 1 ? ` (${staff.length}/${slots})` : ''}`);
+  }
   if (b.farm) {
-    const n = (st: string) => b.farm!.plots.filter((p) => p.state === st).length;
-    lines.push(`Grain store ${b.farm.storage}/${STORAGE_MAX} · ${n('ripe')} ripe · ${n('growing')} growing · ${n('fallow')} to sow`);
+    // idle borrowed land isn't waiting to be sown, it's spare
+    const n = (st: string) => b.farm!.plots.filter((p) => p.state === st && (st !== 'fallow' || !isBorrowed(p))).length;
+    lines.push(`Fields: ${n('ripe')} ripe · ${n('growing')} growing · ${n('fallow')} to sow`);
   }
   ctx.font = `12px ${SERIF}`;
   const lineW = Math.max(...lines.map((l) => ctx.measureText(l).width));

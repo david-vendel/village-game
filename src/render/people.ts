@@ -1,11 +1,19 @@
 // Villagers and chickens wandering the street.
 
-import type { Villager } from '../game/world';
+import type { Animal, Look, Person, Stroll } from '../game/people';
 import { circle, type Ctx, ellipse, hash, line, poly } from './util';
 
 const TUNICS = ['#7a5a3a', '#6b7a4a', '#8a4a3a', '#5a6a7a', '#9a8a5a'];
 
-export function drawVillager(ctx: Ctx, v: Villager, x: number, base: number, time: number): void {
+/** What the street art needs to know about someone strolling: how they look and move. */
+type Walker = Stroll & { kind: Look | 'chicken'; seed: number };
+
+/** A person or animal as a street walker. */
+export function walker(who: Person | Animal): Walker {
+  return { ...who.stroll, kind: 'look' in who ? who.look : who.kind, seed: who.seed };
+}
+
+export function drawVillager(ctx: Ctx, v: Walker, x: number, base: number, time: number): void {
   const walking = v.idle <= 0;
   const phase = walking ? time * v.speed * 0.18 + v.seed : 0;
   ctx.save();
@@ -22,7 +30,7 @@ export function drawVillager(ctx: Ctx, v: Villager, x: number, base: number, tim
   ctx.restore();
 }
 
-function drawPerson(ctx: Ctx, v: Villager, phase: number, walking: boolean, time: number): void {
+function drawPerson(ctx: Ctx, v: Walker, phase: number, walking: boolean, time: number): void {
   const swing = walking ? Math.sin(phase) * 0.45 : 0;
   const bob = walking ? Math.abs(Math.cos(phase)) * 1.2 : Math.sin(time * 1.5 + v.seed) * 0.3;
   const tunic = v.kind === 'monk' ? '#5a4632' : TUNICS[Math.floor(hash(v.seed, 1) * TUNICS.length)];

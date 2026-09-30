@@ -1,74 +1,68 @@
-// Farm simulation. Each finished farm has field plots behind the farmstead
-// and in front of the road, a farmer, and a grain store (0–5 sheaves).
-//
-// Which land the fields cover comes from the land grid (see land.ts): plots
-// fill free cells around the farmstead, and change when a neighbour builds.
-//
-// The farmer works one plot at a time: walk out → sow → walk back to the
-// farm (the plot then grows on its own clock) — or, once a plot is ripe and
-// there is room in the store, walk out → harvest → carry the sheaf back and
-// stack it in front of the house.
+// Farm: the farm-specific part of a farm building. It owns the fields: their
+// plots, crops and growth, and which land they lie on (from the land grid, see
+// land.ts; plots fill free cells around the farmstead and change when a
+// neighbour builds). It is also a workplace (worker.ts): farmers sow fallow
+// plots and harvest ripe ones, and carry the sheaves to the farm's store (the
+// building's stock). Everything else about a farmer's day is the generic
+// worker routine.
 import { BUILDINGS } from './buildings';
-import { CELL_W, FIELD_REACH, HOME, PLOT_CELLS, STORE, WORK_Y, type FieldZone } from './layout';
+import { CELL_W, FIELD_REACH, FIELD_ROWS, HOME, PLOT_CELLS, PLOT_SPACING, STORE, workY, type FieldZone } from './layout';
+import { room, type Resource, type Stock } from './resources';
+import { currentJob, retarget, type JobTicket, type Worker, type Workplace } from './worker';
 
 export type { FieldZone };
 export type PlotState = 'fallow' | 'growing' | 'ripe';
 
-/** Where a field plot lies: zone, centre x relative to the farm's centre, width. */
+/** Where a field plot lies: zone, row in it (0 = far; see FIELD_ROWS), centre x relative to the farm's centre, width. */
 export interface FieldSpot {
   zone: FieldZone;
+  row: number;
   dx: number;
   width: number;
 }
 
 export interface FieldPlot extends FieldSpot {
+  /**
+   * Broken in as a field: the farmer has worked it at least once. Until then it
+   * is plain grass. Borrowed land goes back to grass after each harvest.
+   */
+  tilled: boolean;
   state: PlotState;
   /** Seconds since sowing (only meaningful while growing / ripe). */
   age: number;
 }
 
-export type FarmerAction = 'sow' | 'harvest';
-
-export type FarmerTask =
-  | { kind: 'idle'; wait: number }
-  | { kind: 'walk'; toDx: number; toY: number; then: 'work' | 'deposit' | 'home'; plot: number; action: FarmerAction | null }
-  | { kind: 'work'; action: FarmerAction; plot: number; t: number };
-
-export interface Farmer {
-  /** Position: x relative to the farm centre, y in world units. */
-  dx: number;
-  y: number;
-  facing: 1 | -1;
-  carrying: boolean;
-  task: FarmerTask;
-  /** Distance walked, drives the walk cycle. */
-  stride: number;
-}
+export type FarmAction = 'sow' | 'harvest';
 
 export interface FarmState {
   plots: FieldPlot[];
-  farmer: Farmer;
-  /** Sheaves stacked in front of the house, 0..STORAGE_MAX. */
-  storage: number;
 }
 
-export const STORAGE_MAX = 5;
-export const GROW_TIME = 30; // s from sowing to ripe
-export const SOW_TIME = 2.5;
-export const HARVEST_TIME = 3;
-export const FARMER_SPEED = 42; // px/s
+export const GROW_TIME = 150; // s from sowing to ripe
+/**
+ * How long work takes, per grid cell of plot width (s), so a plot's work time
+ * is in proportion to its size. Live-tunable: the world passes its params in.
+ */
+export interface FarmWork {
+  sowPerCell: number;
+  harvestPerCell: number;
+}
+export const DEFAULT_WORK: FarmWork = { sowPerCell: 2, harvestPerCell: 3 };
 
 /**
  * Cut the free land around a farm into field plots. `isFree(zone, c)` says
  * whether grid cell `c` (relative to the farm centre: it covers dx from
  * c·CELL_W to (c+1)·CELL_W) may be farmed. Each run of free cells is split
  * into plots working outward from the farm; a lone leftover cell joins the
- * plot next to it, and a run too short for a plot stays grass.
+ * plot next to it, and a run too short for a plot stays grass. In front of
+ * the road plots never straddle the edge of the farm's own lot, so each is
+ * either the farm's own land or borrowed from a neighbouring lot.
  */
 export function fieldSpots(isFree: (zone: FieldZone, c: number) => boolean): FieldSpot[] {
-  const reach = Math.floor(FIELD_REACH / CELL_W);
+  const lotCells = PLOT_SPACING / 2 / CELL_W;
   const spots: FieldSpot[] = [];
   for (const zone of ['back', 'front'] as const) {
+    const reach = Math.floor(FIELD_REACH[zone] / CELL_W);
     for (const side of [-1, 1]) {
       // cells walking outward from the farm centre on this side
       const cells = Array.from({ length: reach }, (_, i) => (side > 0 ? i : -1 - i));
@@ -83,14 +77,16 @@ export function fieldSpots(isFree: (zone: FieldZone, c: number) => boolean): Fie
         }
         for (const ch of chunks) {
           const lo = Math.min(...ch);
-          spots.push({ zone, dx: (lo + ch.length / 2) * CELL_W, width: ch.length * CELL_W });
+          const dx = (lo + ch.length / 2) * CELL_W;
+          FIELD_ROWS[zone].forEach((_, row) => spots.push({ zone, row, dx, width: ch.length * CELL_W }));
         }
         run = [];
       };
-      for (const c of cells) {
+      cells.forEach((c, i) => {
+        if (zone === 'front' && i === lotCells) flush(); // leaving the farm's own lot
         if (isFree(zone, c)) run.push(c);
         else flush();
-      }
+      });
       flush();
     }
   }
@@ -102,51 +98,86 @@ export function footprintHalfCells(width: number): number {
   return Math.ceil(width / 2 / CELL_W);
 }
 
+/**
+ * A plot in front of a neighbouring lot: farmed only once the farm's own land
+ * is all in use. (Behind the road the fields stop at the next building.)
+ */
+export function isBorrowed(s: FieldSpot): boolean {
+  return s.zone === 'front' && Math.abs(s.dx) > PLOT_SPACING / 2;
+}
+
 /** Fields of a farm with nothing built around it. */
 export function openFieldSpots(): FieldSpot[] {
   const n = footprintHalfCells(BUILDINGS.farm.width);
   return fieldSpots((zone, c) => zone === 'front' || c < -n || c >= n);
 }
 
-const spotKey = (s: FieldSpot) => `${s.zone}:${s.dx}:${s.width}`;
+/** Width (px) two plots of the same zone share. */
+function overlap(a: FieldSpot, b: FieldSpot): number {
+  if (a.zone !== b.zone || a.row !== b.row) return 0;
+  return Math.max(0, Math.min(a.dx + a.width / 2, b.dx + b.width / 2) - Math.max(a.dx - a.width / 2, b.dx - b.width / 2));
+}
 
 /**
- * Re-lay the fields on new land. Plots that keep their exact spot keep their
- * crop; others start fallow. A farmer heading to or working a plot that is
- * gone walks home.
+ * Re-lay the fields on new land. Each new plot keeps the crop of the old plot
+ * it overlaps most, so a plot trimmed by a neighbour's new building keeps
+ * growing on the land that is left; plots on new land start fallow. A farmer
+ * heading to or working a plot that is gone walks home.
  */
-export function setFieldSpots(farm: FarmState, spots: FieldSpot[]): void {
-  const old = new Map(farm.plots.map((p) => [spotKey(p), p]));
-  const plots = spots.map((s): FieldPlot => old.get(spotKey(s)) ?? { ...s, state: 'fallow', age: 0 });
-  const f = farm.farmer;
-  const t = f.task;
-  if ((t.kind === 'walk' && t.then === 'work') || t.kind === 'work') {
-    const next = plots.indexOf(farm.plots[t.plot]);
-    if (next >= 0) t.plot = next;
-    else walkTo(f, HOME.dx, HOME.y, 'home', -1, null);
+export function setFieldSpots(farm: FarmState, spots: FieldSpot[], workers: Worker[] = []): void {
+  const taken = new Set<FieldPlot>();
+  /** old plot → the new plot that carries on its crop */
+  const successor = new Map<FieldPlot, FieldPlot>();
+  const plots = spots.map((s): FieldPlot => {
+    let from: FieldPlot | null = null;
+    for (const p of farm.plots) {
+      if (!taken.has(p) && overlap(p, s) > 0 && (!from || overlap(p, s) > overlap(from, s))) from = p;
+    }
+    const plot: FieldPlot = { ...s, tilled: from?.tilled ?? false, state: from?.state ?? 'fallow', age: from?.age ?? 0 };
+    if (from) {
+      taken.add(from);
+      successor.set(from, plot);
+    }
+    return plot;
+  });
+  // farmers' jobs follow their plots; a job whose plot is gone is dropped
+  for (const w of workers) {
+    const job = currentJob(w);
+    if (!job) continue;
+    const next = successor.get(farm.plots[job.target]);
+    if (!next) retarget(w, { door: HOME }, null);
+    else retarget(w, { door: HOME }, { ...job, target: plots.indexOf(next) }, { dx: next.dx, y: workY(next.zone, next.row) });
   }
   farm.plots = plots;
 }
 
-export function createFarm(opts: { established?: boolean; spots?: FieldSpot[] } = {}): FarmState {
-  const plots = (opts.spots ?? openFieldSpots()).map((s): FieldPlot => ({ ...s, state: 'fallow', age: 0 }));
-  const farm: FarmState = {
-    plots,
-    farmer: { dx: HOME.dx, y: HOME.y, facing: 1, carrying: false, task: { kind: 'idle', wait: 0.5 }, stride: 0 },
-    storage: 0,
-  };
-  if (opts.established) {
-    // A farm that has been running for a while: a mix of crops at every stage.
-    const ages = [4, GROW_TIME, 20, -1, GROW_TIME, 12, -1, 26];
-    plots.forEach((p, i) => {
-      const age = ages[i % ages.length];
-      if (age < 0) return;
-      p.age = age;
-      p.state = age >= GROW_TIME ? 'ripe' : 'growing';
-    });
-    farm.storage = 2;
+/** Whether a plot needs this job: sowing bare land, or harvesting a ripe crop. */
+function jobFits(p: FieldPlot | undefined, action: string): p is FieldPlot {
+  if (!p) return false;
+  return action === 'sow' ? p.state === 'fallow' : action === 'harvest' && p.state === 'ripe';
+}
+
+/**
+ * Enforce the farm's invariants on state from outside the simulation (e.g. a
+ * loaded save): only tilled land holds a crop, and no farmer is set on a job
+ * its plot no longer needs.
+ */
+export function repairFarm(farm: FarmState, workers: Worker[]): void {
+  for (const p of farm.plots) {
+    if (!p.tilled && p.state !== 'fallow') {
+      p.state = 'fallow';
+      p.age = 0;
+    }
   }
-  return farm;
+  for (const w of workers) {
+    const job = currentJob(w);
+    if (job && !jobFits(farm.plots[job.target], job.action)) w.task = { kind: 'idle', wait: 0.3 };
+  }
+}
+
+/** A new farm: just the farmstead. Its fields appear as the farmer first works them. */
+export function createFarm(opts: { spots?: FieldSpot[] } = {}): FarmState {
+  return { plots: (opts.spots ?? openFieldSpots()).map((s): FieldPlot => ({ ...s, tilled: false, state: 'fallow', age: 0 })) };
 }
 
 /** Plot growth 0..1. */
@@ -155,113 +186,81 @@ export function growth(p: FieldPlot): number {
   return Math.min(1, p.age / GROW_TIME);
 }
 
-export function updateFarm(farm: FarmState, dt: number): void {
+/** Crops grow on their own clock, day and night. */
+export function updateCrops(farm: FarmState, dt: number): void {
   for (const p of farm.plots) {
     if (p.state !== 'growing') continue;
     p.age += dt;
     if (p.age >= GROW_TIME) p.state = 'ripe';
   }
-  updateFarmer(farm, dt);
 }
 
-function isReserved(farm: FarmState, plot: number): boolean {
-  const t = farm.farmer.task;
-  return (t.kind === 'walk' && t.then === 'work' && t.plot === plot) || (t.kind === 'work' && t.plot === plot);
-}
-
-/** Next job: harvest a ripe plot if the store has room, else sow a fallow one. Nearest first. */
-export function chooseJob(farm: FarmState): { plot: number; action: FarmerAction } | null {
-  const f = farm.farmer;
-  const dist = (i: number) => {
-    const p = farm.plots[i];
-    return Math.hypot(p.dx - f.dx, WORK_Y[p.zone] - f.y);
+/**
+ * The farm as a workplace. Next job: harvest a ripe plot while the store has
+ * room, else sow a fallow one, the farm's own land before borrowed land;
+ * nearest first. Work takes time in proportion to the plot's width.
+ */
+export function farmWorkplace(farm: FarmState, stock: Stock, work: FarmWork = DEFAULT_WORK): Workplace {
+  const capacity = BUILDINGS.farm.storage;
+  return {
+    door: HOME,
+    store: STORE,
+    nextJob(w: Worker, taken: JobTicket[]) {
+      const busy = new Set(taken.map((j) => j.target));
+      const dist = (p: FieldPlot) => Math.hypot(p.dx - w.dx, workY(p.zone, p.row) - w.y);
+      const pick = (state: PlotState, where: (p: FieldPlot) => boolean = () => true) => {
+        let best = -1;
+        farm.plots.forEach((p, i) => {
+          if (p.state === state && where(p) && !busy.has(i) && (best < 0 || dist(p) < dist(farm.plots[best]))) best = i;
+        });
+        return best;
+      };
+      const at = (i: number, action: FarmAction) => {
+        const p = farm.plots[i];
+        return { job: { action, target: i }, dx: p.dx, y: workY(p.zone, p.row) };
+      };
+      // sheaves already on their way count against the room in the store
+      const incoming = taken.filter((j) => j.action === 'harvest').length;
+      if (room(stock, capacity, 'grain') > incoming) {
+        const ripe = pick('ripe');
+        if (ripe >= 0) return at(ripe, 'harvest');
+      }
+      const own = pick('fallow', (p) => !isBorrowed(p));
+      const fallow = own >= 0 ? own : pick('fallow');
+      return fallow >= 0 ? at(fallow, 'sow') : null;
+    },
+    begin(job) {
+      const p = farm.plots[job.target];
+      if (!jobFits(p, job.action)) return null;
+      p.tilled = true; // first work on a plot turns grass into a field
+      const perCell = job.action === 'sow' ? work.sowPerCell : work.harvestPerCell;
+      return (p.width / CELL_W) * perCell;
+    },
+    finish(job): Resource | null {
+      const p = farm.plots[job.target];
+      if (!p) return null;
+      p.age = 0;
+      if (job.action === 'sow') {
+        p.state = 'growing';
+        return null;
+      }
+      p.state = 'fallow';
+      if (isBorrowed(p)) p.tilled = false; // borrowed land goes back to grass
+      return 'grain';
+    },
+    deliver(r) {
+      stock[r] = Math.min(capacity[r] ?? 0, stock[r] + 1);
+    },
   };
-  const pick = (state: PlotState) => {
-    let best = -1;
-    farm.plots.forEach((p, i) => {
-      if (p.state === state && !isReserved(farm, i) && (best < 0 || dist(i) < dist(best))) best = i;
-    });
-    return best;
-  };
-  if (farm.storage < STORAGE_MAX) {
-    const ripe = pick('ripe');
-    if (ripe >= 0) return { plot: ripe, action: 'harvest' };
-  }
-  const fallow = pick('fallow');
-  if (fallow >= 0) return { plot: fallow, action: 'sow' };
-  return null;
 }
 
-function walkTo(f: Farmer, toDx: number, toY: number, then: 'work' | 'deposit' | 'home', plot: number, action: FarmerAction | null): void {
-  f.task = { kind: 'walk', toDx, toY, then, plot, action };
-}
-
-function updateFarmer(farm: FarmState, dt: number): void {
-  const f = farm.farmer;
-  const task = f.task;
-
-  if (task.kind === 'idle') {
-    task.wait -= dt;
-    if (task.wait > 0) return;
-    const job = chooseJob(farm);
-    if (!job) {
-      task.wait = 1; // nothing to do; check again shortly
-      return;
-    }
-    const p = farm.plots[job.plot];
-    walkTo(f, p.dx, WORK_Y[p.zone], 'work', job.plot, job.action);
-    return;
-  }
-
-  if (task.kind === 'walk') {
-    const ddx = task.toDx - f.dx;
-    const ddy = task.toY - f.y;
-    const d = Math.hypot(ddx, ddy);
-    const step = FARMER_SPEED * dt;
-    if (Math.abs(ddx) > 0.5) f.facing = ddx > 0 ? 1 : -1;
-    if (d > step) {
-      f.dx += (ddx / d) * step;
-      f.y += (ddy / d) * step;
-      f.stride += step;
-      return;
-    }
-    f.dx = task.toDx;
-    f.y = task.toY;
-    f.stride += d;
-    if (task.then === 'work' && task.action) {
-      f.task = { kind: 'work', action: task.action, plot: task.plot, t: 0 };
-    } else if (task.then === 'deposit') {
-      farm.storage = Math.min(STORAGE_MAX, farm.storage + 1);
-      f.carrying = false;
-      f.task = { kind: 'idle', wait: 0.8 };
-    } else {
-      f.task = { kind: 'idle', wait: 0.8 };
-    }
-    return;
-  }
-
-  // working a plot
-  task.t += dt;
-  const p = farm.plots[task.plot];
-  if (task.action === 'sow' && task.t >= SOW_TIME) {
-    p.state = 'growing';
-    p.age = 0;
-    walkTo(f, HOME.dx, HOME.y, 'home', -1, null);
-  } else if (task.action === 'harvest' && task.t >= HARVEST_TIME) {
-    p.state = 'fallow';
-    p.age = 0;
-    f.carrying = true;
-    walkTo(f, STORE.dx + 16, STORE.y, 'deposit', -1, null);
-  }
-}
-
-/** A static farm for menu previews: everything ripe, store half full. */
+/** A static farm for menu previews: its own land all ripe. */
 export function demoFarm(): FarmState {
   const farm = createFarm();
   for (const p of farm.plots) {
+    p.tilled = !isBorrowed(p);
     p.state = 'ripe';
     p.age = GROW_TIME;
   }
-  farm.storage = 3;
   return farm;
 }

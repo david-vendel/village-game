@@ -1,7 +1,11 @@
 // Data-driven building registry: gameplay data only (name, purpose, footprint,
-// build time). How a building looks — including its drawn height — lives in
-// render/buildings.ts (BUILDING_ART), keyed by the same `BuildingType`.
+// build time, cost, storage, jobs). How a building looks — including its drawn
+// height — lives in render/buildings.ts (BUILDING_ART), keyed by the same
+// `BuildingType`. Behaviour specific to one type (a farm's fields) lives in
+// its own module (farm.ts).
 // To add a building: add an entry here and an entry in BUILDING_ART.
+
+import type { Amounts } from './resources';
 
 export type BuildingType =
   | 'house'
@@ -14,6 +18,10 @@ export type BuildingType =
   | 'watchtower'
   | 'well';
 
+/** Jobs a building can offer (see people.ts). */
+export type Role = 'farmer';
+export const ROLES: readonly Role[] = ['farmer'];
+
 export interface BuildingDef {
   type: BuildingType;
   name: string;
@@ -22,6 +30,12 @@ export interface BuildingDef {
   width: number;
   /** Seconds to construct when construction is enabled. */
   buildTime: number;
+  /** Paid from the village stockpile when construction starts. */
+  cost: Amounts;
+  /** What the building's own store holds, and how much of each. */
+  storage: Amounts;
+  /** Workers it employs once finished, per role. */
+  jobs: Partial<Record<Role, number>>;
 }
 
 export const BUILDINGS: Record<BuildingType, BuildingDef> = {
@@ -31,6 +45,9 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: 'Shelter for villagers. More homes, more hands.',
     width: 150,
     buildTime: 10,
+    cost: { wood: 40, stone: 10 },
+    storage: {},
+    jobs: {},
   },
   farm: {
     type: 'farm',
@@ -39,6 +56,9 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     // farmhouse, barn and grain store; the fields use free land around it
     width: 200,
     buildTime: 12,
+    cost: { wood: 50, stone: 20 },
+    storage: { grain: 5 },
+    jobs: { farmer: 1 },
   },
   mill: {
     type: 'mill',
@@ -46,6 +66,9 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: 'Grinds grain from the farms into flour.',
     width: 130,
     buildTime: 16,
+    cost: { wood: 60, stone: 60 },
+    storage: {},
+    jobs: {},
   },
   blacksmith: {
     type: 'blacksmith',
@@ -53,6 +76,9 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: 'Forges tools and arms at the glowing anvil.',
     width: 170,
     buildTime: 14,
+    cost: { wood: 40, stone: 80 },
+    storage: {},
+    jobs: {},
   },
   market: {
     type: 'market',
@@ -60,6 +86,9 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: 'Stalls where merchants trade goods and coin.',
     width: 170,
     buildTime: 9,
+    cost: { wood: 60, stone: 20 },
+    storage: {},
+    jobs: {},
   },
   chapel: {
     type: 'chapel',
@@ -67,6 +96,9 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: 'Bells, prayer and a steeple seen for miles.',
     width: 160,
     buildTime: 18,
+    cost: { wood: 40, stone: 150 },
+    storage: {},
+    jobs: {},
   },
   tavern: {
     type: 'tavern',
@@ -74,6 +106,9 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: 'Ale, songs and rumours for weary travellers.',
     width: 180,
     buildTime: 13,
+    cost: { wood: 80, stone: 40 },
+    storage: {},
+    jobs: {},
   },
   watchtower: {
     type: 'watchtower',
@@ -81,6 +116,9 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: 'Guards keep watch over the road and the woods.',
     width: 90,
     buildTime: 12,
+    cost: { wood: 60, stone: 60 },
+    storage: {},
+    jobs: {},
   },
   well: {
     type: 'well',
@@ -88,6 +126,9 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: 'Fresh water for the whole street.',
     width: 80,
     buildTime: 6,
+    cost: { wood: 5, stone: 30 },
+    storage: {},
+    jobs: {},
   },
 };
 

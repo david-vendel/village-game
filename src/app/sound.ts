@@ -10,6 +10,7 @@
 // fade out beyond EARSHOT.
 
 import type { BuildingType } from '../game/buildings';
+import { employees } from '../game/people';
 import { RIDER_MAX_SPEED, getBuilding, type World } from '../game/world';
 import { HORSE_STRIDE } from '../render';
 
@@ -275,16 +276,18 @@ export function createSound(initialVolume = 0.6): Sound {
           }
         }
         if (b.farm) {
-          const f = b.farm;
           let s = farms.get(b.id);
-          if (!s) farms.set(b.id, (s = { storage: f.storage, nextWork: 0 }));
-          const fx = x + f.farmer.dx;
-          if (f.storage > s.storage && near) sfx.thud(x);
-          s.storage = f.storage;
-          const task = f.farmer.task;
-          if (task.kind === 'work' && clock >= s.nextWork) {
-            s.nextWork = clock + (task.action === 'sow' ? 0.6 : 0.75);
-            if (near) (task.action === 'sow' ? sfx.rustle : sfx.swish)(fx);
+          if (!s) farms.set(b.id, (s = { storage: b.stock.grain, nextWork: 0 }));
+          // a sheaf stacked in the store (not one collected by the village)
+          if (b.stock.grain > s.storage && near) sfx.thud(x);
+          s.storage = b.stock.grain;
+          for (const p of employees(world, b)) {
+            const w = p.job!.worker;
+            if (w.task.kind === 'job' && clock >= s.nextWork) {
+              const sow = w.task.job.action === 'sow';
+              s.nextWork = clock + (sow ? 0.6 : 0.75);
+              if (near) (sow ? sfx.rustle : sfx.swish)(x + w.dx);
+            }
           }
         }
       }

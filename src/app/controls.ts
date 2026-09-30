@@ -15,7 +15,7 @@ export interface Controls {
   touchHeld(): { left: boolean; right: boolean };
 }
 
-const GAME_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'Enter', 'Escape']);
+const GAME_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'Enter', 'Escape', 'w', 'a', 's', 'd']);
 const ZOOM_STEP = 1.2;
 
 type Role = 'left' | 'right' | 'pinch' | 'none';
@@ -28,28 +28,51 @@ export function installControls(world: World, screen: Screen, actions: Actions):
 
   // --- Keyboard -----------------------------------------------------------------
 
+  // Everything is reachable with the left hand alone: WASD mirrors the arrows,
+  // Space confirms. Letters are lower-cased so Shift / Caps Lock don't matter.
+  const keyOf = (e: KeyboardEvent) => (e.key.length === 1 ? e.key.toLowerCase() : e.key);
+
   window.addEventListener('keydown', (e) => {
-    if (GAME_KEYS.has(e.key)) e.preventDefault();
-    keys.add(e.key);
+    const key = keyOf(e);
+    if (GAME_KEYS.has(key)) e.preventDefault();
+    keys.add(key);
     if (e.repeat) return;
 
-    if (e.key === 'c' || e.key === 'C') return actions.toggleConstruction();
-    if (e.key === 'm' || e.key === 'M') return actions.toggleSound();
-    if (e.key === '-' || e.key === '_') return screen.zoomBy(1 / ZOOM_STEP);
-    if (e.key === '=' || e.key === '+') return screen.zoomBy(ZOOM_STEP);
-    if (e.key === '0') return screen.resetZoom();
+    if (key === 'c') return actions.toggleConstruction();
+    if (key === 'm') return actions.toggleSound();
+    if (key === '-' || key === '_') return screen.zoomBy(1 / ZOOM_STEP);
+    if (key === '=' || key === '+') return screen.zoomBy(ZOOM_STEP);
+    if (key === '0') return screen.resetZoom();
 
     if (world.menu) {
-      if (e.key === 'ArrowLeft') actions.moveSelection(-1);
-      else if (e.key === 'ArrowRight') actions.moveSelection(1);
-      else if (e.key === 'Enter' || e.key === ' ') actions.build();
-      else if (e.key === 'Escape' || e.key === 'ArrowUp' || e.key === 'ArrowDown') actions.closeBuildMenu();
-      else if (/^[1-9]$/.test(e.key)) actions.select(Number(e.key) - 1);
+      if (key === 'ArrowLeft' || key === 'a') actions.moveSelection(-1);
+      else if (key === 'ArrowRight' || key === 'd') actions.moveSelection(1);
+      else if (key === 'ArrowUp' || key === 'w') moveMenuRow(-1);
+      else if (key === 'ArrowDown' || key === 's') moveMenuRow(1);
+      else if (key === 'Enter' || key === ' ') actions.build();
+      else if (key === 'Escape' || key === 'q') actions.closeBuildMenu();
+      else if (/^[1-9]$/.test(key)) actions.select(Number(key) - 1);
       return;
     }
-    if (e.key === 'ArrowDown' || e.key === ' ' || e.key === 'Enter' || e.key === 'b' || e.key === 'B') actions.openBuildMenu();
+    if (key === 'ArrowDown' || key === 's' || key === ' ' || key === 'Enter' || key === 'b') actions.openBuildMenu();
   });
-  window.addEventListener('keyup', (e) => keys.delete(e.key));
+  window.addEventListener('keyup', (e) => keys.delete(keyOf(e)));
+
+  /** Move the menu selection to the card straight above/below (the grid's shape comes from the drawn layout). */
+  function moveMenuRow(delta: -1 | 1): void {
+    if (!world.menu) return;
+    const { cards } = menuLayout(screen.vp.uiW, screen.vp.uiH);
+    const cur = cards[world.menu.selection];
+    const rows = [...new Set(cards.map((c) => c.y))].sort((a, b) => a - b);
+    const rowY = rows[rows.indexOf(cur.y) + delta];
+    if (rowY === undefined) return; // already on the top / bottom row
+    const mid = (c: { x: number; w: number }) => c.x + c.w / 2;
+    let best = -1;
+    cards.forEach((c, i) => {
+      if (c.y === rowY && (best < 0 || Math.abs(mid(c) - mid(cur)) < Math.abs(mid(cards[best]) - mid(cur)))) best = i;
+    });
+    actions.select(best);
+  }
   window.addEventListener('blur', () => {
     keys.clear();
     pointers.clear();

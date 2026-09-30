@@ -3,8 +3,10 @@
 // roof. The sun is to the left, so right-hand faces are in shadow.
 
 import type { BuildingType } from '../game/buildings';
-import { demoFarm, type FarmState, type FieldSpot } from '../game/farm';
-import { drawBackFences, drawBackField, drawFrontField, drawStore } from './farm';
+import { demoFarm, type FarmState } from '../game/farm';
+import { stockOf, type Stock } from '../game/resources';
+import type { Worker } from '../game/worker';
+import { doorProgress, drawBackFences, drawBackField, drawFrontField, drawStore } from './farm';
 import { circle, type Ctx, ellipse, hash, line, poly, rect, shade, smoke } from './util';
 
 export interface DrawArgs {
@@ -15,10 +17,14 @@ export interface DrawArgs {
   time: number;
   /** Stable per-building seed for colour/detail variation. */
   seed: number;
-  /** Live farm state (fields, store) — farms only. */
+  /** Live farm state (fields) — farms only. */
   farm?: FarmState;
-  /** Where a farm's fields lie before it has live state (under construction). */
-  fields?: FieldSpot[];
+  /** The building's own store. */
+  stock?: Stock;
+  /** The people working here (for doors, sleepers…). */
+  workers?: Worker[];
+  /** Ground-perspective vanishing point x (see ground.ts); defaults to `x`. */
+  vpX?: number;
 }
 
 export interface BuildingArt {
@@ -291,7 +297,10 @@ function drawFarm(ctx: Ctx, a: DrawArgs): void {
   stonePlinth(ctx, x0, a.base, w, 10, d);
   block(ctx, x0, a.base - 10, w, 38, d, '#ead9b4');
   timberFrame(ctx, x0, a.base - 10, w, 38, a.seed + 3);
-  door(ctx, x0 + 30, a.base, 18, 34);
+  // the door stands open while the farmer steps through it
+  const doorOpen = (a.workers ?? []).some((w) => doorProgress(w) > 0 && doorProgress(w) < 1);
+  door(ctx, x0 + 30, a.base, 18, 34, doorOpen ? '#1c140d' : undefined);
+  if (doorOpen) rect(ctx, x0 + 26, a.base - 30, 4, 30, '#6b4a2c'); // the door leaf, swung open
   window_(ctx, x0 + 8, a.base - 40, 13, 13, true, a.time, a.seed);
   gableRoof(ctx, x0, a.base - 48, w, d, 40, '#b8955a', '#ead9b4', 'thatch', a.seed);
   // barn
@@ -305,7 +314,24 @@ function drawFarm(ctx: Ctx, a: DrawArgs): void {
   // low fences in front of the side plots
   drawBackFences(ctx, a, a.farm);
   // the grain store between the house and the street
-  drawStore(ctx, a, a.farm);
+  drawStore(ctx, a, a.stock?.grain ?? 0);
+  // the farmer asleep inside
+  if ((a.workers ?? []).some((wk) => wk.task.kind === 'home' && wk.task.activity === 'sleep')) drawSnore(ctx, x0 + w * 0.3, a.base - 70, a.time);
+}
+
+/** Little z's drifting up from a sleeper's window. */
+function drawSnore(ctx: Ctx, x: number, y: number, time: number): void {
+  ctx.save();
+  ctx.font = 'bold 11px Georgia, serif';
+  ctx.textAlign = 'center';
+  for (let i = 0; i < 3; i++) {
+    const t = (time * 0.35 + i / 3) % 1;
+    ctx.globalAlpha = Math.sin(t * Math.PI) * 0.9;
+    ctx.fillStyle = '#f3ead8';
+    ctx.font = `bold ${8 + t * 8}px Georgia, serif`;
+    ctx.fillText('z', x + t * 18 + Math.sin(t * 6) * 3, y - t * 34);
+  }
+  ctx.restore();
 }
 
 function drawMill(ctx: Ctx, a: DrawArgs): void {
@@ -706,6 +732,8 @@ export const BUILDING_ART: Record<BuildingType, BuildingArt> = {
 };
 
 const DEMO_FARM = demoFarm();
+/** Menu previews show a half-full store. */
+const DEMO_STOCK = stockOf({ grain: 3 });
 
 /** Small icon-sized preview for the build menu (draws the real art, scaled). */
 export function drawBuildingIcon(ctx: Ctx, type: BuildingType, x: number, base: number, scale: number, time: number): void {
@@ -713,7 +741,7 @@ export function drawBuildingIcon(ctx: Ctx, type: BuildingType, x: number, base: 
   ctx.translate(x, base);
   ctx.scale(scale, scale);
   const art = BUILDING_ART[type];
-  const args: DrawArgs = { x: 0, base: 0, time, seed: 7, farm: type === 'farm' ? DEMO_FARM : undefined };
+  const args: DrawArgs = { x: 0, base: 0, time, seed: 7, farm: type === 'farm' ? DEMO_FARM : undefined, stock: DEMO_STOCK };
   if (art.behind) art.behind(ctx, args);
   art.draw(ctx, args);
   ctx.restore();

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { isBorrowed } from './farm';
 import { cellX, footprint, landGrid } from './land';
 import { createWorld, placeBuilding, type Building, type World } from './world';
 
@@ -54,6 +55,37 @@ describe('land grid', () => {
     for (const s of after) expect(overlaps(s, footprintX(w, house))).toBe(false);
   });
 
+  it('the field next to the farmhouse keeps its crop when a neighbour trims it', () => {
+    const w = createWorld({ village: false });
+    const farm = placeBuilding(w, 3, 'farm', { instant: true })!;
+    const fx = w.plots[3].x;
+    const nearest = () =>
+      farm.farm!.plots.filter((p) => p.zone === 'back' && p.dx > 0).reduce((a, b) => (a.dx < b.dx ? a : b));
+    const before = nearest();
+    before.state = 'growing';
+    before.age = 17;
+    const smith = placeBuilding(w, 4, 'blacksmith', { instant: true })!;
+    const after = nearest();
+    expect(after.width).toBeLessThan(before.width); // the blacksmith took a cell of it
+    expect(fx + after.dx + after.width / 2).toBeLessThanOrEqual(footprintX(w, smith)[0]);
+    expect(after.state).toBe('growing');
+    expect(after.age).toBe(17);
+  });
+
+  it('a farm may borrow the land in front of both neighbouring lots, even with buildings on them', () => {
+    const w = createWorld({ village: false });
+    placeBuilding(w, 7, 'chapel', { instant: true });
+    const farm = placeBuilding(w, 8, 'farm', { instant: true })!;
+    placeBuilding(w, 9, 'blacksmith', { instant: true });
+    const x = w.plots[8].x;
+    const front = spans(w, farm, 'front');
+    expect(Math.min(...front.map((s) => s[0]))).toBe(w.plots[7].x - 125);
+    expect(Math.max(...front.map((s) => s[1]))).toBe(w.plots[9].x + 125);
+    // no plot straddles the edge of the farm's own lot
+    for (const s of front) expect(overlaps(s, [x - 125, x + 125]) && (s[0] < x - 125 || s[1] > x + 125)).toBe(false);
+    expect(farm.farm!.plots.some(isBorrowed)).toBe(true);
+  });
+
   it('neighbouring farms share the land in front of the road without overlap', () => {
     const w = createWorld({ village: false });
     const a = placeBuilding(w, 3, 'farm', { instant: true })!;
@@ -66,10 +98,13 @@ describe('land grid', () => {
   it('every cell has one use', () => {
     const w = createWorld();
     const g = landGrid(w);
-    for (const row of [g.back, g.front]) expect(row).toHaveLength(g.count);
-    expect(g.back.some((c) => c.kind === 'building')).toBe(true);
-    expect(g.back.some((c) => c.kind === 'field')).toBe(true);
-    expect(g.front.some((c) => c.kind === 'field')).toBe(true);
-    expect(g.front.every((c) => c.kind !== 'building')).toBe(true);
+    const all = g.rows.flatMap((r) => r.cells);
+    for (const r of g.rows) expect(r.cells).toHaveLength(g.count);
+    expect(g.rows.map((r) => `${r.zone}${r.row}`)).toEqual(['back0', 'front0', 'front1']);
+    expect(g.rows[0].cells.some((c) => c.kind === 'building')).toBe(true);
+    expect(g.rows.slice(1).every((r) => r.cells.every((c) => c.kind !== 'building'))).toBe(true);
+    // a new village's farm has claimed its land but not tilled any of it yet
+    for (const r of g.rows) expect(r.cells.some((c) => c.kind === 'spare')).toBe(true);
+    expect(all.some((c) => c.kind === 'field')).toBe(false);
   });
 });

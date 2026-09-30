@@ -47,48 +47,88 @@ src/app      input, screen/zoom, actions     main.ts wires it all into the loop
 | I want to… | Edit |
 | --- | --- |
 | Change how a building looks, or its drawn height | `render/buildings.ts` (`BUILDING_ART`) |
-| Change sky, hills, castle, trees, road, grass | `render/background.ts` |
+| Change sky, sun, moon, stars, clouds, night darkness | `render/sky.ts` |
+| Change hills, castle, trees, road, grass | `render/background.ts` |
+| Change day length, working hours, lunch | `game/daynight.ts` |
 | Change crops, fields, the farmer's look or animation, the sheaf pile | `render/farm.ts` |
 | Change the horse/rider, villagers | `render/horse.ts`, `render/people.ts` |
 | Change construction visuals (scaffolding, stages' look) | `render/construction.ts` |
 | Change the HUD, menu, labels, captions, button positions | `render/ui.ts` (tap areas follow automatically) |
 | Change draw order or camera framing | `render/scene.ts` |
-| Add a building type | `game/buildings.ts` (gameplay data) **and** `render/buildings.ts` (art) |
+| Add a building type | `game/buildings.ts` (gameplay data: cost, storage, jobs) **and** `render/buildings.ts` (art) |
+| Give a building workers | its `jobs` in `game/buildings.ts`, a `Workplace` for it (like `farmWorkplace`) returned by `workplaceOf` in `game/world.ts`, and a look for the worker in `render/` |
 | Change timings, speeds, rules (build times, grow time, store size, rider speed) | `game/buildings.ts`, `game/world.ts`, `game/farm.ts` |
-| Change farmer behaviour or the farm cycle | `game/farm.ts` |
+| Change the working day (lunch, sleep, doors) | `game/worker.ts` |
+| Change what farmers do, or the crop cycle | `game/farm.ts` |
 | Add a new mechanic | new module in `src/game` + tests, a state field for anything visible, then draw it in `src/render` |
 | Move where things stand (plots, farmyard, store, road) | `game/layout.ts` |
 | Change controls or add a key/button action | `app/controls.ts`, `app/actions.ts` (plus the button's look in `render/ui.ts`) |
+| Save something new, or change the save format | `game/save.ts` (bump `SAVE_VERSION`, add a migration, extend the validator) |
+| Change where/when the game is saved | `app/persistence.ts` |
 | Change zoom behaviour or screen scaling | `app/viewport.ts`, `app/screen.ts` |
 
 ## Files
 
 ### `src/game`: logic
-- `buildings.ts`: building registry (name, purpose, footprint width, build time).
-- `world.ts`: world state and `update()`: plots, building entities, rider physics, villagers,
-  build menu, construction progress and stages, the construction toggle, events.
-  Tested by `world.test.ts`.
-- `farm.ts`: farm simulation, tested by `farm.test.ts`. A finished farm has field plots on the
-  free land-grid cells around it (see `land.ts`), a farmer, and a grain store holding 0–5 sheaves. Each plot keeps its own state (fallow → growing → ripe) and
-  age. To sow, the farmer walks out, sows (2.5 s), then walks back to the farm, and the plot
-  grows on its own clock (30 s to ripe). When a plot is ripe and the store has room, he walks
-  out, harvests (3 s), carries the sheaf back and stacks it. Harvesting takes priority over
-  sowing, and the nearest plot is picked first. A full store stops harvesting.
+- `buildings.ts`: building registry: name, purpose, footprint width, build time, **cost** (wood,
+  stone), **storage** (what its own store holds, and how much) and **jobs** (roles and how many).
+  Behaviour of one kind of building lives in its own module (a farm's fields in `farm.ts`).
+- `world.ts`: world state and `update()`: plots, buildings (each with its own `stock` store),
+  people and animals, the village `stock`pile, rider physics, build menu, construction progress
+  and stages, the construction toggle, events. `workplaceOf` says what work a building gives its
+  workers. Tested by `world.test.ts`.
+- `resources.ts`: resources (wood, stone, grain), `Stock` (an amount of each) and `Amounts` (some
+  of them, e.g. a cost), with affordability and payment helpers.
+- `economy.ts`: the village stockpile: what a new village starts with (`STARTING_STOCK`), paying
+  for buildings (placing one charges its cost; the menu shows costs and what is missing), and
+  collecting goods from buildings' stores into the stockpile, one of each every `COLLECT_EVERY` s.
+- `people.ts`: every villager is a `Person` with an id number, a name, a look and a `job` (a
+  building and role, plus their `Worker` state) or none. The unemployed stroll the street;
+  `staffBuildings` fills finished buildings' open jobs with the nearest of them. Chickens are
+  `Animal`s.
+- `worker.ts`: the working day, the same for every job: work in daylight, go home at 11:30
+  (`LUNCH_AT`) and eat for an hour (`LUNCH_HOURS`) once inside, once a day; sleep at night; step
+  in and out of the door (`DOOR_TIME`); carry goods to the store. What the work *is* comes from the
+  building as a `Workplace`: its door and store, the next job, how long a job takes, what it yields.
+- `farm.ts`: the farm's fields, and the farm as a `Workplace`. Tested by `farm.test.ts`. Plots lie
+  on the free land-grid cells around it (see `land.ts`) in rows (`FIELD_ROWS` in `layout.ts`): one
+  behind the road, two in front of it. A new farm is just the farmstead: a plot stays grass until
+  the farmer first works it (`tilled`), and borrowed land in front of the neighbouring lots
+  returns to grass after each harvest. Each plot keeps its own state (fallow → growing → ripe) and
+  age (150 s to ripe). Jobs: harvest while the farm store has room for the sheaf, else sow, own
+  land before borrowed, nearest first; each takes `sowPerCell` / `harvestPerCell` seconds per grid
+  cell of plot width (tuning sliders). A harvest yields a sheaf of grain for the store.
+- `daynight.ts`: time of day, from `world.dayClock`, which runs at the `timeSpeed` knob (a day is
+  `DAY_LENGTH` = 300 s at 1×). The `nightHours` knob (0–12) shapes the sun's path: fewer hours
+  lift it, like a summer far north; 0 is the midnight sun. `timeOfDay` gives villagers what they plan
+  by: daylight (enough light to work), day number, hour, and game hours per second.
 - `land.ts`: the land grid, tested by `land.test.ts`. The street is cut into 25 px cells in two
   rows: `back` (behind the road, where buildings stand) and `front` (between the road and the
   viewer). A building claims its footprint cells (its `width` rounded up to whole cells, centred on
   the plot) as soon as it is placed. A farm's back fields fill the free cells up to the next
   building on each side (usually one plot per side); its front fields take any front cells within
   `FIELD_REACH` that are nearer to it than to another farm. Placing a building re-lays neighbouring
-  farms' fields (`syncFarmFields`); plots that keep their spot keep their crop.
+  farms' fields (`syncFarmFields`): a plot the new building trims keeps its crop on the land
+  that is left; only plots whose land is taken entirely are lost.
 - `layout.ts`: the shared world geometry (see above), including the grid constants.
+- `save.ts`: save games, tested by `save.test.ts`. `saveWorld` snapshots the simulation state
+  (time, buildings with their stores and farms, people with their jobs and working day, animals,
+  the stockpile, rider, RNG, id counter) as versioned JSON-safe data; `loadWorld` validates
+  untrusted data field by field, runs `MIGRATIONS` from older versions, and rebuilds the world
+  under the current rules (plots and field layout are derived, not stored; a job at a building
+  that doesn't offer it is dropped). It refuses corrupt or newer saves with a reason instead of
+  throwing. Not saved: the open menu, pending events, and tuning knobs (the URL owns those).
 
 ### `src/render`: graphics
 - `index.ts`: the renderer's public API: `renderFrame()` (world pass, then screen UI pass),
   `cameraX()`, and the UI layout/hit-test helpers used for input.
 - `scene.ts`: world draw order: backdrop → back fields → farmers in the back field → plot
   markers → buildings → front fields → people → rider → foreground → world-anchored labels.
-- `background.ts`: parallax layers: sky and sun, clouds, mountains, the castle on its hill,
+- `sky.ts`: daylight. Turns the time of day into sky colours, the sun crossing the sky, moon and
+  stars at night, cloud colours, and a tint that darkens the land at night and warms it at dusk.
+  The land is drawn first and tinted, then the sky (drawn on an offscreen canvas) is composited
+  behind it, so the night sky stays bright while the land darkens.
+- `background.ts`: parallax land layers: mountains, the castle on its hill,
   patchwork fields, the distant village, the tree line, the street and the foreground grass.
 - `buildings.ts`: "2D picture of a 3D building" primitives (front face, shaded side face, gable
   roof with thatch/tile/slate, timber framing) and `BUILDING_ART`: per building `draw`, optional
@@ -97,7 +137,13 @@ src/app      input, screen/zoom, actions     main.ts wires it all into the loop
   timber frame → walls → roof. The finished art is revealed bottom-up behind scaffolding.
 - `grid.ts`: the land-grid debug overlay (tuning panel → "land grid", or `?grid=1`): cells tinted
   by use (building footprint red, field green), plot boundaries dashed.
-- `farm.ts`: field plots in gentle perspective, crops by growth stage, the farmer (walk, sow,
+- `ground.ts`: the ground perspective. Anything lying or standing on the land (fields, the land
+  grid, ruts and stones in the road, the grass edge, foreground grass, the farmer, villagers and
+  the rider) maps its x through `groundX`; repeating ground details use `groundTiles`, so lines into the scene converge on a vanishing point in
+  the middle of the view and fan out towards the screen edges as the camera moves. The ground is
+  true width at the building line, so buildings need no correction. `HORIZON_Y` sets how strong
+  the effect is.
+- `farm.ts`: field plots in the ground perspective, crops by growth stage, the farmer (walk, sow,
   scythe, carry), and the sheaf store.
 - `horse.ts`: rider with a 4-beat walk and a diagonal trot, plus idle animation. `people.ts`:
   villagers and chickens.
@@ -109,7 +155,13 @@ src/app      input, screen/zoom, actions     main.ts wires it all into the loop
 ### `src/app`: input and screen
 - `actions.ts`: player verbs (toggle construction, open/close the menu, choose, build) and
   event → message mapping.
-- `controls.ts`: keyboard, touch buttons, menu taps, pinch and wheel → actions and zoom.
+- `controls.ts`: keyboard, touch buttons, menu taps, pinch and wheel → actions and zoom. The
+  keyboard works one-handed: A/D ride, S opens the build menu; in the menu WASD moves through the
+  card grid (rows follow the drawn layout), Space/Enter builds, Esc/Q closes. Arrows mirror WASD.
+- `persistence.ts`: keeps the save in IndexedDB (`village-game` → `saves` → `autosave`). Loads it at
+  startup (an unloadable save is kept aside under `unloadable-<time>`, never overwritten) and
+  autosaves every half hour of game time (`AUTOSAVE_HOURS`), shortly after anything is built or
+  finished, and when the page is hidden or closed. Without IndexedDB the game runs unsaved.
 - `screen.ts`: canvas size, DPR, zoom and touch mode. `viewport.ts`: the pure zoom/scale maths
   (tested). Zoom 1 fits the 600-unit-tall scene to the screen height. Zooming out shows more
   street and sky, and the UI keeps its own scale. On portrait touch screens the scene is lifted
@@ -118,7 +170,9 @@ src/app      input, screen/zoom, actions     main.ts wires it all into the loop
   hoofbeats in step with the gait, menu clicks, a thunk when a building is placed and a chime when
   it's done, hammering during construction, each building's everyday sound, and the farmer's
   sowing, scything and stacking. World sounds pan and fade with distance from the rider. M mutes.
-- `tuning.ts`: slider panel on the right (horse speed/accel/braking, build speed, volume).
+- `tuning.ts`: slider panel on the right (horse speed/accel/braking, build speed, time speed,
+  night length, sowing and harvest time per cell, volume), the
+  land-grid toggle and the "new village" button (wipes the save and reloads).
   Non-default values are kept in the URL query.
 - `src/main.ts`: bootstrap and the frame loop.
 
@@ -130,7 +184,7 @@ src/app      input, screen/zoom, actions     main.ts wires it all into the loop
 
 ## Not done yet / ideas
 
-- No economy (coins/resources); building is free. Grain isn't used by anything yet, so a farm
-  with a full store (5 sheaves) just keeps sowing until every plot is ripe, then waits. A mill
-  or market taking grain would be the natural next step.
-- No music, no day/night cycle, no save game.
+- Wood and stone can't be produced yet (no woodcutter or quarry), so the starting stockpile is
+  all there is. Grain piles up in the stockpile with nothing to use it. New people don't arrive
+  (houses could house newcomers), and there is no way to fire or reassign a worker.
+- No music. No lit windows or lanterns at night yet. One save slot; no offline progress while the page is closed.

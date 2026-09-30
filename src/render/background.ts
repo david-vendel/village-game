@@ -1,7 +1,8 @@
-// Parallax backdrop in the spirit of the Age of Empires II intro: a warm
-// late-afternoon sky, hazy blue mountains, a castle on a hill, patchwork
+// Parallax backdrop in the spirit of the Age of Empires II intro: hazy blue
+// mountains, a castle on a hill, patchwork
 // fields, a distant village and a tree line behind the street.
 
+import { depthScale, groundTiles, groundX } from './ground';
 import { circle, type Ctx, ellipse, GROUND_Y, hash, mix, poly, rect, shade, smoke, VIEW_H } from './util';
 
 const HAZE = '#dcc9ad';
@@ -20,9 +21,8 @@ export interface View {
   time: number;
 }
 
+/** The land behind the street, far to near. The sky goes behind it afterwards (sky.ts). */
 export function drawBackground(ctx: Ctx, v: View): void {
-  drawSky(ctx, v);
-  drawClouds(ctx, v);
   drawMountains(ctx, v);
   drawCastleHills(ctx, v);
   drawFarHills(ctx, v);
@@ -30,60 +30,6 @@ export function drawBackground(ctx: Ctx, v: View): void {
   drawDistantVillage(ctx, v);
   drawTreeLine(ctx, v);
   drawStreetGround(ctx, v);
-}
-
-// --- Sky -------------------------------------------------------------------
-
-function drawSky(ctx: Ctx, v: View): void {
-  // Stops are defined in world y so the horizon stays put; extra sky above y=0
-  // (when zoomed out) deepens towards the zenith.
-  const top = Math.min(0, v.top);
-  const at = (y: number) => (y - top) / (380 - top);
-  const g = ctx.createLinearGradient(0, top, 0, 380);
-  g.addColorStop(0, top < 0 ? '#3f5f99' : '#5f7fb3');
-  g.addColorStop(at(0), '#5f7fb3');
-  g.addColorStop(at(133), '#9fb3c9');
-  g.addColorStop(at(266), '#ecd3a6');
-  g.addColorStop(1, '#f6ddb0');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, top, v.width, VIEW_H - top);
-
-  // Low sun slightly to the left; it barely moves (very far away).
-  const sx = v.width * 0.3 - v.camX * 0.01;
-  const sy = 205;
-  const glow = ctx.createRadialGradient(sx, sy, 0, sx, sy, 380);
-  glow.addColorStop(0, 'rgba(255,244,214,0.95)');
-  glow.addColorStop(0.08, 'rgba(255,230,170,0.75)');
-  glow.addColorStop(0.35, 'rgba(255,205,140,0.25)');
-  glow.addColorStop(1, 'rgba(255,200,140,0)');
-  ctx.fillStyle = glow;
-  ctx.fillRect(0, Math.min(0, v.top), v.width, VIEW_H - Math.min(0, v.top));
-  circle(ctx, sx, sy, 22, '#fff6de');
-}
-
-function drawClouds(ctx: Ctx, v: View): void {
-  const T = 520;
-  const off = v.camX * 0.03 - v.time * 3;
-  const i0 = Math.floor(off / T) - 1;
-  for (let i = i0; i < i0 + v.width / T + 3; i++) {
-    const x = i * T - off + hash(i, 1) * 200;
-    // when zoomed out, some clouds drift higher into the extra sky
-    const y = 50 + hash(i, 2) * 110 + Math.min(0, v.top) * hash(i, 5) * 0.8;
-    const s = 0.6 + hash(i, 3) * 0.8;
-    ctx.globalAlpha = 0.55 + hash(i, 4) * 0.3;
-    // shaded underside, lit top
-    for (let k = 0; k < 6; k++) {
-      const cx = x + (k - 2.5) * 26 * s + hash(i, 10 + k) * 12;
-      const cy = y + Math.abs(k - 2.5) * 4 * s;
-      ellipse(ctx, cx, cy + 6 * s, 30 * s, 12 * s, '#d8b9a5');
-    }
-    for (let k = 0; k < 5; k++) {
-      const cx = x + (k - 2) * 24 * s + hash(i, 20 + k) * 10;
-      const cy = y - 4 * s - hash(i, 30 + k) * 10 * s;
-      ellipse(ctx, cx, cy, 26 * s, 14 * s, '#fbead6');
-    }
-  }
-  ctx.globalAlpha = 1;
 }
 
 // --- Terrain layers ----------------------------------------------------------
@@ -295,30 +241,37 @@ function drawStreetGround(ctx: Ctx, v: View): void {
   ctx.fillStyle = r;
   ctx.fillRect(0, GROUND_Y + 6, v.width, 500 - GROUND_Y - 6);
 
-  // ruts, stones and hoofprints — scroll with the street
+  // Ruts, stones and hoofprints lie on the ground, so they follow its
+  // perspective (ground.ts): nearer ones are spread wider and scroll faster.
   const T = 40;
-  const i0 = Math.floor(v.camX / T) - 1;
-  for (let i = i0; i < i0 + v.width / T + 3; i++) {
-    const sx = i * T - v.camX;
-    ctx.globalAlpha = 0.35;
-    rect(ctx, sx, 458 + hash(i, 100) * 2, T * (0.5 + hash(i, 101) * 0.5), 1.5, '#7e6040');
-    rect(ctx, sx + 10, 484 + hash(i, 102) * 2, T * (0.4 + hash(i, 103) * 0.5), 1.5, '#7e6040');
-    ctx.globalAlpha = 1;
-    if (hash(i, 104) < 0.5) ellipse(ctx, sx + hash(i, 105) * T, 445 + hash(i, 106) * 50, 2 + hash(i, 107) * 2.5, 1.5 + hash(i, 108), shade('#b0a08a', -hash(i, 109) * 0.3));
-  }
+  const rut = (y: number, dx: number, salt: number) =>
+    groundTiles(v.camX, v.width, y, T, (i, sx, s) => {
+      rect(ctx, sx + dx * s, y + hash(i, salt) * 2, T * s * (0.4 + hash(i, salt + 1) * 0.5), 1.5, '#7e6040');
+    });
+  ctx.globalAlpha = 0.35;
+  rut(458, 0, 100);
+  rut(484, 10, 102);
+  ctx.globalAlpha = 1;
+  // stones: each at its own depth; the tile index keeps them fixed in the world
+  groundTiles(v.camX, v.width, 470, T, (i) => {
+    if (hash(i, 104) >= 0.5) return;
+    const y = 445 + hash(i, 106) * 50;
+    const s = depthScale(y);
+    const x = groundX(i * T + hash(i, 105) * T - v.camX, y, v.width / 2);
+    ellipse(ctx, x, y, (2 + hash(i, 107) * 2.5) * s, 1.5 + hash(i, 108), shade('#b0a08a', -hash(i, 109) * 0.3));
+  });
 
   // grassy edge between verge and street
   ctx.fillStyle = '#6a7c33';
-  for (let i = i0 * 2; i < (i0 + v.width / T + 3) * 2; i++) {
-    const sx = i * (T / 2) - v.camX;
+  groundTiles(v.camX, v.width, GROUND_Y + 8, T / 2, (i, sx, s) => {
     ctx.beginPath();
     ctx.moveTo(sx, GROUND_Y + 8);
-    ctx.lineTo(sx + 4 + hash(i, 110) * 6, GROUND_Y + 3 - hash(i, 111) * 5);
-    ctx.lineTo(sx + 14, GROUND_Y + 8);
-    ctx.lineTo(sx + 20, GROUND_Y + 10);
+    ctx.lineTo(sx + (4 + hash(i, 110) * 6) * s, GROUND_Y + 3 - hash(i, 111) * 5);
+    ctx.lineTo(sx + 14 * s, GROUND_Y + 8);
+    ctx.lineTo(sx + 20 * s, GROUND_Y + 10);
     ctx.lineTo(sx, GROUND_Y + 10);
     ctx.fill();
-  }
+  });
 
   // foreground meadow below the street
   const bottom = Math.max(VIEW_H, v.bottom);
@@ -330,15 +283,11 @@ function drawStreetGround(ctx: Ctx, v: View): void {
   ctx.fillRect(0, 498, v.width, bottom - 498);
 }
 
-/** Tall grass, flowers and fence posts in front of everything. */
+/** Tall grass and flowers in front of everything, nearest of all in the ground perspective. */
 export function drawForeground(ctx: Ctx, v: View): void {
-  const factor = 1.2;
-  const off = v.camX * factor;
-  const T = 26;
-  const i0 = Math.floor(off / T) - 2;
-  for (let i = i0; i < i0 + v.width / T + 4; i++) {
-    const sx = i * T - off + hash(i, 120) * 10;
-    const base = VIEW_H + 4;
+  const base = VIEW_H + 4;
+  groundTiles(v.camX, v.width, base, 21, (i, tx, s) => {
+    const sx = tx + hash(i, 120) * 8 * s;
     const h = 10 + hash(i, 121) * 16;
     const sway = Math.sin(v.time * 1.6 + i * 0.7) * 3;
     ctx.fillStyle = hash(i, 122) < 0.5 ? '#3f5222' : '#56692b';
@@ -356,7 +305,7 @@ export function drawForeground(ctx: Ctx, v: View): void {
       const fc = ['#e8d36a', '#d9795f', '#f2efe6', '#b98ad6'][Math.floor(hash(i, 124) * 4)];
       circle(ctx, sx + sway, base - h - 2, 3, fc);
     }
-  }
+  });
 }
 
 // --- Castle ----------------------------------------------------------------

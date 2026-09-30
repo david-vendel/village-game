@@ -2,7 +2,9 @@
 // Each calls into the game and reports what happened as a short message.
 // Messages are plain text here; how they look is up to the renderer.
 
-import { BUILDINGS } from '../game/buildings';
+import { BUILDING_TYPES, BUILDINGS } from '../game/buildings';
+import { buildShortfall } from '../game/economy';
+import { RESOURCES } from '../game/resources';
 import {
   closeMenu,
   confirmMenu,
@@ -59,6 +61,16 @@ export function createActions(world: World, notify: Notify, isTouch: () => boole
       sound.ui('menuMove');
     },
     build() {
+      if (!world.menu) return;
+      // the menu stays open when the village can't pay, so another choice is one key away
+      const type = BUILDING_TYPES[world.menu.selection];
+      const lack = buildShortfall(world, type);
+      if (Object.keys(lack).length) {
+        sound.ui('denied');
+        const need = RESOURCES.filter((r) => lack[r]).map((r) => `${lack[r]} more ${r}`).join(' and ');
+        notify(`Not enough for a ${BUILDINGS[type].name}: need ${need}`);
+        return;
+      }
       const b = confirmMenu(world);
       if (!b) return;
       const name = BUILDINGS[b.type].name;

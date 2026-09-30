@@ -1,16 +1,19 @@
 // Composes the world part of a frame: backdrop → fields → plots & buildings →
-// people → rider → foreground → world-anchored labels. Screen UI (HUD, menu,
+// people → rider → foreground → daylight tint, sky behind it all (sky.ts) →
+// world-anchored labels. Screen UI (HUD, menu,
 // touch buttons) is drawn separately by main.ts in its own coordinate space.
 
-import { farmFieldSpots } from '../game/land';
+import { employees } from '../game/people';
 import { getBuilding, plotAt, WORLD_WIDTH, type Building, type World } from '../game/world';
 import { drawBackground, drawForeground, type View } from './background';
 import { BUILDING_ART, type DrawArgs } from './buildings';
 import { drawConstruction, drawConstructionBehind, drawConstructionFront } from './construction';
 import { drawFarmer } from './farm';
 import { drawLandGrid } from './grid';
+import { groundX } from './ground';
+import { drawSkyBehind, lightAt, tintLand } from './sky';
 import { drawRider } from './horse';
-import { drawVillager } from './people';
+import { drawVillager, walker } from './people';
 import { drawBuildingLabel, drawCompletionEffect, drawPlotPrompt, drawProgress } from './ui';
 import { type Ctx, GROUND_Y, rect, ROAD_Y, VIEW_H } from './util';
 
@@ -43,22 +46,32 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   drawBackground(ctx, v);
 
   const onScreen = (x: number, margin = 280) => x - camX > -margin && x - camX < viewW + margin;
+  /** Screen x of something standing on the ground at world x and depth y (ground.ts). */
+  const onGround = (x: number, y: number) => groundX(x - camX, y, viewW / 2);
   const args = (b: Building): DrawArgs => ({
     x: world.plots[b.plotIndex].x - camX,
     base: BASE,
     time: world.time,
     seed: b.id * 97,
     farm: b.farm,
-    fields: b.type === 'farm' && !b.farm ? farmFieldSpots(world, b) : undefined,
+    stock: b.stock,
+    workers: employees(world, b).map((p) => p.job!.worker),
+    vpX: viewW / 2,
   });
-  const farms = world.buildings.filter((b) => b.farm && onScreen(world.plots[b.plotIndex].x, 300));
-  /** Draw farmers whose y satisfies `pred` (depth decides which layer they are in). */
+  // people at work, with their workplace's position
+  const atWork = world.people.flatMap((p) => {
+    const b = p.job && getBuilding(world, p.job.buildingId);
+    return b && onScreen(world.plots[b.plotIndex].x, 300) ? [{ w: p.job!.worker, x: world.plots[b.plotIndex].x }] : [];
+  });
+  /** Draw workers whose y satisfies `pred` (depth decides which layer they are in). */
   const farmers = (pred: (y: number) => boolean) => {
-    for (const b of farms) {
-      const f = b.farm!.farmer;
-      if (pred(f.y)) drawFarmer(ctx, f, world.plots[b.plotIndex].x + f.dx - camX, f.y, world.time);
+    for (const { w, x } of atWork) {
+      // they walk on the ground, so they follow its perspective like the fields do
+      if (pred(w.y)) drawFarmer(ctx, w, groundX(x + w.dx - camX, w.y, viewW / 2), w.y, world.time);
     }
   };
+  // the unemployed and the animals stroll the street (odd ids on the far side)
+  const strollers = [...world.people.filter((p) => !p.job), ...world.animals];
 
   // things that spread behind buildings (farm fields)
   for (const b of world.buildings) {
@@ -94,16 +107,22 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   farmers((y) => y >= BASE - 4 && y < ROAD_Y);
 
   // villagers behind the rider (odd ids walk the far side of the street)
-  for (const vl of world.villagers) {
-    if (vl.id % 2 === 1 && onScreen(vl.x)) drawVillager(ctx, vl, vl.x - camX, ROAD_Y - 14, world.time);
+  for (const who of strollers) {
+    const x = who.stroll.x;
+    if (who.id % 2 === 1 && onScreen(x)) drawVillager(ctx, walker(who), onGround(x, ROAD_Y - 14), ROAD_Y - 14, world.time);
   }
-  drawRider(ctx, world.rider, world.rider.x - camX, ROAD_Y, world.time);
-  for (const vl of world.villagers) {
-    if (vl.id % 2 === 0 && onScreen(vl.x)) drawVillager(ctx, vl, vl.x - camX, ROAD_Y + 12, world.time);
+  drawRider(ctx, world.rider, onGround(world.rider.x, ROAD_Y), ROAD_Y, world.time);
+  for (const who of strollers) {
+    const x = who.stroll.x;
+    if (who.id % 2 === 0 && onScreen(x)) drawVillager(ctx, walker(who), onGround(x, ROAD_Y + 12), ROAD_Y + 12, world.time);
   }
   farmers((y) => y >= ROAD_Y);
 
   drawForeground(ctx, v);
+  // daylight: tint the land, then put the sky behind it
+  const light = lightAt(world);
+  tintLand(ctx, v, light);
+  drawSkyBehind(ctx, v, light);
   drawGrade(ctx, viewW, sv.top, sv.bottom);
   if (sv.showGrid) drawLandGrid(ctx, world, camX, viewW);
 
@@ -119,7 +138,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     const sx = plot.x - camX;
     const b = getBuilding(world, plot.buildingId);
     if (!b) drawPlotPrompt(ctx, sx, BASE, world.time, sv.promptLabel, k);
-    else if (b.status === 'done') drawBuildingLabel(ctx, b, sx, BASE - BUILDING_ART[b.type].height - 18, k, viewW);
+    else if (b.status === 'done') drawBuildingLabel(ctx, world, b, sx, BASE - BUILDING_ART[b.type].height - 18, k, viewW);
   }
 }
 

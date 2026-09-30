@@ -37,6 +37,9 @@ export interface FrameView {
 
 export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: FrameView): void {
   // world, zoomed and anchored near the bottom of the screen
+  // start transparent: the sky is composited behind the land (see sky.ts)
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   ctx.setTransform(v.worldScale, 0, 0, v.worldScale, 0, v.offsetY);
   drawScene(ctx, world, {
     camX: v.camX,

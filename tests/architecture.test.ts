@@ -58,9 +58,18 @@ const MUTATORS = [
   'confirmMenu',
   'moveMenu',
   'selectMenu',
-  'updateFarm',
+  'updateFarm', // (gone; kept so it can't come back into render)
   'setFieldSpots',
   'syncFarmFields',
+  'updateCrops',
+  'repairFarm',
+  'updateWorker',
+  'retarget',
+  'staffBuildings',
+  'updateStrolls',
+  'collectGoods',
+  'payForBuilding',
+  'pay',
   'rand',
 ];
 

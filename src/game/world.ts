@@ -1,12 +1,23 @@
 // Pure game state + update logic. No DOM, no canvas — unit-tested in world.test.ts.
+// The world holds the street's plots and buildings, the people and animals,
+// the village stockpile and the rider, and runs each part's update in turn.
+// What is specific to one kind of thing lives in its own module: farm.ts
+// (fields), people.ts (villagers, hiring), worker.ts (the working day),
+// economy.ts (stockpile, costs, collection), land.ts (who uses which land).
 
 import { BUILDINGS, BUILDING_TYPES, type BuildingType } from './buildings';
-import { createFarm, updateFarm, type FarmState } from './farm';
+import { timeOfDay } from './daynight';
+import { collectGoods, COLLECT_EVERY, payForBuilding, STARTING_STOCK } from './economy';
+import { createFarm, DEFAULT_WORK, farmWorkplace, updateCrops, type FarmState } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
+import { PLOT_SPACING } from './layout';
+import { employees, nameFor, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
+import { stockOf, type Stock } from './resources';
+import { createWorker, currentJob, updateWorker, type Workplace } from './worker';
 
 export const WORLD_WIDTH = 6400;
 export const PLOT_WIDTH = 200;
-export const PLOT_SPACING = 250;
+export { PLOT_SPACING };
 export const FIRST_PLOT_X = 420;
 /** How close (px) the rider's x must be to a plot centre to interact with it. */
 export const INTERACT_RANGE = 90;
@@ -22,6 +33,13 @@ export interface WorldParams {
   riderDecel: number; // px/s²
   /** Construction speed multiplier: 2 builds twice as fast. */
   buildSpeed: number;
+  /** How fast the time of day runs: 2 makes days half as long (see daynight.ts). */
+  timeSpeed: number;
+  /** Hours of the 24 the sun spends below the horizon, 0..12. */
+  nightHours: number;
+  /** Farm work time per grid cell of plot width (s): sowing and harvesting. */
+  sowPerCell: number;
+  harvestPerCell: number;
 }
 
 export const DEFAULT_PARAMS: WorldParams = {
@@ -29,6 +47,9 @@ export const DEFAULT_PARAMS: WorldParams = {
   riderAccel: RIDER_ACCEL,
   riderDecel: RIDER_DECEL,
   buildSpeed: 1,
+  timeSpeed: 1,
+  nightHours: 8,
+  ...DEFAULT_WORK,
 };
 
 export interface Plot {
@@ -49,7 +70,11 @@ export interface Building {
   status: BuildingStatus;
   /** World time (s) at which the building was completed; used for the completion effect. */
   completedAt: number | null;
-  /** Fields, farmer and grain store — farms only, once finished. */
+  /** The building's own store (capacities in its BuildingDef). */
+  stock: Stock;
+  /** Seconds until the village next collects from the store (economy.ts). */
+  collectIn: number;
+  /** Fields — farms only, once finished. */
   farm?: FarmState;
 }
 
@@ -59,17 +84,6 @@ export interface Rider {
   facing: 1 | -1;
   /** Accumulated gait phase — advances with distance travelled. */
   gait: number;
-}
-
-export interface Villager {
-  id: number;
-  x: number;
-  dir: 1 | -1;
-  speed: number;
-  /** Seconds remaining standing still. */
-  idle: number;
-  kind: 'peasant' | 'woman' | 'monk' | 'chicken';
-  seed: number;
 }
 
 export interface BuildMenu {
@@ -87,7 +101,11 @@ export interface World {
   plots: Plot[];
   buildings: Building[];
   rider: Rider;
-  villagers: Villager[];
+  /** Every villager, employed or not (people.ts). */
+  people: Person[];
+  animals: Animal[];
+  /** The village stockpile: pays for buildings, fed by their stores (economy.ts). */
+  stock: Stock;
   constructionEnabled: boolean;
   params: WorldParams;
   menu: BuildMenu | null;
@@ -95,6 +113,8 @@ export interface World {
   lastSelection: number;
   nextId: number;
   rngState: number;
+  /** Time-of-day clock (s): runs at params.timeSpeed. See daynight.ts. */
+  dayClock: number;
   /** Events produced during the last update/action; drained by the caller. */
   events: GameEvent[];
 }
@@ -139,36 +159,40 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
     plots,
     buildings: [],
     rider: { x: FIRST_PLOT_X + 5 * PLOT_SPACING + PLOT_SPACING / 2, vx: 0, facing: 1, gait: 0 },
-    villagers: [],
+    people: [],
+    animals: [],
+    stock: { ...STARTING_STOCK },
     constructionEnabled: true,
     params: { ...DEFAULT_PARAMS },
     menu: null,
     lastSelection: 0,
     nextId: 1,
     rngState: opts.seed ?? 1337,
+    dayClock: 0,
     events: [],
   };
 
   if (opts.village ?? true) {
     for (const [plotIndex, type] of STARTING_VILLAGE) {
-      const b = placeBuilding(world, plotIndex, type, { instant: true });
+      const b = placeBuilding(world, plotIndex, type, { instant: true, free: true });
       if (!b) continue;
       b.completedAt = -100; // no completion effect for the starting village
-      if (b.farm) b.farm = createFarm({ established: true, spots: farmFieldSpots(world, b) });
     }
     world.events.length = 0;
-    const kinds: Villager['kind'][] = ['peasant', 'woman', 'monk', 'peasant', 'chicken', 'chicken', 'woman'];
+    const kinds: Array<Look | 'chicken'> = ['peasant', 'woman', 'monk', 'peasant', 'chicken', 'chicken', 'woman'];
     for (const kind of kinds) {
-      world.villagers.push({
-        id: world.nextId++,
+      const id = world.nextId++;
+      const stroll = {
         x: FIRST_PLOT_X + rand(world) * 16 * PLOT_SPACING,
-        dir: rand(world) < 0.5 ? -1 : 1,
+        dir: (rand(world) < 0.5 ? -1 : 1) as 1 | -1,
         speed: kind === 'chicken' ? 22 + rand(world) * 14 : 26 + rand(world) * 18,
         idle: rand(world) * 3,
-        kind,
-        seed: Math.floor(rand(world) * 1e6),
-      });
+      };
+      const seed = Math.floor(rand(world) * 1e6);
+      if (kind === 'chicken') world.animals.push({ id, kind, seed, stroll });
+      else world.people.push({ id, name: nameFor(kind, seed), look: kind, seed, job: null, stroll });
     }
+    staffBuildings(world, (b) => createWorker(workplaceOf(world, b)!));
   }
   return world;
 }
@@ -196,10 +220,12 @@ export function placeBuilding(
   world: World,
   plotIndex: number,
   type: BuildingType,
-  opts: { instant?: boolean } = {},
+  /** instant: skip construction; free: don't charge the stockpile (the starting village). */
+  opts: { instant?: boolean; free?: boolean } = {},
 ): Building | null {
   const plot = world.plots[plotIndex];
   if (!plot || plot.buildingId !== null) return null;
+  if (!opts.free && !payForBuilding(world, type)) return null;
   const instant = opts.instant ?? !world.constructionEnabled;
   const b: Building = {
     id: world.nextId++,
@@ -208,6 +234,8 @@ export function placeBuilding(
     progress: instant ? 1 : 0,
     status: instant ? 'done' : 'constructing',
     completedAt: instant ? world.time : null,
+    stock: stockOf(),
+    collectIn: COLLECT_EVERY,
   };
   world.buildings.push(b);
   if (instant && type === 'farm') b.farm = createFarm({ spots: farmFieldSpots(world, b) });
@@ -278,10 +306,33 @@ export function closeMenu(world: World): void {
 
 export function update(world: World, dt: number, input: MoveInput): void {
   world.time += dt;
+  world.dayClock += dt * world.params.timeSpeed;
   updateRider(world, dt, world.menu ? { left: false, right: false } : input);
   updateConstruction(world, dt);
-  for (const b of world.buildings) if (b.farm) updateFarm(b.farm, dt);
-  updateVillagers(world, dt);
+  staffBuildings(world, (b) => createWorker(workplaceOf(world, b)!));
+  for (const b of world.buildings) if (b.farm) updateCrops(b.farm, dt);
+  updateWorkers(world, dt);
+  collectGoods(world, dt);
+  updateStrolls(world, dt, () => rand(world));
+}
+
+/** A building as a workplace for the people it employs; null if it has no work to give. */
+export function workplaceOf(world: World, b: Building): Workplace | null {
+  if (b.farm) return farmWorkplace(b.farm, b.stock, world.params);
+  return null;
+}
+
+function updateWorkers(world: World, dt: number): void {
+  const now = timeOfDay(world);
+  for (const b of world.buildings) {
+    const place = workplaceOf(world, b);
+    if (!place) continue;
+    const staff = employees(world, b).map((p) => p.job!.worker);
+    for (const w of staff) {
+      const taken = staff.filter((o) => o !== w).flatMap((o) => currentJob(o) ?? []);
+      updateWorker(w, place, dt, now, taken);
+    }
+  }
 }
 
 function updateRider(world: World, dt: number, input: MoveInput): void {
@@ -311,24 +362,6 @@ function updateConstruction(world: World, dt: number): void {
     if (b.status !== 'constructing') continue;
     b.progress += (dt * world.params.buildSpeed) / BUILDINGS[b.type].buildTime;
     if (b.progress >= 1) complete(world, b);
-  }
-}
-
-function updateVillagers(world: World, dt: number): void {
-  const minX = FIRST_PLOT_X - 150;
-  const maxX = WORLD_WIDTH - 300;
-  for (const v of world.villagers) {
-    if (v.idle > 0) {
-      v.idle -= dt;
-      if (v.idle <= 0 && rand(world) < 0.4) v.dir = (v.dir * -1) as 1 | -1;
-      continue;
-    }
-    v.x += v.dir * v.speed * dt;
-    if (v.x < minX || v.x > maxX) {
-      v.x = Math.max(minX, Math.min(maxX, v.x));
-      v.dir = (v.dir * -1) as 1 | -1;
-    }
-    if (rand(world) < dt * (v.kind === 'chicken' ? 0.5 : 0.12)) v.idle = 1 + rand(world) * 4;
   }
 }
 

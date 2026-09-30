@@ -1,9 +1,13 @@
 // Farm fields, crops, the farmer and the grain store. Positions come from the
 // simulation geometry in game/farm.ts (world y), shifted onto the building's
 // screen base so the same art works in the street and in menu previews.
+// Fields lie on the ground, so their x goes through the ground perspective
+// (ground.ts), the same projection the land-grid overlay uses.
 
-import { type FarmState, type Farmer, type FieldPlot, type FieldSpot, growth, HARVEST_TIME, openFieldSpots, SOW_TIME } from '../game/farm';
-import { BACK_FIELD, BASE_Y, FRONT_FIELD, STORE, VIEW_H } from '../game/layout';
+import { type FarmState, type FieldPlot, growth } from '../game/farm';
+import { DOOR_TIME, WALK_SPEED, type Worker } from '../game/worker';
+import { BACK_FIELD, BASE_Y, FIELD_ROWS, FRONT_FIELD, STORE, VIEW_H } from '../game/layout';
+import { groundX } from './ground';
 import { circle, clamp01, type Ctx, ellipse, hash, lerp, line, mix, poly, rect } from './util';
 
 const SOIL = '#7a5a3a';
@@ -13,11 +17,13 @@ interface Anchor {
   x: number;
   base: number;
   time: number;
-  /** Where the fields lie while the farm has no live state yet (under construction). */
-  fields?: FieldSpot[];
+  /** Vanishing point x (same units as `x`); defaults to the farm centre, e.g. in menu previews. */
+  vpX?: number;
 }
 
 const toScreenY = (a: Anchor, y: number) => a.base + (y - BASE_Y);
+/** Screen point of the ground at x offset u from the farm centre and world depth y. */
+const ground = (a: Anchor, u: number, y: number): [number, number] => [groundX(a.x + u, y, a.vpX ?? a.x), toScreenY(a, y)];
 
 // --- Crops -----------------------------------------------------------------
 
@@ -39,85 +45,76 @@ function stalk(ctx: Ctx, x: number, y: number, h: number, g: number, sway: numbe
   else if (g >= 0.2) line(ctx, x, y - h * 0.5, x + sway * 0.5 + h * 0.3, y - h * 0.75, color, lw * 0.8); // leaf
 }
 
-// --- Perspective ------------------------------------------------------------
-// A gentle one-point perspective: rows are horizontal, far edges are only a
-// little narrower than near ones, and depth is compressed on screen.
+// --- Plots ------------------------------------------------------------------
+// A plot covers its row's depth band (FIELD_ROWS, world y) and its width; every
+// point maps through the ground perspective, so plots line up with the grid.
 
-/** Back field point: u = x offset from the farm centre, t = 0 near edge … 1 far edge. */
-function backPoint(a: Anchor, u: number, t: number): [number, number] {
-  const near = toScreenY(a, BACK_FIELD.front);
-  const far = toScreenY(a, BACK_FIELD.back);
-  return [a.x + u * (1 - 0.06 * t), lerp(near, far, t)];
+/** Ground point u (x offset from the farm centre) at world depth y. */
+const pt = (a: Anchor, u: number, y: number) => ground(a, u, y);
+
+function quad(a: Anchor, u0: number, u1: number, yFar: number, yNear: number): number[] {
+  return [...pt(a, u0, yFar), ...pt(a, u1, yFar), ...pt(a, u1, yNear), ...pt(a, u0, yNear)];
 }
 
-/** Front field point: t = 0 far (road side) … 1 near (viewer side). */
-function frontPoint(a: Anchor, u: number, t: number): [number, number] {
-  const far = toScreenY(a, FRONT_FIELD.top);
-  const near = toScreenY(a, FRONT_FIELD.bottom);
-  // rows spread out as they come closer
-  return [a.x + u * (0.95 + 0.05 * t), lerp(far, near, t * t * 0.35 + t * 0.65)];
-}
+/** Crops are drawn bigger the nearer to the viewer they grow. */
+const cropSize = (y: number) => lerp(0.8, 1.55, clamp01((y - BACK_FIELD.back) / (FRONT_FIELD.bottom - BACK_FIELD.back)));
 
-type PointFn = (a: Anchor, u: number, t: number) => [number, number];
-
-function quad(a: Anchor, pt: PointFn, u0: number, u1: number, t0: number, t1: number): number[] {
-  return [...pt(a, u0, t0), ...pt(a, u1, t0), ...pt(a, u1, t1), ...pt(a, u0, t1)];
-}
-
-/**
- * One plot: soil, horizontal furrows, and crop rows drawn far-to-near.
- * `farT`/`nearT` give the t of the far and near edge for the point function.
- */
-function fieldPlot(ctx: Ctx, a: Anchor, p: FieldPlot, seed: number, pt: PointFn, farT: number, nearT: number, size: number, rows: number): void {
+/** One plot: soil, horizontal furrows, and crop rows drawn far-to-near. */
+function fieldPlot(ctx: Ctx, a: Anchor, p: FieldPlot, seed: number): void {
+  const { far, near } = FIELD_ROWS[p.zone][p.row];
+  const rows = p.zone === 'back' ? 5 : 4;
   const u0 = p.dx - p.width / 2 + 2;
   const u1 = p.dx + p.width / 2 - 2;
-  poly(ctx, quad(a, pt, u0, u1, farT, nearT), p.state === 'fallow' ? SOIL : '#6f5234');
+  poly(ctx, quad(a, u0, u1, far + 1, near - 1), p.state === 'fallow' ? SOIL : '#6f5234');
   ctx.globalAlpha = 0.45;
   for (let k = 1; k < rows * 2; k++) {
-    const t = lerp(farT, nearT, k / (rows * 2));
-    const [x0, y] = pt(a, u0, t);
-    const [x1] = pt(a, u1, t);
-    line(ctx, x0, y, x1, y, SOIL_DARK, 0.8 + size * 0.4 * (k / (rows * 2)));
+    const y = lerp(far + 1, near - 1, k / (rows * 2));
+    const [x0, sy] = pt(a, u0, y);
+    const [x1] = pt(a, u1, y);
+    line(ctx, x0, sy, x1, sy, SOIL_DARK, 0.8 + cropSize(y) * 0.4 * (k / (rows * 2)));
   }
   ctx.globalAlpha = 1;
   if (p.state === 'fallow') return;
   const g = growth(p);
   const look = cropLook(g);
   for (let r = 0; r < rows; r++) {
-    const k = (r + 0.5) / rows; // 0 far … 1 near
-    const t = lerp(farT, nearT, k);
-    const persp = size * (0.72 + 0.28 * k);
+    const y = lerp(far, near, (r + 0.5) / rows);
+    const persp = cropSize(y);
     const step = 4.5 * persp;
     for (let u = u0 + 2; u < u1 - 1; u += step) {
-      const [x, y] = pt(a, u + hash(seed + r * 31, Math.floor(u * 3)) * 1.5, t);
+      const [x, sy] = pt(a, u + hash(seed + p.row * 97 + r * 31, Math.floor(u * 3)) * 1.5, y);
       const sway = g > 0.5 ? Math.sin(a.time * 1.8 + x * 0.05 + r) * 1.5 * g * persp : 0;
-      stalk(ctx, x, y, look.h * persp, g, sway, look.color, look.tip, 1.25 * persp);
+      stalk(ctx, x, sy, look.h * persp, g, sway, look.color, look.tip, 1.25 * persp);
     }
   }
+}
+
+/** Grass border, then the plots far row first so nearer crops overlap farther ones. */
+function drawPlots(ctx: Ctx, a: Anchor, plots: FieldPlot[], seed: number, border: string, margin: number): void {
+  for (const p of plots) {
+    const { far, near } = FIELD_ROWS[p.zone][p.row];
+    poly(ctx, quad(a, p.dx - p.width / 2 - margin, p.dx + p.width / 2 + margin, far - 3, near + 3), border);
+  }
+  for (const p of [...plots].sort((x, y) => x.row - y.row)) fieldPlot(ctx, a, p, seed);
 }
 
 // --- Back field (behind the farmstead) ----------------------------------------
 
 export function drawBackField(ctx: Ctx, a: Anchor, farm: FarmState | undefined, seed: number): void {
-  for (const p of plotsOf(a, farm, 'back')) {
-    const u0 = p.dx - p.width / 2 - 2;
-    const u1 = p.dx + p.width / 2 + 2;
-    poly(ctx, quad(a, backPoint, u0, u1, 1.12, -0.08), '#7f9143'); // grass border
-    fieldPlot(ctx, a, p, seed, backPoint, 1, 0, 0.8, 5);
-  }
+  drawPlots(ctx, a, plotsOf(farm, 'back'), seed, '#7f9143', 2);
 }
 
 // --- Front field (between the road and the viewer) -----------------------------------
 
 export function drawFrontField(ctx: Ctx, a: Anchor, farm: FarmState | undefined, seed: number): void {
-  const plots = plotsOf(a, farm, 'front');
-  // grass border, then plots, then a low wattle fence along the near edge;
-  // plots may be split up where the land belongs to another farm
-  for (const p of plots) poly(ctx, quad(a, frontPoint, p.dx - p.width / 2 - 4, p.dx + p.width / 2 + 4, -0.08, 1.06), '#6f8338');
-  for (const p of plots) fieldPlot(ctx, a, p, seed + 7, frontPoint, 0, 1, 1.45, 7);
-  for (const p of plots) {
-    const [fl, fy] = frontPoint(a, p.dx - p.width / 2 - 4, 1.06);
-    const [fr] = frontPoint(a, p.dx + p.width / 2 + 4, 1.06);
+  const plots = plotsOf(farm, 'front');
+  drawPlots(ctx, a, plots, seed + 7, '#6f8338', 4);
+  // a low wattle fence along the near edge, in front of every column with a field in it
+  const y = FRONT_FIELD.bottom + 4;
+  const columns = new Map(plots.map((p) => [`${p.dx}:${p.width}`, p]));
+  for (const p of columns.values()) {
+    const [fl, fy] = pt(a, p.dx - p.width / 2 - 4, y);
+    const [fr] = pt(a, p.dx + p.width / 2 + 4, y);
     for (let x = fl; x <= fr; x += 16) line(ctx, x, fy + 6, x, fy - 12, '#5a4330', 3);
     line(ctx, fl, fy - 8, fr, fy - 8, '#7a5d43', 2.5);
     line(ctx, fl, fy - 1, fr, fy - 1, '#7a5d43', 2.5);
@@ -126,19 +123,19 @@ export function drawFrontField(ctx: Ctx, a: Anchor, farm: FarmState | undefined,
 
 /** Low fences along the road side of the back plots. */
 export function drawBackFences(ctx: Ctx, a: Anchor, farm: FarmState | undefined): void {
-  for (const p of plotsOf(a, farm, 'back')) {
-    const s0 = a.x + p.dx - p.width / 2;
-    const e0 = a.x + p.dx + p.width / 2 - 3;
+  const y = FIELD_ROWS.back[0].near;
+  for (const p of plotsOf(farm, 'back')) {
+    const [s0] = pt(a, p.dx - p.width / 2, y);
+    const e0 = pt(a, p.dx + p.width / 2, y)[0] - 3;
     for (let fx = s0; fx <= e0; fx += 16) rect(ctx, fx, a.base - 14, 3, 14, '#6b4f35');
     rect(ctx, s0, a.base - 12, e0 - s0 + 3, 2, '#7d5d3f');
     rect(ctx, s0, a.base - 6, e0 - s0 + 3, 2, '#7d5d3f');
   }
 }
 
-/** Plots of one zone; with no farm state (e.g. under construction) all fallow. */
-function plotsOf(a: Anchor, farm: FarmState | undefined, zone: FieldPlot['zone']): FieldPlot[] {
-  if (farm) return farm.plots.filter((p) => p.zone === zone);
-  return (a.fields ?? openFieldSpots()).filter((s) => s.zone === zone).map((s) => ({ ...s, state: 'fallow', age: 0 }));
+/** Plots of one zone that show as fields: only tilled ones, the rest is still grass. */
+function plotsOf(farm: FarmState | undefined, zone: FieldPlot['zone']): FieldPlot[] {
+  return farm?.plots.filter((p) => p.zone === zone && p.tilled) ?? [];
 }
 
 // --- Grain store -----------------------------------------------------------------------
@@ -159,14 +156,13 @@ function sheaf(ctx: Ctx, x: number, y: number): void {
   for (let i = -3; i <= 3; i++) ellipse(ctx, x + i * 2.2, y - 21 - Math.abs(i) * -0.6, 1.4, 3, '#e3c265', i * 0.15);
 }
 
-export function drawStore(ctx: Ctx, a: Anchor, farm: FarmState | undefined): void {
+export function drawStore(ctx: Ctx, a: Anchor, sheaves: number): void {
   const cx = a.x + STORE.dx;
   const y = toScreenY(a, STORE.y) + 1;
   // wooden pallet the sheaves stand on
   poly(ctx, [cx - 24, y, cx + 24, y, cx + 28, y - 4, cx - 20, y - 4], '#6b4f35');
   line(ctx, cx - 24, y, cx + 24, y, '#4d3826', 1.5);
-  const n = farm?.storage ?? 0;
-  for (let i = 0; i < n; i++) sheaf(ctx, cx + SHEAF_SLOTS[i][0], y - 3 + SHEAF_SLOTS[i][1]);
+  for (let i = 0; i < Math.min(sheaves, SHEAF_SLOTS.length); i++) sheaf(ctx, cx + SHEAF_SLOTS[i][0], y - 3 + SHEAF_SLOTS[i][1]);
 }
 
 // --- Farmer ------------------------------------------------------------------------------
@@ -176,25 +172,40 @@ export function farmerScale(y: number): number {
   return y < BASE_Y ? lerp(0.82, 1, clamp01((y - BACK_FIELD.back) / (BASE_Y - BACK_FIELD.back))) : 1 + ((y - BASE_Y) / (VIEW_H - BASE_Y)) * 0.45;
 }
 
-export function drawFarmer(ctx: Ctx, f: Farmer, x: number, y: number, time: number): void {
-  const s = farmerScale(f.y);
+/** How far through the farmhouse door the farmer is: 0 outside … 1 inside. */
+export function doorProgress(f: Worker): number {
+  const t = f.task;
+  if (t.kind === 'enter') return clamp01(t.t / DOOR_TIME);
+  if (t.kind === 'exit') return 1 - clamp01(t.t / DOOR_TIME);
+  return t.kind === 'home' ? 1 : 0;
+}
+
+export function drawFarmer(ctx: Ctx, f: Worker, x: number, y: number, time: number): void {
+  const inDoor = doorProgress(f);
+  if (inDoor >= 1) return; // indoors
+  const s = farmerScale(f.y) * (1 - 0.15 * inDoor); // a step back into the doorway
   const task = f.task;
-  const walking = task.kind === 'walk';
-  const phase = f.stride * 0.22;
+  const stepping = task.kind === 'enter' || task.kind === 'exit';
+  const walking = task.kind === 'walk' || stepping;
+  const phase = (stepping ? time * WALK_SPEED : f.stride) * 0.22;
   const swing = walking ? Math.sin(phase) * 0.5 : 0;
   const bob = walking ? Math.abs(Math.cos(phase)) * 1.2 : 0;
+  // fades into the dark doorway (all alpha below is relative to this)
+  const alpha = 1 - inDoor;
 
   ctx.save();
-  ctx.translate(x, y);
+  ctx.translate(x, y - inDoor * 5);
   ctx.scale(s * f.facing, s);
-  ctx.globalAlpha = 0.25;
+  ctx.globalAlpha = 0.25 * alpha;
   ellipse(ctx, 0, 0, 9, 2.5, '#2c2416');
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = alpha;
   ctx.lineCap = 'round';
 
   // bending over while working
-  const working = task.kind === 'work';
-  const bend = working ? (task.action === 'sow' ? 0.12 : 0.25 + Math.sin(time * 4) * 0.08) : 0;
+  const job = task.kind === 'job' ? task : null;
+  const working = !!job;
+  const action = job?.job.action;
+  const bend = working ? (action === 'sow' ? 0.12 : 0.25 + Math.sin(time * 4) * 0.08) : 0;
 
   line(ctx, 0, -14 - bob, Math.sin(swing) * 9, 0, '#3d3128', 3);
   line(ctx, 0, -14 - bob, Math.sin(-swing) * 9, 0, '#4d3f33', 3);
@@ -207,7 +218,7 @@ export function drawFarmer(ctx: Ctx, f: Farmer, x: number, y: number, time: numb
   ellipse(ctx, 0, -20, 8, 2.2, '#d8bf6a'); // straw hat
   ellipse(ctx, 0, -22, 4, 3, '#d8bf6a');
 
-  if (working && task.action === 'sow') {
+  if (job && action === 'sow') {
     // seed bag at the hip; the arm casts seed in an arc
     ellipse(ctx, -5, -2, 4, 5, '#c9b48a');
     const arm = Math.sin(time * 5) * 0.9;
@@ -218,12 +229,12 @@ export function drawFarmer(ctx: Ctx, f: Farmer, x: number, y: number, time: numb
     const cast = (time * 5) % (Math.PI * 2);
     for (let i = 0; i < 6; i++) {
       const t = ((cast / (Math.PI * 2)) + i / 6) % 1;
-      ctx.globalAlpha = 1 - t;
+      ctx.globalAlpha = (1 - t) * alpha;
       circle(ctx, 8 + t * 16, -22 + t * 22 + t * t * 6, 1, '#e8d49a');
     }
-    ctx.globalAlpha = 1;
-    drawProgressPips(ctx, task.t / SOW_TIME);
-  } else if (working && task.action === 'harvest') {
+    ctx.globalAlpha = alpha;
+    drawProgressPips(ctx, job.t / job.duration);
+  } else if (job && action === 'harvest') {
     // scythe sweeping low across the crop
     const sweep = Math.sin(time * 4) * 0.7;
     ctx.save();
@@ -238,7 +249,7 @@ export function drawFarmer(ctx: Ctx, f: Farmer, x: number, y: number, time: numb
     ctx.restore();
     line(ctx, 1, -11, 5, -5, '#e0b48e', 2.5);
     ctx.restore();
-    drawProgressPips(ctx, task.t / HARVEST_TIME);
+    drawProgressPips(ctx, job.t / job.duration);
   } else {
     line(ctx, 1, -11, 1 + Math.sin(-swing) * 6, -2, '#8a6a3c', 3);
     if (f.carrying) {

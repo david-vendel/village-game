@@ -2,20 +2,27 @@
 // Buildings claim the cells of their footprint the moment they are placed.
 // Farms then take the free cells around them for fields: behind the road only
 // up to the next building, in front of the road any land within reach that is
-// closer to them than to another farm.
+// closer to them than to another farm — including the land in front of the
+// neighbouring lots, which a farm borrows only when its own land is all in use.
 
 import { BUILDINGS } from './buildings';
 import { fieldSpots, footprintHalfCells, setFieldSpots, type FieldSpot } from './farm';
-import { CELL_W, FIELD_REACH, GRID_X0, type FieldZone } from './layout';
+import { employees } from './people';
+import { CELL_W, FIELD_REACH, FIELD_ROWS, GRID_X0, type FieldZone } from './layout';
 import type { Building, World } from './world';
 
-export type CellUse = { kind: 'free' } | { kind: 'building'; buildingId: number } | { kind: 'field'; buildingId: number };
+export type CellUse =
+  | { kind: 'free' }
+  | { kind: 'building'; buildingId: number }
+  | { kind: 'field'; buildingId: number }
+  /** Land a farm may farm but that is still grass (not tilled yet, or borrowed and resting). */
+  | { kind: 'spare'; buildingId: number };
 
 export interface LandGrid {
   /** Number of cells along the street. */
   count: number;
-  back: CellUse[];
-  front: CellUse[];
+  /** One row of cells per field row (see FIELD_ROWS), back zone first, each far to near. */
+  rows: Array<{ zone: FieldZone; row: number; cells: CellUse[] }>;
 }
 
 /** Index of the cell containing world x. */
@@ -49,7 +56,7 @@ function buildingCells(world: World): Array<number | null> {
 function farmFor(world: World, farms: Building[], zone: FieldZone, k: number, built: Array<number | null>): Building | null {
   const mid = cellX(k) + CELL_W / 2;
   let best: Building | null = null;
-  let bestD = FIELD_REACH;
+  let bestD = FIELD_REACH[zone];
   for (const f of farms) {
     const fx = world.plots[f.plotIndex].x;
     const d = Math.abs(mid - fx);
@@ -88,25 +95,37 @@ export function farmFieldSpots(world: World, farm: Building): FieldSpot[] {
 
 /** Re-lay every finished farm's fields after the land changed (a building was placed). */
 export function syncFarmFields(world: World): void {
-  for (const b of world.buildings) if (b.farm) setFieldSpots(b.farm, farmFieldSpots(world, b));
+  for (const b of world.buildings) {
+    if (b.farm) setFieldSpots(b.farm, farmFieldSpots(world, b), employees(world, b).map((p) => p.job!.worker));
+  }
 }
 
-/** Every cell's use, for display (the grid overlay). Field cells are those inside a farm's plots. */
+/**
+ * Every cell's use, for display (the grid overlay). Behind the road buildings
+ * stand on the cells; field cells are those inside a farm's plots.
+ */
 export function landGrid(world: World): LandGrid {
   const built = buildingCells(world);
   const count = built.length;
-  const back: CellUse[] = built.map((id) => (id === null ? { kind: 'free' } : { kind: 'building', buildingId: id }));
-  const front: CellUse[] = built.map(() => ({ kind: 'free' }));
+  const rows = (Object.keys(FIELD_ROWS) as FieldZone[]).flatMap((zone) =>
+    FIELD_ROWS[zone].map((_, row) => ({
+      zone,
+      row,
+      cells: built.map((id): CellUse => (zone === 'back' && id !== null ? { kind: 'building', buildingId: id } : { kind: 'free' })),
+    })),
+  );
   for (const b of world.buildings) {
     if (b.type !== 'farm') continue;
-    const spots = b.farm?.plots ?? farmFieldSpots(world, b);
+    const farm = b.farm;
+    const spots = farm?.plots ?? farmFieldSpots(world, b);
     const fx = world.plots[b.plotIndex].x;
-    for (const s of spots) {
-      const row = s.zone === 'back' ? back : front;
+    spots.forEach((s, i) => {
+      const cells = rows.find((r) => r.zone === s.zone && r.row === s.row)!.cells;
+      const kind = farm?.plots[i].tilled ? 'field' : 'spare';
       for (let k = cellAt(fx + s.dx - s.width / 2 + 0.5); k < cellAt(fx + s.dx + s.width / 2 - 0.5) + 1; k++) {
-        if (k >= 0 && k < count) row[k] = { kind: 'field', buildingId: b.id };
+        if (k >= 0 && k < count) cells[k] = { kind, buildingId: b.id };
       }
-    }
+    });
   }
-  return { count, back, front };
+  return { count, rows };
 }

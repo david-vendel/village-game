@@ -3,6 +3,7 @@
 // so a setting survives a reload and can be sent as a link. Same pattern as
 // ../hollow.
 
+import { DAY_LENGTH } from '../game/daynight';
 import { DEFAULT_PARAMS, type World, type WorldParams } from '../game/world';
 import type { Sound } from './sound';
 
@@ -25,6 +26,18 @@ const WORLD_KNOBS: WorldKnob[] = [
   { key: 'riderAccel', param: 'haccel', min: 100, max: 2000, step: 20, render: (v) => `horse accel ${v} px/s²` },
   { key: 'riderDecel', param: 'hbrake', min: 100, max: 2000, step: 20, render: (v) => `horse braking ${v} px/s²` },
   { key: 'buildSpeed', param: 'build', min: 0.25, max: 10, step: 0.25, render: (v) => `build speed ${v}×` },
+  {
+    key: 'timeSpeed',
+    param: 'tspeed',
+    min: 0.25,
+    max: 20,
+    step: 0.25,
+    render: (v) => `time speed ${v}× (day ${+(DAY_LENGTH / v / 60).toFixed(1)} min)`,
+  },
+  { key: 'nightHours', param: 'night', min: 0, max: 12, step: 0.5, render: (v) => `night ${v} h` },
+  // work time scales with plot width; the label shows a typical 3-cell plot
+  { key: 'sowPerCell', param: 'sow', min: 0.25, max: 10, step: 0.25, render: (v) => `sowing ${v} s/cell (plot ${+(v * 3).toFixed(2)} s)` },
+  { key: 'harvestPerCell', param: 'reap', min: 0.25, max: 10, step: 0.25, render: (v) => `harvest ${v} s/cell (plot ${+(v * 3).toFixed(2)} s)` },
 ];
 
 function setUrlParam(name: string, v: number | null): void {
@@ -40,7 +53,7 @@ export interface DisplayOptions {
   grid: boolean;
 }
 
-export function installTuning(world: World, sound: Sound): DisplayOptions {
+export function installTuning(world: World, sound: Sound, opts: { onNewVillage: () => void }): DisplayOptions {
   const knobs: Knob[] = [
     ...WORLD_KNOBS.map(({ key, ...k }) => ({
       ...k,
@@ -112,6 +125,18 @@ export function installTuning(world: World, sound: Sound): DisplayOptions {
   });
   toggle.append('land grid', box);
   root.append(toggle);
+
+  // the game autosaves; this is the way back to a fresh start
+  const reset = document.createElement('button');
+  reset.textContent = 'new village';
+  reset.style.cssText =
+    'margin-top:8px;font:inherit;color:#f3ead8;background:rgba(232,200,114,0.12);' +
+    'border:1px solid rgba(232,200,114,0.45);border-radius:6px;padding:2px 10px;cursor:pointer';
+  reset.addEventListener('click', () => {
+    reset.blur();
+    if (window.confirm('Start a new village? Your saved village will be lost.')) opts.onNewVillage();
+  });
+  root.append(reset);
 
   document.body.appendChild(root);
   return display;

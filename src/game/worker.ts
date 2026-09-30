@@ -1,0 +1,211 @@
+// A worker's day, for any job. The routine is the same everywhere: work in
+// daylight, go home for an hour's lunch at 11:30, sleep at night, go in and out
+// through the door, and carry goods to the store. What the work *is* comes from
+// the workplace (a `Workplace`, e.g. farm.ts): which job is next, how long it
+// takes, and what it produces.
+//
+// Positions are relative to the workplace's centre (dx) and in world y.
+
+import type { TimeOfDay } from './daynight';
+import type { Resource } from './resources';
+
+/** A job at a workplace: what to do (its own vocabulary, e.g. 'sow') and to which of its things. */
+export interface JobTicket {
+  action: string;
+  target: number;
+}
+
+export type WorkerTask =
+  | { kind: 'idle'; wait: number }
+  | { kind: 'walk'; toDx: number; toY: number; then: 'job' | 'deliver' | 'home'; job: JobTicket | null }
+  /** Doing a job: t seconds done out of duration. */
+  | { kind: 'job'; job: JobTicket; t: number; duration: number }
+  /** Stepping in through the door (t: seconds so far, up to DOOR_TIME). */
+  | { kind: 'enter'; t: number }
+  /** Indoors, out of sight. At lunch, `left` counts the game hours still to eat. */
+  | { kind: 'home'; activity: 'lunch' | 'sleep'; left: number }
+  /** Stepping out of the door, back to work. */
+  | { kind: 'exit'; t: number };
+
+export interface Worker {
+  dx: number;
+  y: number;
+  facing: 1 | -1;
+  /** What the worker is carrying to the store, if anything. */
+  carrying: Resource | null;
+  task: WorkerTask;
+  /** Distance walked, drives the walk cycle. */
+  stride: number;
+  /** Day number of the last lunch (once a day). */
+  lunchDay: number;
+}
+
+/** What a workplace tells its workers. */
+export interface Workplace {
+  /** The front door, where workers go in and out and wait for work. */
+  door: { dx: number; y: number };
+  /** Where carried goods are dropped off. */
+  store: { dx: number; y: number };
+  /** The next job for this worker (not one in `taken`, which others are on), with where to do it. */
+  nextJob(worker: Worker, taken: JobTicket[]): { job: JobTicket; dx: number; y: number } | null;
+  /** Arrived at a job: start it and return how long it takes (s), or null if it no longer needs doing. */
+  begin(job: JobTicket): number | null;
+  /** A job is done: returns what the worker now carries to the store, if anything. */
+  finish(job: JobTicket): Resource | null;
+  /** Goods dropped off at the store. */
+  deliver(r: Resource): void;
+}
+
+export const WALK_SPEED = 42; // px/s
+/** Seconds to step through a door, in or out. */
+export const DOOR_TIME = 0.9;
+/** Workers head home for lunch from this hour (finishing the job in hand first)… */
+export const LUNCH_AT = 11.5;
+/** …and eat for this many game hours once inside. */
+export const LUNCH_HOURS = 1;
+/** Past this hour a missed lunch is skipped for the day. */
+const LUNCH_LATEST = 15;
+
+/** Midday in bright light: for workplaces run outside a world (tests). */
+export const MIDDAY: TimeOfDay = { daylight: true, day: 1, hour: 10, hoursPerSecond: 24 / 300 };
+
+/** A new worker, stepping out of the workplace's door. */
+export function createWorker(place: Pick<Workplace, 'door'>): Worker {
+  return { dx: place.door.dx, y: place.door.y, facing: 1, carrying: null, task: { kind: 'exit', t: 0 }, stride: 0, lunchDay: 0 };
+}
+
+/** The job a worker is doing or on the way to, if any. */
+export function currentJob(w: Worker): JobTicket | null {
+  const t = w.task;
+  if (t.kind === 'job') return t.job;
+  if (t.kind === 'walk' && t.then === 'job') return t.job;
+  return null;
+}
+
+/** Point a worker's current job somewhere else (its target moved), or drop it (null: walk home). */
+export function retarget(w: Worker, place: Pick<Workplace, 'door'>, job: JobTicket | null, at?: { dx: number; y: number }): void {
+  const t = w.task;
+  if (t.kind !== 'job' && !(t.kind === 'walk' && t.then === 'job')) return;
+  if (!job) {
+    goHome(w, place);
+    return;
+  }
+  t.job = job;
+  if (t.kind === 'walk' && at) {
+    t.toDx = at.dx;
+    t.toY = at.y;
+  }
+}
+
+function walkTo(w: Worker, toDx: number, toY: number, then: 'job' | 'deliver' | 'home', job: JobTicket | null): void {
+  w.task = { kind: 'walk', toDx, toY, then, job };
+}
+
+function goHome(w: Worker, place: Pick<Workplace, 'door'>): void {
+  walkTo(w, place.door.dx, place.door.y, 'home', null);
+}
+
+const atDoor = (w: Worker, place: Workplace) => Math.abs(w.dx - place.door.dx) < 0.5 && Math.abs(w.y - place.door.y) < 0.5;
+
+/** Why the worker should be indoors now, if they should. */
+function offDuty(w: Worker, now: TimeOfDay): 'lunch' | 'sleep' | null {
+  if (!now.daylight) return 'sleep';
+  if (now.hour >= LUNCH_AT && now.hour < LUNCH_LATEST && w.lunchDay !== now.day) return 'lunch';
+  return null;
+}
+
+/** Advance one worker. `taken`: jobs the workplace's other workers are on. */
+export function updateWorker(w: Worker, place: Workplace, dt: number, now: TimeOfDay, taken: JobTicket[]): void {
+  const task = w.task;
+  const off = offDuty(w, now);
+
+  if (task.kind === 'enter' || task.kind === 'exit') {
+    task.t += dt;
+    if (task.t < DOOR_TIME) return;
+    if (task.kind === 'exit') w.task = { kind: 'idle', wait: 0.3 };
+    else if (off) w.task = { kind: 'home', activity: off, left: off === 'lunch' ? LUNCH_HOURS : 0 };
+    else w.task = { kind: 'exit', t: 0 }; // nothing to stay in for after all
+    return;
+  }
+
+  if (task.kind === 'home') {
+    if (task.activity === 'lunch') {
+      task.left -= dt * now.hoursPerSecond;
+      if (!now.daylight) {
+        w.lunchDay = now.day; // lunch ran into the night: off to bed
+        w.task = { kind: 'home', activity: 'sleep', left: 0 };
+      } else if (task.left <= 0) {
+        w.lunchDay = now.day;
+        w.task = { kind: 'exit', t: 0 };
+      }
+    } else if (now.daylight) {
+      w.task = { kind: 'exit', t: 0 }; // morning: back out to work
+    }
+    return;
+  }
+
+  // time to go in: drop plans for work and head home (a job already started
+  // is finished first, and goods being carried still go to the store)
+  if (off && task.kind === 'walk' && task.then === 'job') goHome(w, place);
+
+  if (task.kind === 'idle') {
+    task.wait -= dt;
+    if (task.wait > 0) return;
+    if (off) {
+      if (atDoor(w, place)) w.task = { kind: 'enter', t: 0 };
+      else goHome(w, place);
+      return;
+    }
+    const next = place.nextJob(w, taken);
+    if (!next) {
+      // nothing to do: wait by the door, and look again shortly
+      if (atDoor(w, place)) task.wait = 1;
+      else goHome(w, place);
+      return;
+    }
+    walkTo(w, next.dx, next.y, 'job', next.job);
+    return;
+  }
+
+  if (task.kind === 'walk') {
+    const ddx = task.toDx - w.dx;
+    const ddy = task.toY - w.y;
+    const d = Math.hypot(ddx, ddy);
+    const step = WALK_SPEED * dt;
+    if (Math.abs(ddx) > 0.5) w.facing = ddx > 0 ? 1 : -1;
+    if (d > step) {
+      w.dx += (ddx / d) * step;
+      w.y += (ddy / d) * step;
+      w.stride += step;
+      return;
+    }
+    w.dx = task.toDx;
+    w.y = task.toY;
+    w.stride += d;
+    if (task.then === 'job' && task.job) {
+      const duration = place.begin(task.job);
+      // the job changed on the way (someone else did it, the land was built on): pick another
+      w.task = duration === null ? { kind: 'idle', wait: 0.3 } : { kind: 'job', job: task.job, t: 0, duration };
+    } else if (task.then === 'deliver') {
+      if (w.carrying) place.deliver(w.carrying);
+      w.carrying = null;
+      w.task = { kind: 'idle', wait: 0.8 };
+    } else if (off) {
+      w.task = { kind: 'enter', t: 0 };
+    } else {
+      w.task = { kind: 'idle', wait: 0.8 };
+    }
+    return;
+  }
+
+  // doing a job
+  task.t += dt;
+  if (task.t < task.duration) return;
+  const goods = place.finish(task.job);
+  if (goods) {
+    w.carrying = goods;
+    walkTo(w, place.store.dx + 16, place.store.y, 'deliver', null);
+  } else {
+    w.task = { kind: 'idle', wait: 0.4 }; // straight on to the next job from here
+  }
+}
