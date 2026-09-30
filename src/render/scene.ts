@@ -5,7 +5,7 @@
 
 import { employees } from '../game/people';
 import type { Worker } from '../game/worker';
-import { onSite } from '../game/site';
+import { laidOut, onSite } from '../game/site';
 import { getBuilding, plotAt, WORLD_WIDTH, type Building, type World } from '../game/world';
 import { drawBackground, drawForeground, type View } from './background';
 import { BUILDING_ART, type DrawArgs } from './buildings';
@@ -59,6 +59,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     stock: b.stock,
     workers: employees(world, b).map((p) => p.job!.worker),
     onSite: onSite(b),
+    laid: laidOut(b),
     vpX: viewW / 2,
   });
   // people at work, with their workplace's position

@@ -35,8 +35,14 @@ export interface Person {
   seed: number;
   /** null: between shifts, strolling the street. */
   job: Job | null;
-  /** Their profession for life; only people with one take jobs, and only of that role. */
+  /** Their profession for life; people with one take jobs of that role only. */
   profession?: Role;
+  /**
+   * Out of work and looking: no profession yet. Runs errands as a serf while
+   * there are any, and takes the first lasting job going (a miller, a
+   * farmer), which then becomes their profession. Never a builder.
+   */
+  seeker?: true;
   stroll: Stroll;
 }
 
@@ -48,7 +54,7 @@ export interface Animal {
 }
 
 const NAMES: Record<Look, readonly string[]> = {
-  peasant: ['Aldric', 'Bertram', 'Cedric', 'Edwin', 'Godric', 'Hugh', 'Osric', 'Wat', 'Piers', 'Hamon'],
+  peasant: ['Aldric', 'Bertram', 'Cedric', 'Edwin', 'Godric', 'Hugh', 'Osric', 'Wat', 'Piers', 'Hamon', 'Alan', 'Jocelin', 'Ralf', 'Simkin', 'Walter', 'Ivo'],
   woman: ['Agnes', 'Beatrice', 'Cecily', 'Edith', 'Isolde', 'Joan', 'Maud', 'Rohese', 'Alys', 'Emma'],
   monk: ['Brother Anselm', 'Brother Bede', 'Brother Cuthbert', 'Brother Dunstan'],
 };
@@ -81,21 +87,53 @@ export function openings(b: Building, buildersPerSite: number, dayLabour: boolea
   return b.site && dayLabour ? { builder: buildersPerSite } : {};
 }
 
+/** Where someone is along the street now (world x). */
+function whereX(world: World, p: Person): number {
+  const b = p.job && world.buildings.find((x) => x.id === p.job!.buildingId);
+  return b ? world.plots[b.plotIndex].x + p.job!.worker.dx : p.stroll.x;
+}
+
+/** A serf between errands: carrying nothing and not in the middle of picking something up. */
+function betweenErrands(p: Person): boolean {
+  const w = p.job?.role === 'serf' ? p.job.worker : null;
+  return !!w && !w.carrying && w.task.kind !== 'job';
+}
+
 /**
- * Fill every building's open jobs with the nearest unemployed villagers.
- * `dayLabour`: whether construction sites hire now (only while it's light).
+ * Who may take a job of this role, best first: people of that profession who
+ * are free; for a lasting job (not building, not errands) then seekers who
+ * are free, then seekers running errands as serfs, between errands; for
+ * errands, free seekers only.
  */
-export function staffBuildings(world: World, hire: (b: Building, role: Role, who: Person) => Worker, opts: { buildersPerSite: number; dayLabour: boolean }): void {
-  for (const b of world.buildings) {
-    const jobs = openings(b, opts.buildersPerSite, opts.dayLabour);
-    for (const role of ROLES) {
-      const open = (jobs[role] ?? 0) - employees(world, b).filter((p) => p.job!.role === role).length;
+function candidates(world: World, role: Role): Person[][] {
+  const free = (p: Person) => !p.job;
+  if (role === 'serf') return [world.people.filter((p) => free(p) && p.seeker)];
+  const pros = world.people.filter((p) => free(p) && p.profession === role);
+  if (role === 'builder') return [pros];
+  return [pros, world.people.filter((p) => free(p) && p.seeker), world.people.filter((p) => p.seeker && betweenErrands(p))];
+}
+
+/**
+ * Fill every building's open jobs (`openingsOf`) with the nearest people who
+ * may take them. Lasting jobs are filled before errands (ROLES ends with
+ * serf), so a serf is hired away for one whenever they are between errands.
+ */
+export function staffBuildings(world: World, hire: (b: Building, role: Role, who: Person) => Worker, openingsOf: (b: Building) => Partial<Record<Role, number>>): void {
+  for (const role of ROLES) {
+    for (const b of world.buildings) {
+      const open = (openingsOf(b)[role] ?? 0) - employees(world, b).filter((p) => p.job!.role === role).length;
+      const x = world.plots[b.plotIndex].x;
       for (let n = 0; n < open; n++) {
-        const x = world.plots[b.plotIndex].x;
-        // everyone keeps their profession: builders build, the farmer farms
-        const free = world.people.filter((p) => !p.job && p.profession === role).sort((a, c) => Math.abs(a.stroll.x - x) - Math.abs(c.stroll.x - x));
-        if (!free.length) break; // nobody free for this job: on to the next
-        free[0].job = { buildingId: b.id, role, worker: hire(b, role, free[0]) };
+        const tier = candidates(world, role).find((list) => list.length);
+        if (!tier) break; // nobody for this job: on to the next
+        const who = tier.sort((a, c) => Math.abs(whereX(world, a) - x) - Math.abs(whereX(world, c) - x))[0];
+        if (who.job) release(world, who); // a serf leaves their errands from where they stand
+        if (role !== 'serf') {
+          // a lasting job becomes a seeker's profession
+          who.profession = role;
+          delete who.seeker;
+        }
+        who.job = { buildingId: b.id, role, worker: hire(b, role, who) };
       }
     }
   }

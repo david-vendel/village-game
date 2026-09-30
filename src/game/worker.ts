@@ -10,12 +10,16 @@
 
 import type { TimeOfDay } from './daynight';
 import type { Spot } from './layout';
-import type { Load, Resource } from './resources';
+import type { Load } from './resources';
 
 /** A job at a workplace: what to do (its own vocabulary, e.g. 'sow') and to which of its things. */
 export interface JobTicket {
   action: string;
   target: number;
+  /** Where the load from this job goes down, if the workplace has several places for it (a site's work spots). */
+  slot?: number;
+  /** The building a load from this job is carried to, for jobs that carry between buildings (transport). */
+  to?: number;
 }
 
 export type WorkerTask =
@@ -51,6 +55,11 @@ export interface Workplace {
    * workers are let go rather than going indoors (the world does that).
    */
   dayLabour?: boolean;
+  /**
+   * Work by the errand (transport): a worker with no errand to run is let go
+   * where they stand (the world does that), instead of waiting at the door.
+   */
+  temporary?: boolean;
   /** The front door, where workers go in and out and wait for work. */
   door: Spot;
   /** The next job for this worker (not one in `taken`, which others are on), with where to do it. */
@@ -68,16 +77,6 @@ export interface Workplace {
   dropSpot(job: JobTicket, load: Load): Spot;
   /** The worker has carried the load from `job` to its drop spot and puts it down. */
   deliver(load: Load, job: JobTicket): void;
-}
-
-/** Where a workplace sends its goods: the village's warehouses, seen from the workplace. */
-export interface Depot {
-  /** The warehouse to take a load of r to (the nearest with room), if any. */
-  find(r: Resource): number | null;
-  /** Where the next load of r goes down at that warehouse, relative to the workplace. */
-  spot(id: number, r: Resource): Spot | null;
-  /** Put a load down in that warehouse. */
-  put(id: number, load: Load): void;
 }
 
 /** Walking speed with a load, and with empty hands (px/s). */

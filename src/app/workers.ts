@@ -10,6 +10,7 @@ import { getBuilding, type Building, type World } from '../game/world';
 
 function occupation(p: Person): string {
   if (p.profession) return p.profession;
+  if (p.seeker) return p.job?.role === 'serf' ? 'serf' : 'unemployed';
   return p.look === 'monk' ? 'monk' : 'townswoman';
 }
 
@@ -32,7 +33,8 @@ function activity(world: World, p: Person): string {
   if (!p.job) {
     const s = p.stroll;
     if (s.y !== laneY(p.id)) return 'walking back to the street';
-    const why = !p.profession ? '' : !timeOfDay(world).daylight ? ', off for the night' : ', no work going';
+    const night = !timeOfDay(world).daylight;
+    const why = p.seeker ? (night ? ', looking for work in the morning' : ', looking for work') : !p.profession ? '' : night ? ', off for the night' : ', no work going';
     return (s.idle > 0 ? 'standing about' : 'strolling') + why;
   }
   const b = getBuilding(world, p.job.buildingId);
@@ -42,18 +44,23 @@ function activity(world: World, p: Person): string {
   const w = p.job.worker;
   const t = w.task;
   const here = whereAt(world, x + w.dx);
-  const off = offDuty(w, timeOfDay(world), { dayLabour: !!b.site });
+  const off = offDuty(w, timeOfDay(world), { dayLabour: !!b.site || p.job.role === 'serf' });
   const warehouse = (id: number) => {
     const wh = getBuilding(world, id);
     return wh ? `the ${nameOf(wh)}` : 'a warehouse';
+  };
+  const named = (id: number | undefined) => {
+    const o = id === undefined ? undefined : getBuilding(world, id);
+    return o ? `the ${nameOf(o)}` : 'somewhere';
   };
   switch (t.kind) {
     case 'job': {
       const a = t.job.action;
       if (a === 'sow') return 'sowing a field';
       if (a === 'harvest') return 'harvesting a field';
-      if (a === 'haul') return 'lifting a sheaf off the stack';
+      if (a === 'grind') return 'grinding grain into flour';
       if (a === 'build') return `building ${place}`;
+      if (resource(a, 'ship') || resource(a, 'supply')) return `picking up ${resource(a, 'ship') ?? resource(a, 'supply')} at ${named(t.job.target)}`;
       if (resource(a, 'take')) return `picking up ${resource(a, 'take')} from the pile`;
       if (resource(a, 'fetch')) return `loading ${resource(a, 'fetch')} at ${warehouse(t.job.target)}`;
       return a;
@@ -63,9 +70,9 @@ function activity(world: World, p: Person): string {
       if (t.then === 'deliver') {
         const load = w.carrying ? `${w.carrying.amount} ${w.carrying.resource}` : 'nothing';
         if (a === 'harvest') return `carrying a sheaf to the ${nameOf(b)} store`;
-        if (a === 'haul') return `carrying a sheaf to ${warehouse(t.job!.target)}`;
-        if (resource(a, 'take')) return `carrying ${load} to put in place at ${place}`;
-        if (resource(a, 'fetch')) return `carrying ${load} to the pile at ${place}`;
+        if (resource(a, 'ship') || resource(a, 'supply')) return `carrying ${load} from ${named(t.job!.target)} to ${named(t.job!.to)}`;
+        if (resource(a, 'take')) return `carrying ${load} from the pile to its place at ${place}`;
+        if (resource(a, 'fetch')) return `carrying ${load} to its place at ${place}`;
         return `carrying ${load}`;
       }
       if (t.then === 'home') {
@@ -76,7 +83,7 @@ function activity(world: World, p: Person): string {
       }
       if (a === 'sow') return 'walking to sow a field';
       if (a === 'harvest') return 'walking to harvest a field';
-      if (a === 'haul') return 'going for a sheaf to take to the warehouse';
+      if (resource(a, 'ship') || resource(a, 'supply')) return `going to ${named(t.job!.target)} for ${resource(a, 'ship') ?? resource(a, 'supply')} to take to ${named(t.job!.to)}`;
       if (a === 'build') return `going to build at ${place}`;
       if (resource(a, 'take')) return `going to the pile for ${resource(a, 'take')}`;
       if (resource(a, 'fetch')) return `walking to ${warehouse(t.job!.target)} for ${resource(a, 'fetch')}`;

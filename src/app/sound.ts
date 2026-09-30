@@ -204,7 +204,7 @@ export function createSound(initialVolume = 0.6): Sound {
     },
     /** A load put down (or, softer, picked up): a sheaf, logs or a block of stone. */
     setDown(x: number, r: Resource, k = 1) {
-      if (r === 'grain') {
+      if (r === 'grain' || r === 'flour') {
         noise({ x, dur: 0.12, gain: 0.2 * k, filter: 'bandpass', freq: 1800, attack: 0.02 });
         tone({ x, dur: 0.14, gain: 0.15 * k, freq: 90, to: 55 });
       } else if (r === 'wood') {

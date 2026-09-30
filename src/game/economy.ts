@@ -1,14 +1,14 @@
 // The village economy. The village's materials are whatever its warehouses
 // hold: builders fetch wood and stone from them for construction sites
-// (site.ts), and producers carry their goods there themselves (a farmer
-// hauls sheaves when the fields need nothing). Every load is picked up from,
-// and put down at, its own place in a warehouse's stacks (warehouseSlot).
+// (site.ts), and serfs carry goods between the warehouses and the buildings
+// that make or use them (transport.ts). Every store keeps each item in its
+// own place (storeSlot), where it is picked up from and put down.
 
 import { BUILDINGS, type BuildingType } from './buildings';
-import { pileItems, STAND_Y, warehouseSlot, type Spot } from './layout';
+import { MILL_SLOTS, PILE_UNIT, SHEAF_SLOTS, STAND_Y, warehouseSlot, type Slot, type Spot } from './layout';
+import { SACK } from './mill';
 import { room, RESOURCES, shortfall, stockOf, type Amounts, type Load, type Resource, type Stock } from './resources';
 import { owed } from './site';
-import type { Depot } from './worker';
 import type { Building, World } from './world';
 
 /** What the starting village's warehouse holds. */
@@ -99,37 +99,35 @@ export function putAway(world: World, load: Load, x: number): number {
 }
 
 /**
- * Where someone stands at a warehouse to reach its stack of r: `top` for the
- * item they would pick up, else where the next one goes down. x relative to `fromX`.
+ * How a building's store keeps r: how much one item holds, how many items a
+ * person carries at once, and where item i lies (layout.ts). Null if it keeps none.
  */
-export function warehouseSpot(world: World, wh: Building, r: Resource, fromX: number, top: boolean): Spot {
-  const n = pileItems(wh.stock[r]);
-  return { dx: xOf(world, wh) + warehouseSlot(r, top ? n - 1 : n).dx - fromX, y: STAND_Y };
+export function storeSlots(b: Building, r: Resource): { unit: number; perTrip: number; slot: (i: number) => Slot } | null {
+  const pick = (slots: readonly Slot[]) => (i: number) => slots[Math.max(0, Math.min(i, slots.length - 1))];
+  if (b.type === 'warehouse') return { unit: PILE_UNIT, perTrip: 1, slot: (i) => warehouseSlot(r, i) };
+  if (b.type === 'farm' && r === 'grain') return { unit: 1, perTrip: 2, slot: pick(SHEAF_SLOTS) };
+  if (b.type === 'mill' && (r === 'grain' || r === 'flour')) return { unit: SACK, perTrip: 1, slot: pick(MILL_SLOTS[r]) };
+  return null;
 }
 
-/** The warehouses as a place for a workplace at `fromX` to take its goods. */
-export function depotFor(world: World, fromX: number): Depot {
-  const capacity = BUILDINGS.warehouse.storage;
-  const find = (id: number) => warehouses(world).find((w) => w.id === id) ?? null;
-  return {
-    find(r) {
-      let best: Building | null = null;
-      for (const w of warehouses(world)) {
-        if (room(w.stock, capacity, r) <= 0) continue;
-        if (!best || Math.abs(xOf(world, w) - fromX) < Math.abs(xOf(world, best) - fromX)) best = w;
-      }
-      return best?.id ?? null;
-    },
-    spot(id, r) {
-      const wh = find(id);
-      return wh ? warehouseSpot(world, wh, r, fromX, false) : null;
-    },
-    put(id, load) {
-      const wh = find(id);
-      const n = wh ? Math.min(load.amount, room(wh.stock, capacity, load.resource)) : 0;
-      if (wh) wh.stock[load.resource] += n;
-      // it filled up while they walked: whatever doesn't fit goes to the next one with room
-      if (n < load.amount) putAway(world, { resource: load.resource, amount: load.amount - n }, fromX);
-    },
-  };
+/** How much of r one person carries away from this store at a time. */
+export function tripLoad(b: Building, r: Resource): number {
+  const s = storeSlots(b, r);
+  return s ? s.unit * s.perTrip : PILE_UNIT;
+}
+
+/**
+ * Where someone stands at a building's store of r: `top` for the item they
+ * would pick up, else where the next `adding` goes down. x relative to `fromX`.
+ */
+export function storeSpot(world: World, b: Building, r: Resource, fromX: number, top: boolean, adding = 0): Spot {
+  const s = storeSlots(b, r);
+  const items = (amount: number) => Math.ceil(amount / (s?.unit ?? PILE_UNIT) - 1e-9);
+  const i = top ? items(b.stock[r]) - 1 : items(b.stock[r] + Math.max(adding, 1e-6)) - 1;
+  return { dx: xOf(world, b) + (s?.slot(Math.max(0, i)).dx ?? 0) - fromX, y: STAND_Y };
+}
+
+/** Where someone stands at a warehouse's stack of r: the top item (to pick up), or where the next load goes. */
+export function warehouseSpot(world: World, wh: Building, r: Resource, fromX: number, top: boolean): Spot {
+  return storeSpot(world, wh, r, fromX, top, PILE_UNIT);
 }

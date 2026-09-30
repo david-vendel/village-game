@@ -274,8 +274,11 @@ export function drawWorker(ctx: Ctx, f: Worker, seed: number, x: number, y: numb
     } else {
       line(ctx, 1, -11, 1 + Math.sin(-swing) * 6, -2, tunic, 3);
     }
-    if (load === 'grain') {
-      // a sheaf over the shoulder
+    if (load === 'flour' || (load === 'grain' && (f.carrying?.amount ?? 0) > 2)) {
+      // a sack over the shoulder
+      ellipse(ctx, 3, -17, 6.5, 5.5, load === 'flour' ? '#efe9da' : '#d8c79a', -0.4);
+    } else if (load === 'grain') {
+      // sheaves over the shoulder
       ctx.rotate(-0.9);
       poly(ctx, [8, -8, 12, -8, 14, -26, 6, -26], '#caa24a');
       line(ctx, 7, -16, 13, -16, '#7a5a2a', 2);

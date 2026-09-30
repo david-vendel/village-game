@@ -12,13 +12,15 @@
 
 import { BUILDINGS, BUILDING_TYPES, type BuildingType } from './buildings';
 import { timeOfDay } from './daynight';
-import { buildShortfall, depotFor, putAway, takeFromWarehouses, WAREHOUSE_START } from './economy';
+import { buildShortfall, putAway, takeFromWarehouses, WAREHOUSE_START } from './economy';
 import { createFarm, DEFAULT_WORK, farmWorkplace, updateCrops, type FarmState } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
 import { PLOT_SPACING } from './layout';
-import { employees, laneY, nameFor, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
+import { millWorkplace } from './mill';
+import { employees, laneY, nameFor, openings, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
 import { BUILDERS_PER_SITE, createSite, siteWorkplace, type Site } from './site';
 import { RESOURCES, stockOf, type Stock } from './resources';
+import { serfPositions, transportHub, transportWorkplace } from './transport';
 import { createWorker, currentJob, offDuty, updateWorker, type Worker, type Workplace } from './worker';
 
 export const WORLD_WIDTH = 6400;
@@ -184,10 +186,12 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
       if (type === 'warehouse') b.stock = { ...WAREHOUSE_START };
     }
     world.events.length = 0;
-    // six workers with a fixed profession for life (one farmer, five builders) and two townsfolk who never work
+    // six workers with a fixed profession for life (one farmer, five builders),
+    // two townsfolk who never work, and five out of work, looking for a job
     const kinds: Array<Look | 'chicken'> = ['peasant', 'woman', 'monk', 'peasant', 'chicken', 'chicken', 'peasant', 'peasant', 'peasant', 'peasant'];
+    const seekers = 5;
     let peasants = 0;
-    for (const kind of kinds) {
+    for (const kind of [...kinds, ...Array<Look>(seekers).fill('peasant')]) {
       const id = world.nextId++;
       const stroll = {
         x: FIRST_PLOT_X + rand(world) * 16 * PLOT_SPACING,
@@ -198,7 +202,11 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
       };
       const seed = Math.floor(rand(world) * 1e6);
       if (kind === 'chicken') world.animals.push({ id, kind, seed, stroll });
-      else world.people.push({ id, name: nameFor(kind, seed, new Set(world.people.map((p) => p.name))), look: kind, seed, job: null, stroll, ...(kind === 'peasant' ? { profession: peasants++ === 0 ? ('farmer' as const) : ('builder' as const) } : {}) });
+      else {
+        const n = kind === 'peasant' ? peasants++ : -1;
+        const work = n < 0 ? {} : n === 0 ? { profession: 'farmer' as const } : n < 6 ? { profession: 'builder' as const } : { seeker: true as const };
+        world.people.push({ id, name: nameFor(kind, seed, new Set(world.people.map((p) => p.name))), look: kind, seed, job: null, stroll, ...work });
+      }
     }
     staff(world);
   }
@@ -250,7 +258,7 @@ export function placeBuilding(
     stock: stockOf(),
   };
   // builders bring the materials and build it (a free one has its materials on site already)
-  if (!instant) b.site = createSite(opts.free ? BUILDINGS[type].cost : {});
+  if (!instant) b.site = createSite(type, opts.free ? BUILDINGS[type].cost : {});
   world.buildings.push(b);
   if (instant && type === 'farm') b.farm = createFarm({ spots: farmFieldSpots(world, b) });
   // the new footprint may cover land neighbouring farms were using
@@ -347,14 +355,18 @@ export function update(world: World, dt: number, input: MoveInput): void {
 /** A building as a workplace for the people it employs; null if it has no work to give. */
 export function workplaceOf(world: World, b: Building): Workplace | null {
   if (b.site) return siteWorkplace(world, b, world.params.buildSpeed);
-  if (b.farm) return farmWorkplace(b.farm, b.stock, world.params, depotFor(world, world.plots[b.plotIndex].x));
+  if (b.farm) return farmWorkplace(b.farm, b.stock, world.params);
+  if (b.type === 'mill' && b.status === 'done') return millWorkplace(b.stock);
+  if (b === transportHub(world)) return transportWorkplace(world, b);
   return null;
 }
 
-/** Hire for open jobs; construction sites only hire while it's light enough to work. */
+/** Hire for open jobs; construction sites and errands only hire while it's light enough to work. */
 function staff(world: World): void {
   const dayLabour = timeOfDay(world).daylight;
-  staffBuildings(world, (b, _role, who) => newWorker(world, b, who), { buildersPerSite: BUILDERS_PER_SITE, dayLabour });
+  const hub = transportHub(world);
+  const openingsOf = (b: Building) => (b === hub ? (dayLabour ? { serf: serfPositions(world) } : {}) : openings(b, BUILDERS_PER_SITE, dayLabour));
+  staffBuildings(world, (b, _role, who) => newWorker(world, b, who), openingsOf);
 }
 
 /** A new hand walks over from exactly where they are on the street. */
@@ -384,6 +396,11 @@ function updateWorkers(world: World, dt: number): void {
         continue;
       }
       const taken = staffers.filter((o) => o !== w).flatMap((o) => currentJob(o) ?? []);
+      // errand work: with nothing to carry and no errand waiting, they are let go where they stand
+      if (place.temporary && w.task.kind === 'idle' && !w.carrying && !place.nextJob(w, taken)) {
+        release(world, p);
+        continue;
+      }
       updateWorker(w, place, dt, now, taken);
     }
   }

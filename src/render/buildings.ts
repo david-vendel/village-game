@@ -4,7 +4,8 @@
 
 import type { BuildingType } from '../game/buildings';
 import { demoFarm, type FarmState } from '../game/farm';
-import { pileItems, WAREHOUSE_SHOWN, warehouseSlot } from '../game/layout';
+import { MILL_SLOTS, pileItems, WAREHOUSE_SHOWN, warehouseSlot } from '../game/layout';
+import { SACK } from '../game/mill';
 import { stockOf, type Amounts, type Stock } from '../game/resources';
 import type { Worker } from '../game/worker';
 import { doorProgress, drawBackFences, drawBackField, drawFrontField, drawStore } from './farm';
@@ -24,8 +25,10 @@ export interface DrawArgs {
   stock?: Stock;
   /** The people working here (for doors, sleepers…). */
   workers?: Worker[];
-  /** Under construction: materials lying on the site, not yet built with. */
+  /** Under construction: materials lying on the site's pile. */
   onSite?: Amounts;
+  /** Under construction: materials laid down at each work spot (dx from the centre), not yet built in. */
+  laid?: Array<{ dx: number; amounts: Amounts }>;
   /** Ground-perspective vanishing point x (see ground.ts); defaults to `x`. */
   vpX?: number;
 }
@@ -369,6 +372,7 @@ function drawWarehouse(ctx: Ctx, a: DrawArgs): void {
     rect(ctx, bx, by, 6.5, 1.5, '#c4beb3');
   }
   for (let i = 0; i < shown('grain'); i++) ellipse(ctx, a.x + warehouseSlot('grain', i).dx, a.base - 5, 4, 5.5, '#d8c79a');
+  for (let i = 0; i < shown('flour'); i++) ellipse(ctx, a.x + warehouseSlot('flour', i).dx, a.base - 5, 4, 5.5, '#efe9da');
 }
 
 function drawMill(ctx: Ctx, a: DrawArgs): void {
@@ -437,14 +441,17 @@ function drawMill(ctx: Ctx, a: DrawArgs): void {
     }
   }
   circle(ctx, hub.x, hub.y, 5, '#3e2c1d');
-  // flour sacks
-  for (const [dx, dy] of [
-    [34, 0],
-    [46, 0],
-    [40, -9],
-  ]) {
-    ellipse(ctx, cx + dx, a.base - 6 + dy, 7, 7, '#e8e0cc');
-    ellipse(ctx, cx + dx + 2, a.base - 5 + dy, 4, 5, '#cbbfa4');
+  // the store: sacks of grain waiting left of the door, flour right of it, each in its place
+  for (const [r, body, shadow] of [
+    ['grain', '#d8c79a', '#b9a676'],
+    ['flour', '#e8e0cc', '#cbbfa4'],
+  ] as const) {
+    const n = Math.min(MILL_SLOTS[r].length, Math.ceil((a.stock?.[r] ?? 0) / SACK - 1e-9));
+    for (let i = 0; i < n; i++) {
+      const s = MILL_SLOTS[r][i];
+      ellipse(ctx, a.x + s.dx, a.base - 6 - s.lift, 7, 7, body);
+      ellipse(ctx, a.x + s.dx + 2, a.base - 5 - s.lift, 4, 5, shadow);
+    }
   }
 }
 

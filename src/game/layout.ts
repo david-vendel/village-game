@@ -118,13 +118,14 @@ function pyramid(i: number, rows: readonly number[]): { row: number; col: number
 }
 
 /** Most items a warehouse shows outside, per resource (the rest is indoors). */
-export const WAREHOUSE_SHOWN = { wood: 12, stone: 10, grain: 4 } as const;
+export const WAREHOUSE_SHOWN = { wood: 12, stone: 10, grain: 4, flour: 4 } as const;
 
 /**
  * The warehouse's stacks: logs piled against the right-hand wall, a stone heap
- * on the left, sacks of grain along the front. Item i (0 = bottom of the stack).
+ * on the left, sacks of grain along the front left of the doors and sacks of
+ * flour to their right. Item i (0 = bottom of the stack).
  */
-export function warehouseSlot(r: 'wood' | 'stone' | 'grain', i: number): Slot {
+export function warehouseSlot(r: 'wood' | 'stone' | 'grain' | 'flour', i: number): Slot {
   const n = Math.max(0, Math.min(i, WAREHOUSE_SHOWN[r] - 1));
   if (r === 'wood') {
     const { row, col } = pyramid(n, [5, 4, 2, 1]);
@@ -134,6 +135,7 @@ export function warehouseSlot(r: 'wood' | 'stone' | 'grain', i: number): Slot {
     const { row, col } = pyramid(n, [4, 3, 2, 1]);
     return { dx: -110.75 + col * 7 + row * 3.5, lift: 2.5 + row * 5 };
   }
+  if (r === 'flour') return { dx: -10 + n * 8, lift: 0 };
   return { dx: -72 + n * 8, lift: 0 };
 }
 
@@ -150,3 +152,23 @@ export function siteSlot(width: number, r: 'wood' | 'stone', i: number): Slot {
   const n = Math.max(0, Math.min(i, SITE_SHOWN.stone - 1));
   return { dx: x + 50 + (n % 3) * 8, lift: Math.floor(n / 3) * 6 - 3 };
 }
+
+/** How far to the right of a work spot the materials laid down there lie (beside the builder). */
+export const SPOT_PILE_DX = 12;
+
+/** The mill's door, where the miller goes in and out and grinds. */
+export const MILL_DOOR: Spot = { dx: -6, y: STAND_Y };
+
+/** The mill's store: sacks of grain waiting left of the door, sacks of flour right of it (bottom row first). */
+export const MILL_SLOTS: Record<'grain' | 'flour', readonly Slot[]> = {
+  grain: [
+    { dx: -40, lift: 0 },
+    { dx: -28, lift: 0 },
+    { dx: -34, lift: 9 },
+  ],
+  flour: [
+    { dx: 28, lift: 0 },
+    { dx: 40, lift: 0 },
+    { dx: 34, lift: 9 },
+  ],
+};

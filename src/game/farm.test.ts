@@ -163,7 +163,7 @@ describe('farms in the world', () => {
     expect(w.people.filter((p) => !p.job).length).toBe(w.people.length - 1);
   });
 
-  it('a farm hires a farmer once finished, and only if a farmer is free (builders never farm)', () => {
+  it('a farm hires a farmer once finished: a free farmer, else someone looking for work (builders never farm)', () => {
     const w = createWorld();
     const b = placeBuilding(w, 0, 'farm')!;
     expect(b.farm).toBeUndefined();
@@ -171,33 +171,44 @@ describe('farms in the world', () => {
     expect(employees(w, b).every((p) => p.job!.role === 'builder')).toBe(true);
     const done = placeBuilding(w, 1, 'farm', { instant: true, free: true })!;
     tick(w, 1);
-    // the village's one farmer already works the starting farm
-    expect(employees(w, done)).toHaveLength(0);
+    // the village's one farmer works the starting farm: a seeker takes the job, for life
+    const [farmer] = employees(w, done);
+    expect(farmer.job!.role).toBe('farmer');
+    expect(farmer.profession).toBe('farmer');
+    expect(farmer.seeker).toBeUndefined();
     const empty = createWorld({ village: false });
     const lonely = placeBuilding(empty, 0, 'farm', { instant: true, free: true })!;
     tick(empty, 1);
     expect(employees(empty, lonely)).toHaveLength(0);
   });
 
-  it('with nothing to do in the fields, the farmer carries the sheaves to the warehouse', () => {
+  it('serfs carry the sheaves from the farm store to the warehouse, then go back to strolling', () => {
     const w = createWorld();
     const farm = w.buildings.find((b) => b.type === 'farm')!;
-    for (const p of farm.farm!.plots) {
-      p.tilled = true;
-      p.state = 'growing';
-    }
     farm.stock.grain = 3;
-    const farmer = employees(w, farm)[0].job!.worker;
     let pickedAt: number | null = null;
-    for (let t = 0; t < 120 && villageStock(w).grain === 0; t += 1 / 30) {
+    for (let t = 0; t < 120 && villageStock(w).grain < 3; t += 1 / 30) {
       const before = farm.stock.grain;
       update(w, 1 / 30, { left: false, right: false });
-      if (farm.stock.grain < before) pickedAt = farmer.dx;
+      const serf = w.people.find((p) => p.job?.role === 'serf' && p.job.worker.carrying);
+      if (farm.stock.grain < before && serf && pickedAt === null) pickedAt = w.plots[w.buildings.find((b) => b.id === serf.job!.buildingId)!.plotIndex].x + serf.job!.worker.dx - w.plots[farm.plotIndex].x;
     }
-    // the top sheaf, taken from where it stood; nothing moves on its own
+    // the top sheaf, taken from where it stood
     expect(pickedAt).toBeCloseTo(SHEAF_SLOTS[2].dx);
-    expect(farm.stock.grain).toBe(2);
-    expect(villageStock(w).grain).toBe(1);
+    expect(farm.stock.grain).toBe(0);
+    expect(villageStock(w).grain).toBe(3);
+    tick(w, 2);
+    expect(w.people.filter((p) => p.job?.role === 'serf')).toHaveLength(0);
+  });
+
+  it('a finished mill takes a serf as its miller before any more errands', () => {
+    const w = createWorld();
+    w.buildings.find((b) => b.type === 'warehouse')!.stock.grain = 40;
+    const mill = placeBuilding(w, 9, 'mill', { instant: true, free: true })!;
+    for (let t = 0; t < 200 && villageStock(w).flour === 0; t += 1 / 30) update(w, 1 / 30, { left: false, right: false });
+    const [miller] = employees(w, mill);
+    expect(miller.profession).toBe('miller');
+    expect(villageStock(w).flour).toBeGreaterThan(0);
   });
 });
 

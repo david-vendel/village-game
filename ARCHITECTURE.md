@@ -85,26 +85,39 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   people and animals, the village `stock`pile, rider physics, build menu, construction progress
   and stages, the construction toggle, events. `workplaceOf` says what work a building gives its
   workers. Tested by `world.test.ts`.
-- `resources.ts`: resources (wood, stone, grain), `Stock` (an amount of each) and `Amounts` (some
+- `resources.ts`: resources (wood, stone, grain, flour), `Stock` (an amount of each) and `Amounts` (some
   of them, e.g. a cost), with affordability and payment helpers.
 - `economy.ts`: the village's materials are what its warehouses hold (the starting warehouse
-  has `WAREHOUSE_START`: 50 wood, 50 stone). A new building can start only if the warehouses
-  hold its cost beyond what other sites are still owed. `depotFor` gives a workplace the
-  warehouses as somewhere to carry its goods, with the exact spot each load goes down.
+  has `WAREHOUSE_START`). A new building can start only if the warehouses hold its cost beyond
+  what other sites are still owed. `storeSlots`/`storeSpot` say where each item lies in any
+  building's store (warehouse stacks, a farm's sheaves, the mill's sacks) and how much one
+  person carries off at a time.
+- `transport.ts`: serfs carry goods between buildings, one errand per trip: what a building
+  `ships` from its store to a warehouse (a farm's sheaves, the mill's flour) and what it `needs`
+  brought from one (the mill's grain). Serfs are the people looking for work, hired by the
+  transport hub (the oldest warehouse) while there are errands (up to `SERFS_MAX`, daylight only)
+  and let go where they stand when there are none.
+- `mill.ts`: the mill as a workplace: its miller grinds a sack of grain (`SACK`) into flour in
+  `GRIND_TIME`, in the mill's store (grain left of the door, flour right, `MILL_SLOTS`).
 - `site.ts`: construction. A placed building is a site that hires up to `BUILDERS_PER_SITE`
   idle villagers as builders (day labour: no lunch, let go at nightfall, hired again in the
   morning). They take its cost off the nearest warehouse's stacks `LOAD_SIZE` at a time and
-  lay it on the site's pile; then carry loads from the pile to spots along the front of the
-  building, put them in place and build with them in `BUILD_CHUNK`s of labour (`buildTime` in
-  all, scaled by the build-speed slider); progress never runs ahead of the materials put in
-  place (`Site`: delivered, taken, placed). With construction off,
+  carry it straight to a work spot along the front of the building (`workSpots`), lay it down
+  there and build with what lies at their spot in `BUILD_CHUNK`s of labour (`buildTime` in all,
+  scaled by the build-speed slider), using it up. A site's starting materials (a free
+  building's) lie on a pile at its side and are carried to a spot first. Progress is the share
+  of the cost built in (`Site`: delivered, pile, laid). With construction off,
   buildings are finished at once from the warehouses' stock.
 - `people.ts`: every villager is a `Person` with an id number, a name, a look and a `job` (a
   building and role, plus their `Worker` state) or none. The unemployed stroll the street on
   their lane (`laneY`: odd ids the far side, even the near side);
-  `staffBuildings` fills open jobs (a finished building's own, builders at sites) with the
-  nearest of them, who walk over from where they are. A new village has six: one farmer and
-  five free hands. Chickens are `Animal`s.
+  `staffBuildings` fills open jobs (a finished building's own, builders at sites, serfs at the
+  transport hub) with the nearest of them, who walk over from where they are. A profession is
+  for life; the one exception is people looking for work (`seeker`): they run errands as serfs,
+  and take the first lasting job going (miller, farmer), which becomes their profession. Lasting
+  jobs are filled before errands, so a serf between errands is hired away for one. A new
+  village has one farmer, five builders, five people looking for work and two townsfolk.
+  Chickens are `Animal`s.
 - `worker.ts`: the working day, the same for every job: work in daylight, go home at 11:30
   (`LUNCH_AT`) and eat for an hour (`LUNCH_HOURS`) once inside, once a day; sleep at night; step
   in and out of the door (`DOOR_TIME`); carry loads (walking faster with empty hands,
@@ -119,8 +132,7 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   age (150 s to ripe). Jobs: harvest while the farm store has room for the sheaf, else sow, own
   land before borrowed, nearest first; each takes `sowPerCell` / `harvestPerCell` seconds per grid
   cell of plot width (tuning sliders). A harvest yields a sheaf, stacked in its own place in the
-  store (`SHEAF_SLOTS`). When the store is full, or the fields need nothing, the farmer takes the
-  top sheaf to a warehouse (`haul`).
+  store (`SHEAF_SLOTS`), from where serfs carry them to a warehouse (`transport.ts`).
 - `daynight.ts`: time of day, from `world.dayClock`, which runs at the `timeSpeed` knob (a day is
   `DAY_LENGTH` = 300 s at 1×). The `nightHours` knob (0–12) shapes the sun's path: fewer hours
   lift it, like a summer far north; 0 is the midnight sun. `timeOfDay` gives villagers what they plan

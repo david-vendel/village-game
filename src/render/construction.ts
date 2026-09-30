@@ -41,6 +41,7 @@ export function drawConstruction(ctx: Ctx, type: BuildingType, a: DrawArgs, prog
   const { stage, t } = constructionStage(progress);
 
   materials(ctx, a.x, W, a.base, a.onSite ?? {}, a.seed);
+  for (const spot of a.laid ?? []) laidDown(ctx, a.x + spot.dx, a.base, spot.amounts, a.seed);
 
   // 1. stakes and rope marking the footprint
   const stakes = 6;
@@ -117,6 +118,18 @@ export function drawConstruction(ctx: Ctx, type: BuildingType, a: DrawArgs, prog
  * a log or block in its own place (game/layout.ts), and builders take them
  * off the top.
  */
+/** Materials a builder has laid down at their work spot: short logs stacked, stones beside them. */
+function laidDown(ctx: Ctx, x: number, base: number, amounts: Amounts, seed: number): void {
+  const logs = Math.min(4, pileItems(amounts.wood ?? 0));
+  for (let i = 0; i < logs; i++) {
+    const cy = base + 2 - i * 4.5;
+    rect(ctx, x - 7, cy - 4, 14, 4, '#7b5634');
+    circle(ctx, x + 7, cy - 2, 2.2, '#c9a06a');
+  }
+  const stones = Math.min(4, pileItems(amounts.stone ?? 0));
+  for (let i = 0; i < stones; i++) ellipse(ctx, x + 12 + (i % 2) * 7, base + 1 - Math.floor(i / 2) * 5, 4, 3, hash(seed, 40 + i) < 0.5 ? '#a89c88' : '#948877');
+}
+
 function materials(ctx: Ctx, x: number, width: number, base: number, onSite: Amounts, seed: number): void {
   const logs = Math.min(SITE_SHOWN.wood, pileItems(onSite.wood ?? 0));
   for (let i = 0; i < logs; i++) {

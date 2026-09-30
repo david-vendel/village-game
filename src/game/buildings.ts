@@ -5,7 +5,7 @@
 // its own module (farm.ts).
 // To add a building: add an entry here and an entry in BUILDING_ART.
 
-import type { Amounts } from './resources';
+import type { Amounts, Resource } from './resources';
 
 export type BuildingType =
   | 'warehouse'
@@ -19,9 +19,15 @@ export type BuildingType =
   | 'watchtower'
   | 'well';
 
-/** Jobs a building can offer (see people.ts); builders work on construction sites (site.ts). */
-export type Role = 'farmer' | 'builder';
-export const ROLES: readonly Role[] = ['farmer', 'builder'];
+/**
+ * Jobs a building can offer (see people.ts); builders work on construction
+ * sites (site.ts); serfs run errands, carrying goods between buildings
+ * (transport.ts). Serf is the one job that is not a profession: anyone out of
+ * work takes it for as long as there is carrying to do. Serf comes last:
+ * hiring fills the other jobs first.
+ */
+export type Role = 'farmer' | 'builder' | 'miller' | 'serf';
+export const ROLES: readonly Role[] = ['farmer', 'builder', 'miller', 'serf'];
 
 export interface BuildingDef {
   type: BuildingType;
@@ -37,17 +43,21 @@ export interface BuildingDef {
   storage: Amounts;
   /** Workers it employs once finished, per role. */
   jobs: Partial<Record<Role, number>>;
+  /** Goods it makes, which serfs carry from its store to a warehouse. */
+  ships?: Resource[];
+  /** Goods it uses, which serfs bring to its store from a warehouse. */
+  needs?: Resource[];
 }
 
 export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   warehouse: {
     type: 'warehouse',
     name: 'Warehouse',
-    purpose: "Holds the village's wood, stone and grain. Builders fetch from here.",
+    purpose: "Holds the village's wood, stone, grain and flour. Builders fetch from here.",
     width: 170,
     buildTime: 14,
     cost: { wood: 60, stone: 40 },
-    storage: { wood: 300, stone: 300, grain: 100 },
+    storage: { wood: 300, stone: 300, grain: 100, flour: 100 },
     jobs: {},
   },
   house: {
@@ -70,6 +80,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     cost: { wood: 50, stone: 20 },
     storage: { grain: 5 },
     jobs: { farmer: 1 },
+    ships: ['grain'],
   },
   mill: {
     type: 'mill',
@@ -78,8 +89,11 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     width: 130,
     buildTime: 16,
     cost: { wood: 60, stone: 60 },
-    storage: {},
-    jobs: {},
+    // a sack of grain waiting per slot, a sack of flour per slot (layout.ts MILL_SLOTS)
+    storage: { grain: 30, flour: 30 },
+    jobs: { miller: 1 },
+    ships: ['flour'],
+    needs: ['grain'],
   },
   blacksmith: {
     type: 'blacksmith',
