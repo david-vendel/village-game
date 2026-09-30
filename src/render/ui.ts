@@ -331,16 +331,19 @@ export function drawPlotPrompt(ctx: Ctx, sx: number, base: number, time: number,
 }
 
 /** Name + purpose label over a finished building the rider is next to. */
-export function drawBuildingLabel(ctx: Ctx, b: Building, sx: number, y: number, k: number): void {
+export function drawBuildingLabel(ctx: Ctx, b: Building, sx: number, y: number, k: number, viewW: number): void {
   const def = BUILDINGS[b.type];
   const lines = [def.purpose];
   if (b.farm) {
     const n = (st: string) => b.farm!.plots.filter((p) => p.state === st).length;
     lines.push(`Grain store ${b.farm.storage}/${STORAGE_MAX} · ${n('ripe')} ripe · ${n('growing')} growing · ${n('fallow')} to sow`);
   }
+  ctx.font = `12px ${SERIF}`;
+  const w = Math.max(60, ...lines.map((l) => ctx.measureText(l).width)) + 24;
+  // keep the label on screen (it may be wider than a phone's view)
+  const half = (w / 2) * k + 6;
+  sx = half * 2 > viewW ? viewW / 2 : Math.max(half, Math.min(viewW - half, sx));
   around(ctx, sx, y, k, () => {
-    ctx.font = `12px ${SERIF}`;
-    const w = Math.max(60, ...lines.map((l) => ctx.measureText(l).width)) + 24;
     const h = 24 + lines.length * 16;
     panel(ctx, sx - w / 2, y - h - 4, w, h, 0.6);
     text(ctx, def.name, sx, y - h + 13, 14, GOLD, 'center', true);

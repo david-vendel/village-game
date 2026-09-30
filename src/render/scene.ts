@@ -114,7 +114,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     const sx = plot.x - camX;
     const b = getBuilding(world, plot.buildingId);
     if (!b) drawPlotPrompt(ctx, sx, BASE, world.time, sv.promptLabel, k);
-    else if (b.status === 'done') drawBuildingLabel(ctx, b, sx, BASE - BUILDINGS[b.type].height - 18, k);
+    else if (b.status === 'done') drawBuildingLabel(ctx, b, sx, BASE - BUILDINGS[b.type].height - 18, k, viewW);
   }
 }
 
