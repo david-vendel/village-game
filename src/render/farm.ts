@@ -5,7 +5,7 @@
 // (ground.ts), the same projection the land-grid overlay uses.
 
 import { type FarmState, type FieldPlot, growth } from '../game/farm';
-import { drawHead, tunicOf } from './people';
+import { drawArm, drawHead, drawLegs, drawTorso, type Figure, HEAD, outfitOf, SHOULDER, swingHand } from './figure';
 import { DOOR_TIME, WALK_SPEED, type Worker } from '../game/worker';
 import { BACK_FIELD, BASE_Y, FIELD_ROWS, FRONT_FIELD, SHEAF_SLOTS, STORE, VIEW_H } from '../game/layout';
 import { groundX } from './ground';
@@ -175,20 +175,20 @@ export function doorProgress(f: Worker): number {
 }
 
 /**
- * A villager at work: the farmer (straw hat) or a builder (cap), walking,
- * sowing, scything, hammering, loading up, or carrying a load.
+ * A villager at work — the farmer, a builder, the miller or a serf, dressed
+ * for their trade — walking, sowing, scything, hammering, loading up, or
+ * carrying a load.
  */
-export function drawWorker(ctx: Ctx, f: Worker, seed: number, x: number, y: number, time: number): void {
+export function drawWorker(ctx: Ctx, f: Worker, fig: Figure, x: number, y: number, time: number): void {
   const inDoor = doorProgress(f);
   if (inDoor >= 1) return; // indoors
   const s = farmerScale(f.y) * (1 - 0.15 * inDoor); // a step back into the doorway
   const task = f.task;
-  const tunic = tunicOf('peasant', seed);
+  const o = outfitOf(fig);
   const stepping = task.kind === 'enter' || task.kind === 'exit';
   const walking = task.kind === 'walk' || stepping;
   const phase = (stepping ? time * WALK_SPEED : f.stride) * 0.22;
-  const swing = walking ? Math.sin(phase) * 0.5 : 0;
-  const bob = walking ? Math.abs(Math.cos(phase)) * 1.2 : 0;
+  const swing = walking ? Math.sin(phase) * 0.55 : 0;
   // fades into the dark doorway (all alpha below is relative to this)
   const alpha = 1 - inDoor;
 
@@ -196,32 +196,34 @@ export function drawWorker(ctx: Ctx, f: Worker, seed: number, x: number, y: numb
   ctx.translate(x, y - inDoor * 5);
   ctx.scale(s * f.facing, s);
   ctx.globalAlpha = 0.25 * alpha;
-  ellipse(ctx, 0, 0, 9, 2.5, '#2c2416');
+  ellipse(ctx, 0.8, 0, 7.5, 2.2, '#2c2416');
   ctx.globalAlpha = alpha;
   ctx.lineCap = 'round';
 
   // bending over while working
   const job = task.kind === 'job' ? task : null;
-  const working = !!job;
   const action = job?.job.action;
-  const bend = !working ? 0 : action === 'sow' ? 0.12 : action === 'build' ? 0.08 : action === 'harvest' ? 0.25 + Math.sin(time * 4) * 0.08 : 0.4;
+  const bend = !job ? 0 : action === 'sow' ? 0.12 : action === 'build' ? 0.08 : action === 'harvest' ? 0.25 + Math.sin(time * 4) * 0.08 : 0.4;
 
-  line(ctx, 0, -14 - bob, Math.sin(swing) * 9, 0, '#3d3128', 3);
-  line(ctx, 0, -14 - bob, Math.sin(-swing) * 9, 0, '#4d3f33', 3);
+  const hipY = drawLegs(ctx, o, phase, walking);
   ctx.save();
-  ctx.translate(0, -14 - bob);
+  ctx.translate(0, hipY);
   ctx.rotate(bend);
   // the same clothes and head as on the street: nobody ever changes outfit
-  poly(ctx, [-6, 2, 6, 2, 5, -13, -5, -13], tunic);
-  drawHead(ctx, 'peasant', 0, -17);
+  const [sx, sy] = SHOULDER;
+  const body = (farHand: [number, number]) => {
+    drawArm(ctx, o, sx - 1.2, sy, farHand[0], farHand[1], true);
+    drawTorso(ctx, o, walking ? Math.sin(phase) * 0.6 : 0, fig.seed);
+    drawHead(ctx, o, HEAD[0], HEAD[1]);
+  };
 
   if (job && action === 'sow') {
-    // seed bag at the hip; the arm casts seed in an arc
-    ellipse(ctx, -5, -2, 4, 5, '#c9b48a');
+    // seed bag at the hip, held open; the other arm casts seed in an arc
+    body([-2.5, -1.5]);
+    ellipse(ctx, -4.5, 0, 3.8, 4.6, '#c9b48a');
+    line(ctx, -6.5, -3.5, -2.5, -3.5, '#8a7a58', 1);
     const arm = Math.sin(time * 5) * 0.9;
-    const hx = 2 + Math.cos(arm - 0.3) * 9;
-    const hy = -10 + Math.sin(arm - 0.3) * 6;
-    line(ctx, 1, -11, hx, hy, '#e0b48e', 2.5);
+    drawArm(ctx, o, sx, sy, 2 + Math.cos(arm - 0.3) * 9, -10 + Math.sin(arm - 0.3) * 6);
     ctx.restore();
     const cast = (time * 5) % (Math.PI * 2);
     for (let i = 0; i < 6; i++) {
@@ -232,63 +234,79 @@ export function drawWorker(ctx: Ctx, f: Worker, seed: number, x: number, y: numb
     ctx.globalAlpha = alpha;
     drawProgressPips(ctx, job.t / job.duration);
   } else if (job && action === 'harvest') {
-    // scythe sweeping low across the crop
-    const sweep = Math.sin(time * 4) * 0.7;
+    // scythe held in both hands, sweeping low across the crop
+    const rot = 0.6 + Math.sin(time * 4) * 0.7;
+    const grip = (t: number): [number, number] => [2 - Math.sin(rot) * t, -8 + Math.cos(rot) * t];
+    body(grip(3));
     ctx.save();
     ctx.translate(2, -8);
-    ctx.rotate(0.6 + sweep);
-    line(ctx, 0, 0, 0, 20, '#6b4a2c', 2);
+    ctx.rotate(rot);
+    line(ctx, 0, -2, 0, 20, '#6b4a2c', 2);
     ctx.strokeStyle = '#c9c9c9';
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(-8, 20, 8, 0, Math.PI * 0.6, false);
     ctx.stroke();
     ctx.restore();
-    line(ctx, 1, -11, 5, -5, '#e0b48e', 2.5);
+    drawArm(ctx, o, sx, sy, ...grip(10));
     ctx.restore();
     drawProgressPips(ctx, job.t / job.duration);
   } else if (job && action === 'build') {
-    // hammering at the work
-    const swingArm = -0.9 + Math.abs(Math.sin(time * 6)) * 1.4;
+    // hammering at the work, the other hand steadying it
+    body([7.5, -4]);
+    const a = -0.9 + Math.abs(Math.sin(time * 6)) * 1.4;
+    const hx = 1 + Math.cos(a) * 9;
+    const hy = -11 + Math.sin(a) * 9;
     ctx.save();
-    ctx.translate(1, -11);
-    ctx.rotate(swingArm);
-    line(ctx, 0, 0, 9, 0, '#e0b48e', 2.5);
-    line(ctx, 9, 0, 9, -8, '#6b4a2c', 1.8);
-    rect(ctx, 6, -10, 7, 3, '#8a8a8a');
+    ctx.translate(hx, hy);
+    ctx.rotate(a);
+    line(ctx, 0, 1.5, 0, -8, '#6b4a2c', 1.8);
+    rect(ctx, -3, -10, 7, 3, '#8a8a8a');
     ctx.restore();
+    drawArm(ctx, o, sx, sy, hx, hy);
     ctx.restore();
     drawProgressPips(ctx, job.t / job.duration);
   } else if (job) {
-    // loading up at the warehouse
-    line(ctx, 1, -11, 6, -1, '#e0b48e', 2.5);
+    // loading up at the warehouse, both hands down
+    body([5, -1]);
+    drawArm(ctx, o, sx, sy, 6.5, -0.5);
     ctx.restore();
     drawProgressPips(ctx, job.t / job.duration);
   } else {
     const load = f.carrying?.resource;
+    const onShoulder = load === 'flour' || load === 'grain' || load === 'wood';
     if (load === 'stone') {
       // a block of stone held in both arms
-      line(ctx, 1, -11, 7, -7, '#e0b48e', 2.5);
+      body([6, -7.5]);
       rect(ctx, 3, -12, 10, 7, '#aaa398');
       rect(ctx, 3, -12, 10, 2, '#c4beb3');
+      drawArm(ctx, o, sx, sy, 7, -7);
     } else {
-      line(ctx, 1, -11, 1 + Math.sin(-swing) * 6, -2, tunic, 3);
+      body(swingHand(sx - 1.2, sy, swing + 0.05));
+      if (!onShoulder) drawArm(ctx, o, sx, sy, ...swingHand(sx, sy, -swing + 0.05));
     }
     if (load === 'flour' || (load === 'grain' && (f.carrying?.amount ?? 0) > 2)) {
       // a sack over the shoulder
-      ellipse(ctx, 3, -17, 6.5, 5.5, load === 'flour' ? '#efe9da' : '#d8c79a', -0.4);
+      ellipse(ctx, 1, -15.5, 6.5, 5.5, load === 'flour' ? '#efe9da' : '#d8c79a', -0.4);
+      drawArm(ctx, o, sx, sy, 4.2, -15);
     } else if (load === 'grain') {
       // sheaves over the shoulder
+      ctx.save();
       ctx.rotate(-0.9);
       poly(ctx, [8, -8, 12, -8, 14, -26, 6, -26], '#caa24a');
       line(ctx, 7, -16, 13, -16, '#7a5a2a', 2);
+      ctx.restore();
+      drawArm(ctx, o, sx, sy, 3.8, -14);
     } else if (load === 'wood') {
       // two logs over the shoulder
+      ctx.save();
       ctx.rotate(-0.25);
       for (const dy of [-15, -11]) {
         rect(ctx, -12, dy, 24, 4, '#8b6440');
         circle(ctx, 12, dy + 2, 2, '#c9a577');
       }
+      ctx.restore();
+      drawArm(ctx, o, sx, sy, 3.5, -12);
     }
     ctx.restore();
   }

@@ -9,6 +9,7 @@ import { SACK } from '../game/mill';
 import { stockOf, type Amounts, type Stock } from '../game/resources';
 import type { Worker } from '../game/worker';
 import { doorProgress, drawBackFences, drawBackField, drawFrontField, drawStore } from './farm';
+import { drawArm, drawHead, drawLegs, drawTorso, HEAD, outfitOf, SHOULDER } from './figure';
 import { circle, type Ctx, ellipse, hash, line, poly, rect, shade, smoke } from './util';
 
 export interface DrawArgs {
@@ -229,19 +230,28 @@ function crate(ctx: Ctx, x: number, base: number, s: number): void {
   line(ctx, x, base, x + 16 * s, base - 14 * s, '#6d522f', 1.5);
 }
 
+/** A townsperson standing at their work, in the same body as the villagers (figure.ts). */
 function person(ctx: Ctx, x: number, base: number, tunic: string, time: number, hammer = false): void {
-  rect(ctx, x - 3, base - 9, 2.5, 9, '#3d3128');
-  rect(ctx, x + 0.5, base - 9, 2.5, 9, '#3d3128');
-  poly(ctx, [x - 5, base - 8, x + 5, base - 8, x + 4, base - 22, x - 4, base - 22], tunic);
-  circle(ctx, x, base - 26, 4, '#e0b48e');
+  const o = { ...outfitOf({ look: 'peasant', role: null, seed: Math.round(x) }), top: tunic, sleeve: tunic };
+  if (hammer) Object.assign(o, { rolled: true, apron: '#4a3526', beard: true });
+  ctx.save();
+  ctx.translate(x, base);
+  ctx.translate(0, drawLegs(ctx, o, 0, false));
+  const [sx, sy] = SHOULDER;
+  drawArm(ctx, o, sx - 1.2, sy, 4, -3, true);
+  drawTorso(ctx, o, 0, Math.round(x));
+  drawHead(ctx, o, HEAD[0], HEAD[1]);
   if (hammer) {
     const a = Math.abs(Math.sin(time * 5)) * 1.6 - 0.4;
-    const hx = x + 3 + Math.cos(-a) * 10;
-    const hy = base - 18 - Math.sin(a) * 10;
-    line(ctx, x + 3, base - 19, hx, hy, '#e0b48e', 2.5);
+    const hx = sx + Math.cos(-a) * 10;
+    const hy = sy + 3 - Math.sin(a) * 8;
     line(ctx, hx, hy, hx + Math.cos(-a + 1.4) * 4, hy - Math.sin(a - 1.4) * 4, '#5a3d24', 2);
     rect(ctx, hx - 2, hy - 3, 5, 4, '#555');
+    drawArm(ctx, o, sx, sy, hx, hy);
+  } else {
+    drawArm(ctx, o, sx, sy, 5, -4);
   }
+  ctx.restore();
 }
 
 // --- Buildings ---------------------------------------------------------------

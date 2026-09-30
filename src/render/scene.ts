@@ -11,6 +11,7 @@ import { drawBackground, drawForeground, type View } from './background';
 import { BUILDING_ART, type DrawArgs } from './buildings';
 import { drawConstruction, drawConstructionBehind, drawConstructionFront } from './construction';
 import { drawWorker } from './farm';
+import { type Figure, figureOf } from './figure';
 import { drawLandGrid } from './grid';
 import { groundX } from './ground';
 import { drawSkyBehind, lightAt, tintLand } from './sky';
@@ -67,14 +68,14 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     const b = p.job && getBuilding(world, p.job.buildingId);
     // builders fetching from a far warehouse can be anywhere along the street
     const x = b ? world.plots[b.plotIndex].x : 0;
-    return b && onScreen(x + p.job!.worker.dx, 300) ? [{ w: p.job!.worker, seed: p.seed, x }] : [];
+    return b && onScreen(x + p.job!.worker.dx, 300) ? [{ w: p.job!.worker, fig: figureOf(p), x }] : [];
   });
   /** Draw workers whose y satisfies `pred` (depth decides which layer they are in). */
   const farmers = (pred: (y: number) => boolean) => {
-    for (const { w, seed, x } of atWork) if (pred(w.y)) drawAtWork(w, seed, x);
+    for (const { w, fig, x } of atWork) if (pred(w.y)) drawAtWork(w, fig, x);
   };
   // they walk on the ground, so they follow its perspective like the fields do
-  const drawAtWork = (w: Worker, seed: number, x: number) => drawWorker(ctx, w, seed, groundX(x + w.dx - camX, w.y, viewW / 2), w.y, world.time);
+  const drawAtWork = (w: Worker, fig: Figure, x: number) => drawWorker(ctx, w, fig, groundX(x + w.dx - camX, w.y, viewW / 2), w.y, world.time);
   // the unemployed and the animals stroll the street, each at their own depth
   const strollers = [...world.people.filter((p) => !p.job), ...world.animals];
 
@@ -114,7 +115,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   // everyone on the street and the land in front of it, far to near, so
   // whoever stands nearer the viewer is drawn over whoever is behind them
   const standing: Array<{ y: number; draw: () => void }> = [
-    ...atWork.filter(({ w }) => w.y >= BASE - 4).map(({ w, seed, x }) => ({ y: w.y, draw: () => drawAtWork(w, seed, x) })),
+    ...atWork.filter(({ w }) => w.y >= BASE - 4).map(({ w, fig, x }) => ({ y: w.y, draw: () => drawAtWork(w, fig, x) })),
     ...strollers
       .filter((who) => onScreen(who.stroll.x))
       .map((who) => ({ y: who.stroll.y, draw: () => drawVillager(ctx, walker(who), onGround(who.stroll.x, who.stroll.y), who.stroll.y, world.time) })),
