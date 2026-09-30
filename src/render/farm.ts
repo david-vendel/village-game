@@ -19,8 +19,6 @@ import {
 import { BASE_Y, VIEW_H } from '../game/layout';
 import { circle, clamp01, type Ctx, ellipse, hash, lerp, line, mix, poly } from './util';
 
-/** Back-field rows lean right as they recede (matches the oblique buildings). */
-const SKEW = 30;
 const SOIL = '#7a5a3a';
 const SOIL_DARK = '#5e4329';
 
@@ -52,97 +50,87 @@ function stalk(ctx: Ctx, x: number, y: number, h: number, g: number, sway: numbe
   else if (g >= 0.2) line(ctx, x, y - h * 0.5, x + sway * 0.5 + h * 0.3, y - h * 0.75, color, lw * 0.8); // leaf
 }
 
-// --- Back field (behind the farmstead) --------------------------------------------
+// --- Perspective ------------------------------------------------------------
+// A gentle one-point perspective: rows are horizontal, far edges are only a
+// little narrower than near ones, and depth is compressed on screen.
 
+/** Back field point: u = x offset from the farm centre, t = 0 near edge … 1 far edge. */
 function backPoint(a: Anchor, u: number, t: number): [number, number] {
-  const front = toScreenY(a, BACK_FIELD.front);
-  const back = toScreenY(a, BACK_FIELD.back);
-  return [a.x + u * (1 - 0.1 * t) + SKEW * t, lerp(front, back, t)];
+  const near = toScreenY(a, BACK_FIELD.front);
+  const far = toScreenY(a, BACK_FIELD.back);
+  return [a.x + u * (1 - 0.06 * t), lerp(near, far, t)];
 }
 
-function backPlot(ctx: Ctx, a: Anchor, p: FieldPlot, seed: number): void {
+/** Front field point: t = 0 far (road side) … 1 near (viewer side). */
+function frontPoint(a: Anchor, u: number, t: number): [number, number] {
+  const far = toScreenY(a, FRONT_FIELD.top);
+  const near = toScreenY(a, FRONT_FIELD.bottom);
+  // rows spread out as they come closer
+  return [a.x + u * (0.95 + 0.05 * t), lerp(far, near, t * t * 0.35 + t * 0.65)];
+}
+
+type PointFn = (a: Anchor, u: number, t: number) => [number, number];
+
+function quad(a: Anchor, pt: PointFn, u0: number, u1: number, t0: number, t1: number): number[] {
+  return [...pt(a, u0, t0), ...pt(a, u1, t0), ...pt(a, u1, t1), ...pt(a, u0, t1)];
+}
+
+/**
+ * One plot: soil, horizontal furrows, and crop rows drawn far-to-near.
+ * `farT`/`nearT` give the t of the far and near edge for the point function.
+ */
+function fieldPlot(ctx: Ctx, a: Anchor, p: FieldPlot, seed: number, pt: PointFn, farT: number, nearT: number, size: number, rows: number): void {
   const u0 = p.dx - p.width / 2 + 2;
   const u1 = p.dx + p.width / 2 - 2;
-  // grass border, then the tilled soil
-  const m = 5;
-  poly(ctx, [...backPoint(a, u0 - m, -0.06), ...backPoint(a, u1 + m, -0.06), ...backPoint(a, u1 + m, 1.08), ...backPoint(a, u0 - m, 1.08)], '#7f9143');
-  const pts = [...backPoint(a, u0, 0), ...backPoint(a, u1, 0), ...backPoint(a, u1, 1), ...backPoint(a, u0, 1)];
-  poly(ctx, pts, p.state === 'fallow' ? SOIL : '#6f5234');
-  // furrows run away from the viewer
+  poly(ctx, quad(a, pt, u0, u1, farT, nearT), p.state === 'fallow' ? SOIL : '#6f5234');
   ctx.globalAlpha = 0.45;
-  for (let u = u0 + 4; u < u1; u += 6) {
-    const [x1, y1] = backPoint(a, u, 0);
-    const [x2, y2] = backPoint(a, u, 1);
-    line(ctx, x1, y1, x2, y2, SOIL_DARK, 1.2);
+  for (let k = 1; k < rows * 2; k++) {
+    const t = lerp(farT, nearT, k / (rows * 2));
+    const [x0, y] = pt(a, u0, t);
+    const [x1] = pt(a, u1, t);
+    line(ctx, x0, y, x1, y, SOIL_DARK, 0.8 + size * 0.4 * (k / (rows * 2)));
   }
   ctx.globalAlpha = 1;
   if (p.state === 'fallow') return;
   const g = growth(p);
   const look = cropLook(g);
-  // rows from the back forward so nearer plants overlap farther ones
-  for (let r = 8; r >= 0; r--) {
-    const t = 0.06 + r * 0.11;
-    const persp = 1 - 0.35 * t;
-    for (let u = u0 + 3; u < u1 - 1; u += 5) {
-      const [x, y] = backPoint(a, u + hash(seed + r, u) * 2, t);
-      const sway = g > 0.5 ? Math.sin(a.time * 1.8 + x * 0.05) * 1.4 * g : 0;
-      stalk(ctx, x, y, look.h * persp, g, sway, look.color, look.tip, 1.3 * persp);
+  for (let r = 0; r < rows; r++) {
+    const k = (r + 0.5) / rows; // 0 far … 1 near
+    const t = lerp(farT, nearT, k);
+    const persp = size * (0.72 + 0.28 * k);
+    const step = 4.5 * persp;
+    for (let u = u0 + 2; u < u1 - 1; u += step) {
+      const [x, y] = pt(a, u + hash(seed + r * 31, Math.floor(u * 3)) * 1.5, t);
+      const sway = g > 0.5 ? Math.sin(a.time * 1.8 + x * 0.05 + r) * 1.5 * g * persp : 0;
+      stalk(ctx, x, y, look.h * persp, g, sway, look.color, look.tip, 1.25 * persp);
     }
   }
 }
+
+// --- Back field (behind the farmstead) ----------------------------------------
 
 export function drawBackField(ctx: Ctx, a: Anchor, farm: FarmState | undefined, seed: number): void {
-  for (const p of plotsOf(farm, 'back')) backPlot(ctx, a, p, seed);
-}
-
-// --- Front field (between the road and the viewer) -------------------------------------
-
-function frontPlot(ctx: Ctx, a: Anchor, p: FieldPlot, seed: number): void {
-  const top = toScreenY(a, FRONT_FIELD.top);
-  const bottom = toScreenY(a, FRONT_FIELD.bottom);
-  const x0 = a.x + p.dx - p.width / 2 + 2;
-  const x1 = a.x + p.dx + p.width / 2 - 2;
-  const g0 = ctx.createLinearGradient(0, top, 0, bottom);
-  g0.addColorStop(0, p.state === 'fallow' ? SOIL : '#6f5234');
-  g0.addColorStop(1, p.state === 'fallow' ? '#6a4c30' : '#5f4429');
-  ctx.fillStyle = g0;
-  ctx.fillRect(x0, top, x1 - x0, bottom - top);
-  // furrows run across, getting further apart as they come closer
-  ctx.globalAlpha = 0.5;
-  for (let k = 0; k < 9; k++) {
-    const t = (k + 0.5) / 9;
-    const y = lerp(top, bottom, t * t * 0.4 + t * 0.6);
-    line(ctx, x0, y, x1, y, SOIL_DARK, 1 + t);
-  }
-  ctx.globalAlpha = 1;
-  if (p.state === 'fallow') return;
-  const g = growth(p);
-  const look = cropLook(g);
-  for (let r = 0; r < 7; r++) {
-    const t = (r + 0.6) / 7;
-    const y = lerp(top, bottom, t * t * 0.4 + t * 0.6);
-    const persp = 1 + 0.6 * t; // closer to the viewer: bigger
-    const step = 5 + 2 * t;
-    for (let x = x0 + 3; x < x1 - 1; x += step) {
-      const px = x + hash(seed + r * 31, Math.floor(x)) * 2;
-      const sway = g > 0.5 ? Math.sin(a.time * 1.8 + px * 0.05 + r) * 1.8 * g * persp : 0;
-      stalk(ctx, px, y, look.h * persp * 1.15, g, sway, look.color, look.tip, 1.4 * persp);
-    }
+  for (const p of plotsOf(farm, 'back')) {
+    const u0 = p.dx - p.width / 2 - 2;
+    const u1 = p.dx + p.width / 2 + 2;
+    poly(ctx, quad(a, backPoint, u0, u1, 1.12, -0.08), '#7f9143'); // grass border
+    fieldPlot(ctx, a, p, seed, backPoint, 1, 0, 0.8, 5);
   }
 }
+
+// --- Front field (between the road and the viewer) -----------------------------------
 
 export function drawFrontField(ctx: Ctx, a: Anchor, farm: FarmState | undefined, seed: number): void {
-  const top = toScreenY(a, FRONT_FIELD.top);
-  const bottom = toScreenY(a, FRONT_FIELD.bottom);
-  // grass margin and a trodden path from the road into the field
-  ctx.fillStyle = '#6f8338';
-  ctx.fillRect(a.x - 126, top - 6, 252, bottom - top + 12);
-  poly(ctx, [a.x - 8, toScreenY(a, 500), a.x + 8, toScreenY(a, 500), a.x + 10, top, a.x - 10, top], '#9c7c52');
-  for (const p of plotsOf(farm, 'front')) frontPlot(ctx, a, p, seed + 7);
+  const plots = plotsOf(farm, 'front');
+  const ext = Math.max(...plots.map((p) => Math.abs(p.dx) + p.width / 2)) + 4;
+  poly(ctx, quad(a, frontPoint, -ext, ext, -0.08, 1.06), '#6f8338'); // grass border
+  for (const p of plots) fieldPlot(ctx, a, p, seed + 7, frontPoint, 0, 1, 1.45, 7);
   // low wattle fence along the near edge
-  for (let x = a.x - 124; x <= a.x + 124; x += 16) line(ctx, x, bottom + 8, x, bottom - 10, '#5a4330', 3);
-  line(ctx, a.x - 124, bottom - 6, a.x + 124, bottom - 6, '#7a5d43', 2.5);
-  line(ctx, a.x - 124, bottom + 1, a.x + 124, bottom + 1, '#7a5d43', 2.5);
+  const [fl, fy] = frontPoint(a, -ext, 1.06);
+  const [fr] = frontPoint(a, ext, 1.06);
+  for (let x = fl; x <= fr; x += 16) line(ctx, x, fy + 6, x, fy - 12, '#5a4330', 3);
+  line(ctx, fl, fy - 8, fr, fy - 8, '#7a5d43', 2.5);
+  line(ctx, fl, fy - 1, fr, fy - 1, '#7a5d43', 2.5);
 }
 
 /** Plots of one zone; with no farm state (e.g. under construction) all fallow. */

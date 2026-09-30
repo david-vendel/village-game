@@ -11,7 +11,8 @@ horse, people and the landscape are drawn procedurally in code.
   villagers, build menu, construction progress and stages, and the construction toggle.
   It doesn't use the DOM, and `world.test.ts` covers it.
 - `src/game/farm.ts`: farm simulation (pure, covered by `farm.test.ts`). A finished farm has
-  4 plots behind the farmstead (either side of the house) and 4 in front of the road, a farmer
+  4 plots behind the farmstead (either side of the house) and 5 wider ones in front of the road
+  (same total width; nearer, so they look bigger), a farmer
   and a grain store holding 0–5 sheaves. Each plot keeps its own state (fallow → growing → ripe)
   and age. The farmer works one plot at a time. To sow, he walks out, sows (2.5 s), then walks
   back to the farm, and the plot grows on its own clock (30 s to ripe). When a plot is ripe and

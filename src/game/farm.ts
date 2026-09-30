@@ -54,11 +54,13 @@ export const FARMER_SPEED = 42; // px/s
 
 // Geometry (world units). The back field lies behind the farmstead; the front
 // field lies between the road and the viewer.
-export const BACK_FIELD = { front: BASE_Y - 2, back: BASE_Y - 66 };
+// Seen from a low angle, the back field is a shallow strip; the front field is
+// closer to the viewer, so it takes up more of the screen.
+export const BACK_FIELD = { front: BASE_Y - 3, back: BASE_Y - 30 };
 export const FRONT_FIELD = { top: 512, bottom: VIEW_H - 14 };
 /** Where the farmer stands in each zone while working a plot. */
 export const WORK_Y: Record<FieldZone, number> = {
-  back: BASE_Y - 30,
+  back: BASE_Y - 15,
   front: (FRONT_FIELD.top + FRONT_FIELD.bottom) / 2 + 8,
 };
 /** The farmyard: the farmer's home spot, by the door. */
@@ -68,8 +70,12 @@ export const STORE = { dx: -86, y: BASE_Y + 3 };
 
 /** Back plots flank the farmstead so the farmer stays in view while working them. */
 export const BACK_DX = [-180, -118, 118, 180];
-export const FRONT_DX = [-90, -30, 30, 90];
-export const PLOT_W: Record<FieldZone, number> = { back: 60, front: 58 };
+/**
+ * The front field spans the same width as the back one. Being closer to the
+ * viewer, its plots look bigger, so fewer of them fit across.
+ */
+export const FRONT_DX = [-168, -84, 0, 84, 168];
+export const PLOT_W: Record<FieldZone, number> = { back: 60, front: 84 };
 
 export function createFarm(opts: { established?: boolean } = {}): FarmState {
   const plots: FieldPlot[] = [
