@@ -7,7 +7,7 @@
 // rider. Screen UI uses its own scale so buttons and text keep a usable size
 // whatever the zoom.
 
-import { VIEW_H } from './render/util';
+import { VIEW_H } from '../game/layout';
 
 export const ZOOM_MAX = 1;
 /** Narrow (portrait) screens start zoomed out until this much street is visible. */

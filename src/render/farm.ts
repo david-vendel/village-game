@@ -2,21 +2,8 @@
 // simulation geometry in game/farm.ts (world y), shifted onto the building's
 // screen base so the same art works in the street and in menu previews.
 
-import {
-  BACK_DX,
-  BACK_FIELD,
-  type FarmState,
-  type Farmer,
-  type FieldPlot,
-  FRONT_DX,
-  FRONT_FIELD,
-  growth,
-  HARVEST_TIME,
-  PLOT_W,
-  SOW_TIME,
-  STORE,
-} from '../game/farm';
-import { BASE_Y, VIEW_H } from '../game/layout';
+import { type FarmState, type Farmer, type FieldPlot, growth, HARVEST_TIME, SOW_TIME } from '../game/farm';
+import { BACK_DX, BACK_FIELD, BASE_Y, FRONT_DX, FRONT_FIELD, PLOT_W, STORE, VIEW_H } from '../game/layout';
 import { circle, clamp01, type Ctx, ellipse, hash, lerp, line, mix, poly } from './util';
 
 const SOIL = '#7a5a3a';

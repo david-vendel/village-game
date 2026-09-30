@@ -6,9 +6,10 @@ village street and raises buildings on free plots.
 
 ```sh
 npm install
-npm run dev      # play in the browser
-npm test         # game-logic unit tests (headless)
-npm run build    # typecheck + static build into dist/
+npm run dev        # play in the browser
+npm test           # logic tests + layer-boundary checks (headless)
+npm run typecheck  # whole project, plus src/game alone without browser APIs
+npm run build      # typecheck + static build into dist/
 ```
 
 `dist/` is plain static files (relative paths), so it can be served from any
@@ -37,4 +38,12 @@ its own clock, from sprouts to ripe gold. Ripe plots are harvested, and the shea
 are stacked in front of the house (up to 5). Ride up to a farm to see its store and
 crop counts.
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for how it is put together.
+## Code layout
+
+Graphics and game logic are separate layers:
+- `src/game`: rules and simulation. No drawing.
+- `src/render`: all visuals. It only reads game state.
+- `src/app`: input and screen handling.
+
+Tests enforce the boundaries. See [ARCHITECTURE.md](ARCHITECTURE.md) for the rules and a
+"where do I make this change" guide.

@@ -8,12 +8,22 @@
 
 import { BUILDINGS, BUILDING_TYPES } from '../game/buildings';
 import { STORAGE_MAX } from '../game/farm';
-import { constructionStage, STAGE_LABEL, type Building, type World } from '../game/world';
-import { drawBuildingIcon } from './buildings';
+import { constructionStage, type Building, type ConstructionStage, type World } from '../game/world';
+import { BUILDING_ART, drawBuildingIcon } from './buildings';
 import type { Ctx } from './util';
 
 const SERIF = 'Georgia, "Times New Roman", serif';
 const GOLD = '#e8c872';
+
+/** Caption shown on the progress bar for each construction stage. */
+const STAGE_LABEL: Record<ConstructionStage, string> = {
+  staking: 'Marking out the plot',
+  foundation: 'Laying the foundation',
+  frame: 'Raising the timber frame',
+  walls: 'Building the walls',
+  roof: 'Putting on the roof',
+  done: 'Finished',
+};
 
 export interface Toast {
   text: string;
@@ -282,7 +292,7 @@ export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number):
     roundRect(ctx, r.x, r.y, r.w, r.h - 24, 6);
     ctx.clip();
     const previewH = r.h - 34;
-    const scale = Math.min(0.6, (r.w - 8) / (def.width * 1.3), previewH / (def.height + 20));
+    const scale = Math.min(0.6, (r.w - 8) / (def.width * 1.3), previewH / (BUILDING_ART[type].height + 20));
     drawBuildingIcon(ctx, type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time);
     ctx.restore();
     const label = `${i + 1}. ${def.name}`;

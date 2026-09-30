@@ -20,6 +20,8 @@ export interface DrawArgs {
 }
 
 export interface BuildingArt {
+  /** Approximate drawn height (world px): sizes scaffolding, labels and menu previews. */
+  height: number;
   /** Drawn for all buildings before any building body (e.g. farm fields). */
   behind?: (ctx: Ctx, a: DrawArgs) => void;
   draw: (ctx: Ctx, a: DrawArgs) => void;
@@ -697,15 +699,15 @@ function drawWell(ctx: Ctx, a: DrawArgs): void {
 }
 
 export const BUILDING_ART: Record<BuildingType, BuildingArt> = {
-  house: { draw: drawHouse },
-  farm: { behind: drawFarmField, draw: drawFarm, front: drawFarmFrontField },
-  mill: { draw: drawMill },
-  blacksmith: { draw: drawBlacksmith },
-  market: { draw: drawMarket },
-  chapel: { draw: drawChapel },
-  tavern: { draw: drawTavern },
-  watchtower: { draw: drawWatchtower },
-  well: { draw: drawWell },
+  house: { height: 140, draw: drawHouse },
+  farm: { height: 120, behind: drawFarmField, draw: drawFarm, front: drawFarmFrontField },
+  mill: { height: 250, draw: drawMill },
+  blacksmith: { height: 150, draw: drawBlacksmith },
+  market: { height: 110, draw: drawMarket },
+  chapel: { height: 270, draw: drawChapel },
+  tavern: { height: 170, draw: drawTavern },
+  watchtower: { height: 260, draw: drawWatchtower },
+  well: { height: 90, draw: drawWell },
 };
 
 const DEMO_FARM = demoFarm();

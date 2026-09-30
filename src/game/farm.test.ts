@@ -3,12 +3,11 @@ import {
   chooseJob,
   createFarm,
   GROW_TIME,
-  HOME,
   STORAGE_MAX,
-  STORE,
   updateFarm,
   type FarmState,
 } from './farm';
+import { HOME, STORE } from './layout';
 import { createWorld, placeBuilding, update } from './world';
 
 function run(farm: FarmState, seconds: number): void {

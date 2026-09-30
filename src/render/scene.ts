@@ -2,7 +2,6 @@
 // people → rider → foreground → world-anchored labels. Screen UI (HUD, menu,
 // touch buttons) is drawn separately by main.ts in its own coordinate space.
 
-import { BUILDINGS } from '../game/buildings';
 import { getBuilding, plotAt, WORLD_WIDTH, type Building, type World } from '../game/world';
 import { drawBackground, drawForeground, type View } from './background';
 import { BUILDING_ART, type DrawArgs } from './buildings';
@@ -106,15 +105,15 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   for (const b of world.buildings) {
     const sx = world.plots[b.plotIndex].x - camX;
     if (!onScreen(world.plots[b.plotIndex].x)) continue;
-    if (b.status === 'constructing') drawProgress(ctx, b, sx, BASE - BUILDINGS[b.type].height - 20, k);
-    else if (b.completedAt !== null) drawCompletionEffect(ctx, sx, BASE, BUILDINGS[b.type].height, world.time - b.completedAt, b.id);
+    if (b.status === 'constructing') drawProgress(ctx, b, sx, BASE - BUILDING_ART[b.type].height - 20, k);
+    else if (b.completedAt !== null) drawCompletionEffect(ctx, sx, BASE, BUILDING_ART[b.type].height, world.time - b.completedAt, b.id);
   }
   const plot = plotAt(world, world.rider.x);
   if (plot && !world.menu) {
     const sx = plot.x - camX;
     const b = getBuilding(world, plot.buildingId);
     if (!b) drawPlotPrompt(ctx, sx, BASE, world.time, sv.promptLabel, k);
-    else if (b.status === 'done') drawBuildingLabel(ctx, b, sx, BASE - BUILDINGS[b.type].height - 18, k, viewW);
+    else if (b.status === 'done') drawBuildingLabel(ctx, b, sx, BASE - BUILDING_ART[b.type].height - 18, k, viewW);
   }
 }
 

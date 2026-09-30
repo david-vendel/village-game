@@ -322,14 +322,6 @@ export const STAGE_BOUNDS: Array<[ConstructionStage, number]> = [
   ['roof', 1],
 ];
 
-export const STAGE_LABEL: Record<ConstructionStage, string> = {
-  staking: 'Marking out the plot',
-  foundation: 'Laying the foundation',
-  frame: 'Raising the timber frame',
-  walls: 'Building the walls',
-  roof: 'Putting on the roof',
-  done: 'Finished',
-};
 
 /** Which stage a progress value falls in, and 0..1 progress within that stage. */
 export function constructionStage(progress: number): { stage: ConstructionStage; t: number } {

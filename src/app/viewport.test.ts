@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { VIEW_H } from './game/layout';
+import { VIEW_H } from '../game/layout';
 import { computeViewport, defaultZoom, zoomRange } from './viewport';
 
 describe('viewport', () => {

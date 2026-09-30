@@ -3,47 +3,110 @@
 Vite + TypeScript + Canvas 2D. No engine and no image assets: every building, the
 horse, people and the landscape are drawn procedurally in code.
 
-## Layout
+## Layers
 
-- `src/game/buildings.ts`: the building registry (pure data: name, purpose, size, build time).
-  Adding a building means adding an entry here plus a draw function in `render/buildings.ts`.
-- `src/game/world.ts`: pure game state and logic: plots, building entities, rider physics,
-  villagers, build menu, construction progress and stages, and the construction toggle.
-  It doesn't use the DOM, and `world.test.ts` covers it.
-- `src/game/farm.ts`: farm simulation (pure, covered by `farm.test.ts`). A finished farm has
-  4 plots behind the farmstead (either side of the house) and 5 wider ones in front of the road
-  (same total width; nearer, so they look bigger), a farmer
-  and a grain store holding 0–5 sheaves. Each plot keeps its own state (fallow → growing → ripe)
-  and age. The farmer works one plot at a time. To sow, he walks out, sows (2.5 s), then walks
-  back to the farm, and the plot grows on its own clock (30 s to ripe). When a plot is ripe and
-  the store has room, he walks out, harvests (3 s), carries the sheaf back and stacks it.
-  Harvesting takes priority over sowing, and the nearest plot is picked first. A full store stops
-  harvesting.
-- `src/game/layout.ts`: the vertical layout of the scene (road, ground, 600-unit scene height)
-  shared by logic and rendering.
-- `src/render/`: everything visual.
-  - `background.ts`: parallax layers: sky and sun, clouds, mountains, the castle on its hill,
-    patchwork fields, the distant village, the tree line, the street and the foreground grass.
-  - `buildings.ts`: the "2D picture of a 3D building" primitives (front face, shaded side face,
-    gable roof with thatch/tile/slate texture, timber framing) and one art function per building.
-    A building can also provide `behind` art (the farm's wheat field) that is drawn before all buildings.
-  - `construction.ts`: generic staged construction for any building: stakes → foundation →
-    timber frame → walls → roof. The walls and roof stages reveal the finished art from the
-    bottom up, behind scaffolding with builders.
-  - `horse.ts`: the monarch on horseback: 4-beat walk and diagonal trot leg cycles driven by
-    distance travelled, plus idle breathing, head nods, tail swish and hoof pawing.
-  - `farm.ts`: back/front field plots with crops drawn by growth stage (sprouts → green → golden
-    → ripe with ears), the farmer (walking, sowing with seed cast, scything, carrying a sheaf,
-    drawn larger the closer he is to the viewer) and the sheaf store.
-  - `people.ts`: villagers and chickens. `ui.ts`: HUD, build menu, labels, progress bars, toasts.
-  - `scene.ts`: draw order and the camera.
-- `src/viewport.ts`: zoom and coordinate spaces. Zoom 1 fits the 540-unit-tall scene to the
-  screen height, and zooming out shows more street and more sky, with the ground kept at the bottom.
-  Screen UI has its own scale, so it isn't affected by zoom. On portrait touch screens the street
-  is lifted so the buttons sit on meadow. Covered by `viewport.test.ts`.
-- `src/main.ts`: keyboard, pointer input (touch buttons, menu taps, pinch, wheel) and the main loop.
-  UI layout functions in `ui.ts` (`hudLayout`, `menuLayout`) return rectangles that are used both
-  for drawing and for tap hit-testing.
+The code is split so **graphics** and **game logic/mechanics** can be worked on
+separately, even at the same time.
+
+```
+src/game     rules, state, simulation        no DOM, no canvas, imports only src/game
+   ▲
+   │ reads state (never changes it)
+src/render   everything you see              imports src/game + src/render
+   ▲
+   │ renderFrame(), layouts
+src/app      input, screen/zoom, actions     main.ts wires it all into the loop
+```
+
+| Layer | Owns | Must not |
+| --- | --- | --- |
+| `src/game` | World state, rules, timings, simulation (rider physics, construction, farms, villagers), gameplay data (building names, purposes, footprints, build times) | Touch the DOM or canvas; import from `render` or `app`; hold display-only data (colours, drawn heights, captions) |
+| `src/render` | All visuals: art, animation, draw order, camera framing, HUD/menu look and layout, on-screen wording | Change game state (only read it); import from `app` |
+| `src/app` | Keyboard/touch/wheel input, zoom and screen scaling, the player actions input maps onto, turning game events into messages | Draw anything itself; reach into `render` internals (use `src/render/index.ts`) |
+
+**The shared contract.** The two sides meet in two places only:
+
+1. **State types** in `src/game` (`World`, `Building`, `FarmState`, `Farmer`, `FieldPlot`, …).
+   The renderer draws whatever these say. A new mechanic that needs to be visible adds a
+   field here, and the renderer then draws it.
+2. **`src/game/layout.ts`**: world positions that art and logic must agree on, such as the
+   road line, where the farm plots are, the farmhouse door and the grain store. If you
+   redraw the farmhouse wider, move `HOME`/`STORE` there, and the farmer walks to the new spots.
+
+**Enforced.** `npm test` includes `tests/architecture.test.ts`, which fails if:
+- a game file imports render/app code or uses browser APIs;
+- a render file imports app code or calls a state-changing game function (`update`,
+  `placeBuilding`, `openMenu`, …);
+- app code imports render internals instead of `src/render/index.ts`.
+
+`npm run build` also compiles `src/game` on its own with no DOM types
+(`tsconfig.game.json`).
+
+## Where to make a change
+
+| I want to… | Edit |
+| --- | --- |
+| Change how a building looks, or its drawn height | `render/buildings.ts` (`BUILDING_ART`) |
+| Change sky, hills, castle, trees, road, grass | `render/background.ts` |
+| Change crops, fields, the farmer's look or animation, the sheaf pile | `render/farm.ts` |
+| Change the horse/rider, villagers | `render/horse.ts`, `render/people.ts` |
+| Change construction visuals (scaffolding, stages' look) | `render/construction.ts` |
+| Change the HUD, menu, labels, captions, button positions | `render/ui.ts` (tap areas follow automatically) |
+| Change draw order or camera framing | `render/scene.ts` |
+| Add a building type | `game/buildings.ts` (gameplay data) **and** `render/buildings.ts` (art) |
+| Change timings, speeds, rules (build times, grow time, store size, rider speed) | `game/buildings.ts`, `game/world.ts`, `game/farm.ts` |
+| Change farmer behaviour or the farm cycle | `game/farm.ts` |
+| Add a new mechanic | new module in `src/game` + tests, a state field for anything visible, then draw it in `src/render` |
+| Move where things stand (plots, farmyard, store, road) | `game/layout.ts` |
+| Change controls or add a key/button action | `app/controls.ts`, `app/actions.ts` (plus the button's look in `render/ui.ts`) |
+| Change zoom behaviour or screen scaling | `app/viewport.ts`, `app/screen.ts` |
+
+## Files
+
+### `src/game`: logic
+- `buildings.ts`: building registry (name, purpose, footprint width, build time).
+- `world.ts`: world state and `update()`: plots, building entities, rider physics, villagers,
+  build menu, construction progress and stages, the construction toggle, events.
+  Tested by `world.test.ts`.
+- `farm.ts`: farm simulation, tested by `farm.test.ts`. A finished farm has 4 plots behind the
+  farmstead (either side of the house) and 5 wider ones in front of the road, a farmer, and a
+  grain store holding 0–5 sheaves. Each plot keeps its own state (fallow → growing → ripe) and
+  age. To sow, the farmer walks out, sows (2.5 s), then walks back to the farm, and the plot
+  grows on its own clock (30 s to ripe). When a plot is ripe and the store has room, he walks
+  out, harvests (3 s), carries the sheaf back and stacks it. Harvesting takes priority over
+  sowing, and the nearest plot is picked first. A full store stops harvesting.
+- `layout.ts`: the shared world geometry (see above).
+
+### `src/render`: graphics
+- `index.ts`: the renderer's public API: `renderFrame()` (world pass, then screen UI pass),
+  `cameraX()`, and the UI layout/hit-test helpers used for input.
+- `scene.ts`: world draw order: backdrop → back fields → farmers in the back field → plot
+  markers → buildings → front fields → people → rider → foreground → world-anchored labels.
+- `background.ts`: parallax layers: sky and sun, clouds, mountains, the castle on its hill,
+  patchwork fields, the distant village, the tree line, the street and the foreground grass.
+- `buildings.ts`: "2D picture of a 3D building" primitives (front face, shaded side face, gable
+  roof with thatch/tile/slate, timber framing) and `BUILDING_ART`: per building `draw`, optional
+  `behind`/`front` art, and the drawn `height`.
+- `construction.ts`: generic staged construction for any building: stakes → foundation →
+  timber frame → walls → roof. The finished art is revealed bottom-up behind scaffolding.
+- `farm.ts`: field plots in gentle perspective, crops by growth stage, the farmer (walk, sow,
+  scythe, carry), and the sheaf store.
+- `horse.ts`: rider with a 4-beat walk and a diagonal trot, plus idle animation. `people.ts`:
+  villagers and chickens.
+- `ui.ts`: HUD, touch buttons, build menu, labels, progress bars and toasts, plus
+  `hudLayout`/`menuLayout`, which return the rectangles used both for drawing and for tap
+  hit-testing.
+- `util.ts`: drawing helpers (shapes, colour mixing, smoke, hashing).
+
+### `src/app`: input and screen
+- `actions.ts`: player verbs (toggle construction, open/close the menu, choose, build) and
+  event → message mapping.
+- `controls.ts`: keyboard, touch buttons, menu taps, pinch and wheel → actions and zoom.
+- `screen.ts`: canvas size, DPR, zoom and touch mode. `viewport.ts`: the pure zoom/scale maths
+  (tested). Zoom 1 fits the 600-unit-tall scene to the screen height. Zooming out shows more
+  street and sky, and the UI keeps its own scale. On portrait touch screens the scene is lifted
+  above the buttons.
+- `src/main.ts`: bootstrap and the frame loop.
 
 ## Rules
 
@@ -56,4 +119,5 @@ horse, people and the landscape are drawn procedurally in code.
 - No economy (coins/resources); building is free. Grain isn't used by anything yet, so a farm
   with a full store (5 sheaves) just keeps sowing until every plot is ripe, then waits. A mill
   or market taking grain would be the natural next step.
+- Two farms on neighbouring plots have overlapping front fields.
 - No sound, no day/night cycle, no save game.

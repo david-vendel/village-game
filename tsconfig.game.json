@@ -1,0 +1,11 @@
+{
+  // Compiles src/game on its own with no browser (DOM) types, proving the game
+  // logic doesn't depend on the renderer or the browser. Part of `npm run build`.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022"],
+    "types": []
+  },
+  "include": ["src/game"],
+  "exclude": ["src/game/**/*.test.ts"]
+}

@@ -34,7 +34,7 @@ export function drawConstructionFront(ctx: Ctx, type: BuildingType, a: DrawArgs,
 export function drawConstruction(ctx: Ctx, type: BuildingType, a: DrawArgs, progress: number): void {
   const def = BUILDINGS[type];
   const W = def.width;
-  const H = def.height;
+  const H = BUILDING_ART[type].height;
   const left = a.x - W / 2;
   const { stage, t } = constructionStage(progress);
 
