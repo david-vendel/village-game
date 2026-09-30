@@ -45,9 +45,16 @@ export function committed(world: World): Stock {
   return s;
 }
 
-/** What the village can still spend on a new building: in the warehouses and not yet promised. */
+/** Whether builders can fetch r from b: a finished warehouse, or a finished building that makes r (a woodcutter's hut for wood). */
+const holdsFor = (b: Building, r: Resource) => b.status === 'done' && (b.type === 'warehouse' || !!BUILDINGS[b.type].ships?.includes(r));
+
+/**
+ * What the village can still spend on a new building: in the warehouses and
+ * the huts' stores (builders fetch from both), and not yet promised.
+ */
 export function available(world: World): Stock {
-  const have = villageStock(world);
+  const have = stockOf();
+  for (const b of world.buildings) for (const r of RESOURCES) if (holdsFor(b, r)) have[r] += b.stock[r];
   const promised = committed(world);
   for (const r of RESOURCES) have[r] = Math.max(0, have[r] - promised[r]);
   return have;
@@ -71,7 +78,7 @@ export function upgradeShortfall(world: World, b: Building): Amounts {
 export function materialSource(world: World, r: Resource, x: number): Building | null {
   let best: Building | null = null;
   for (const b of world.buildings) {
-    if (b.status !== 'done' || b.stock[r] <= 0 || !(b.type === 'warehouse' || BUILDINGS[b.type].ships?.includes(r))) continue;
+    if (b.stock[r] <= 0 || !holdsFor(b, r)) continue;
     const d = away(world, b, x);
     if (!best || d < away(world, best, x) || (d === away(world, best, x) && b.type === 'warehouse' && best.type !== 'warehouse')) best = b;
   }
