@@ -4,11 +4,14 @@
 // up to the next building, in front of the road any land within reach that is
 // closer to them than to another farm — including the land in front of the
 // neighbouring lots, which a farm borrows only when its own land is all in use.
+// Where a road runs off at a crossroads, no field is sown across it: a
+// crossroads covers its cells on both of its streets, behind the road and in front of it.
 
 import { BUILDINGS } from './buildings';
 import { fieldSpots, footprintHalfCells, setFieldSpots, type FieldSpot } from './farm';
 import { employees } from './people';
 import { CELL_W, FIELD_REACH, FIELD_ROWS, GRID_X0, type FieldZone } from './layout';
+import { crossings, SIDE_ROAD_HALF } from './streets';
 import type { Building, World } from './world';
 
 export type CellUse =
@@ -45,11 +48,27 @@ export function footprint(world: World, b: Building): { from: number; to: number
 function buildingCells(world: World): Array<number | null> {
   const count = cellAt(world.plots[world.plots.length - 1].x) + 20;
   const cells: Array<number | null> = new Array(count).fill(null);
+  const cover = (from: number, to: number, id: number) => {
+    for (let k = Math.max(0, from); k < Math.min(count, to); k++) cells[k] = id;
+  };
   for (const b of world.buildings) {
     const { from, to } = footprint(world, b);
-    for (let k = Math.max(0, from); k < Math.min(count, to); k++) cells[k] = b.id;
+    cover(from, to, b.id);
   }
+  // a crossroads stands on the street it leads to as well
+  const n = footprintHalfCells(BUILDINGS.intersection.width);
+  for (const c of crossings(world)) cover(cellAt(c.x + 0.5) - n, cellAt(c.x + 0.5) + n, c.buildingId);
   return cells;
+}
+
+/** Cells in front of the road that a road running off at a crossroads crosses. */
+function roadCells(world: World, count: number): boolean[] {
+  const road = new Array<boolean>(count).fill(false);
+  const xs = [...crossings(world).map((c) => c.x), ...world.buildings.filter((b) => b.type === 'intersection').map((b) => world.plots[b.plotIndex].x)];
+  for (const x of xs) {
+    for (let k = Math.max(0, cellAt(x - SIDE_ROAD_HALF * 1.6)); k <= Math.min(count - 1, cellAt(x + SIDE_ROAD_HALF * 1.6)); k++) road[k] = true;
+  }
+  return road;
 }
 
 /** The farm that should work a free cell: the nearest one within reach, if any. */
@@ -80,8 +99,9 @@ function ownerGrid(world: World): { built: Array<number | null>; owner: Record<F
   const built = buildingCells(world);
   const farms = world.buildings.filter((b) => b.type === 'farm');
   const owner: Record<FieldZone, Array<number | null>> = { back: [], front: [] };
+  const road = roadCells(world, built.length);
   for (const zone of ['back', 'front'] as const) {
-    owner[zone] = built.map((id, k) => (zone === 'back' && id !== null ? null : farmFor(world, farms, zone, k, built)?.id ?? null));
+    owner[zone] = built.map((id, k) => ((zone === 'back' && id !== null) || (zone === 'front' && road[k]) ? null : farmFor(world, farms, zone, k, built)?.id ?? null));
   }
   return { built, owner };
 }

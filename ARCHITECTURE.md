@@ -153,6 +153,18 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   lift it, like a summer far north; 0 is the midnight sun. `timeOfDay` gives villagers what they plan
   by: daylight (enough light to work: from half an hour after sunrise to half an hour before
   sunset, `WORK_MARGIN`), day number, hour, and game hours per second.
+- `streets.ts`: the street network. A crossroads (the `intersection` building, 10 wood) opens a
+  new street across its own at right angles, crossing it at the new street's middle plot
+  (`CROSS_PLOT`); streets form a tree. Each street is still a line with its own stretch of world x
+  (street i starts at i × `STREET_STRIDE`), so one x says where anything is. `route` is the way
+  between two x's (to the corner, then on from the same spot on the next street; `worker.ts` walks
+  it), `streetDist` the walking distance that every "nearest" (warehouses, errands, hiring,
+  quarries, trees) is measured by. Each street also has a map `origin` and `dir` (for the village
+  map); it is seen from its right-hand side, so its lots lie to its left (`backOf`) and a new street
+  runs off into what lay behind the old one. The rider turns at a finished crossroads
+  (`turnAtCrossroads` in `world.ts`): ↑ onto the road away from the viewer, ↓ towards them. A new
+  street gets its own plots and woods; trees are cut where the road runs off, and no field is sown
+  across it.
 - `land.ts`: the land grid, tested by `land.test.ts`. The street is cut into 25 px cells in two
   rows: `back` (behind the road, where buildings stand) and `front` (between the road and the
   viewer). A building claims its footprint cells (its `width` rounded up to whole cells, centred on
@@ -180,7 +192,8 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   The land is drawn first and tinted, then the sky (drawn on an offscreen canvas) is composited
   behind it, so the night sky stays bright while the land darkens.
 - `background.ts`: parallax land layers: mountains, the castle on its hill,
-  patchwork fields, the distant village, the tree line, the street and the foreground grass.
+  patchwork fields, the distant village, the tree line, the street and the foreground grass, and
+  (`drawSideRoad`) the road running off the street at a crossroads.
 - `buildings.ts`: "2D picture of a 3D building" primitives (front face, shaded side face, gable
   roof with thatch/tile/slate, timber framing) and `BUILDING_ART`: per building `draw`, optional
   `behind`/`front` art, and the drawn `height`.
@@ -198,7 +211,9 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   scythe, carry), and the sheaf store.
 - `horse.ts`: rider with a 4-beat walk and a diagonal trot, plus idle animation. `people.ts`:
   villagers and chickens.
-- `ui.ts`: HUD, touch buttons, build menu, labels, progress bars and toasts, plus
+- `ui.ts`: HUD, touch buttons (with ▲ ▼ to turn at a crossroads), the village map in the top right
+  corner (streets and building icons, north up, the rider as a gold arrow), build menu, labels,
+  progress bars and toasts, plus
   `hudLayout`/`menuLayout`, which return the rectangles used both for drawing and for tap
   hit-testing.
 - `util.ts`: drawing helpers (shapes, colour mixing, smoke, hashing).
@@ -234,7 +249,8 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
 
 ## Rules
 
-- Plots sit every 250 px along a 6400 px street. A plot holds at most one building.
+- Plots sit every 250 px along each 6400 px street. A plot holds at most one building; a crossroads
+  stands on a plot of each of its two streets.
 - With construction ON, a building takes its `buildTime` (6–18 s). With it OFF, buildings
   appear finished immediately, and turning it off also finishes anything under construction.
 

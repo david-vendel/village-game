@@ -14,7 +14,8 @@ import { isBorrowed } from '../game/farm';
 import { WOOD_REACH } from '../game/nature';
 import { employees, jobsOf } from '../game/people';
 import { RESOURCES, type Amounts } from '../game/resources';
-import { constructionStage, type Building, type ConstructionStage, type World } from '../game/world';
+import { backOf, mapPoint, streetOf, streetStart } from '../game/streets';
+import { constructionStage, WORLD_WIDTH, type Building, type ConstructionStage, type World } from '../game/world';
 import { BUILDING_ART, drawBuildingIcon } from './buildings';
 import type { Ctx } from './util';
 
@@ -157,6 +158,11 @@ export interface HudLayout {
   left: Rect;
   right: Rect;
   build: Rect;
+  /** Touch buttons to turn at a crossroads: onto the road away from the viewer, and towards them. */
+  turnUp: Rect;
+  turnDown: Rect;
+  /** The village map, top right. */
+  map: Rect;
 }
 
 /** Size of the small round-cornered HUD buttons (zoom), in UI units; the side panels' buttons match it. */
@@ -165,12 +171,17 @@ export const HUD_BUTTON = 14;
 export function hudLayout(uiW: number, uiH: number): HudLayout {
   const z = HUD_BUTTON;
   const b = 76;
+  const build = { x: uiW - 16 - 86, y: uiH - 16 - 86, w: 86, h: 86 };
+  const mapW = Math.round(Math.min(170, uiW * 0.34));
   return {
     zoomOut: { x: uiW - 12 - z * 2 - 4, y: 12, w: z, h: z },
     zoomIn: { x: uiW - 12 - z, y: 12, w: z, h: z },
     left: { x: 16, y: uiH - 16 - b, w: b, h: b },
     right: { x: 16 + b + 14, y: uiH - 16 - b, w: b, h: b },
-    build: { x: uiW - 16 - 86, y: uiH - 16 - 86, w: 86, h: 86 },
+    build,
+    turnUp: { x: build.x - 14 - 64, y: build.y, w: 64, h: 40 },
+    turnDown: { x: build.x - 14 - 64, y: build.y + 46, w: 64, h: 40 },
+    map: { x: uiW - 12 - mapW, y: 12 + z + 8, w: mapW, h: Math.round(mapW * 0.72) },
   };
 }
 
@@ -180,6 +191,8 @@ export interface HudState {
   rightHeld: boolean;
   /** Rider stands at an empty plot. */
   canBuild: boolean;
+  /** Rider stands at a crossroads. */
+  canTurn: boolean;
 }
 
 export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: HudState): void {
@@ -187,8 +200,8 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
   text(ctx, 'Village Crown', 16, 34, 24, GOLD, 'left', true);
   const lines = st.touch
     ? ['Hold the arrows to ride, hammer to build or upgrade', 'Pinch or tap - + to zoom']
-    : ['A D / ← → ride   S / ↓ / Space build/upgrade   C construction   M sound', 'In the menu: WASD choose, Space build, Esc / Q close   - + zoom'];
-  const maxW = L.zoomOut.x - 28;
+    : ['A D / ← → ride   S / ↓ / Space build/upgrade   W / S turn at a crossroads   C construction   M sound', 'In the menu: WASD choose, Space build, Esc / Q close   - + zoom'];
+  const maxW = L.map.x - 28;
   let y = 54;
   for (const s of lines) {
     text(ctx, s, 16, y, fitSize(ctx, s, 12, maxW), '#f3ead8');
@@ -202,6 +215,7 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
   const stockLine = `Stored: ${amounts(villageStock(world))}   People ${world.people.length} (${working} at work)`;
   text(ctx, stockLine, 16, y + 18, fitSize(ctx, stockLine, 12, maxW), '#e8d9a8');
 
+  drawMiniMap(ctx, world, L.map);
   button(ctx, L.zoomOut, false);
   plusMinusIcon(ctx, L.zoomOut, false);
   button(ctx, L.zoomIn, false);
@@ -216,7 +230,115 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
     button(ctx, L.build, false, true);
     hammerIcon(ctx, L.build.x + L.build.w / 2, L.build.y + L.build.h / 2, L.build.w * 0.5);
     ctx.globalAlpha = 1;
+    if (st.canTurn) {
+      for (const [r, dir] of [[L.turnUp, -1], [L.turnDown, 1]] as const) {
+        button(ctx, r, false);
+        const cx = r.x + r.w / 2;
+        const cy = r.y + r.h / 2;
+        ctx.fillStyle = GOLD;
+        ctx.beginPath();
+        ctx.moveTo(cx - 11, cy - dir * 6);
+        ctx.lineTo(cx + 11, cy - dir * 6);
+        ctx.lineTo(cx, cy + dir * 8);
+        ctx.fill();
+      }
+    }
   }
+}
+
+/** Most of the village (world px) the map shows across; a bigger network is shown around the rider. */
+const MAP_SPAN = 4200;
+/** How far behind its street (world px) a building is marked on the map. */
+const MAP_LOT = 80;
+
+/**
+ * The village map: the streets and a small picture of every building, north
+ * up, with the rider as a gold arrow. It fits the whole network, zoomed in no
+ * closer than MAP_SPAN across, and follows the rider when that is too big.
+ */
+function drawMiniMap(ctx: Ctx, world: World, r: Rect): void {
+  panel(ctx, r.x, r.y, r.w, r.h, 0.55);
+  ctx.save();
+  roundRect(ctx, r.x + 1, r.y + 1, r.w - 2, r.h - 2, 6);
+  ctx.clip();
+
+  const ends = world.streets.map((s) => [mapPoint(world, streetStart(s.index) + 120), mapPoint(world, streetStart(s.index) + WORLD_WIDTH - 120)] as const);
+  const pts = ends.flat();
+  const pad = 250;
+  const box = {
+    minX: Math.min(...pts.map((p) => p.x)) - pad,
+    maxX: Math.max(...pts.map((p) => p.x)) + pad,
+    minY: Math.min(...pts.map((p) => p.y)) - pad,
+    maxY: Math.max(...pts.map((p) => p.y)) + pad,
+  };
+  const scale = Math.max(Math.min(r.w / (box.maxX - box.minX), r.h / (box.maxY - box.minY)), r.w / MAP_SPAN);
+  const me = mapPoint(world, world.rider.x);
+  const centre = (lo: number, hi: number, at: number, half: number) => (hi - lo <= half * 2 ? (lo + hi) / 2 : Math.max(lo + half, Math.min(hi - half, at)));
+  const cx = centre(box.minX, box.maxX, me.x, r.w / 2 / scale);
+  const cy = centre(box.minY, box.maxY, me.y, r.h / 2 / scale);
+  const sx = (x: number) => r.x + r.w / 2 + (x - cx) * scale;
+  const sy = (y: number) => r.y + r.h / 2 - (y - cy) * scale;
+
+  // streets
+  ctx.lineCap = 'round';
+  for (const [colour, width] of [['#3a2a1c', 5], ['#c9a86a', 2.5]] as const) {
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = width;
+    for (const [a, b] of ends) {
+      ctx.beginPath();
+      ctx.moveTo(sx(a.x), sy(a.y));
+      ctx.lineTo(sx(b.x), sy(b.y));
+      ctx.stroke();
+    }
+  }
+
+  // buildings, standing on their lots behind the street (crossroads are the streets meeting)
+  const iconScale = Math.max(0.03, scale * 1.25);
+  const lots = world.buildings
+    .filter((b) => b.type !== 'intersection')
+    .map((b) => {
+      const x = world.plots[b.plotIndex].x;
+      const p = mapPoint(world, x);
+      const back = backOf(world.streets[streetOf(x)]?.dir ?? { x: 1, y: 0 });
+      return { b, x: sx(p.x + back.x * MAP_LOT), y: sy(p.y + back.y * MAP_LOT) };
+    })
+    .filter((l) => l.x > r.x - 20 && l.x < r.x + r.w + 20 && l.y > r.y - 20 && l.y < r.y + r.h + 30)
+    // nearer the bottom of the map is nearer the viewer: drawn last
+    .sort((a, b) => a.y - b.y);
+  for (const { b, x, y } of lots) {
+    ctx.globalAlpha = b.status === 'done' ? 1 : 0.45;
+    drawBuildingIcon(ctx, b.type, x, y + 3, iconScale, world.time);
+  }
+  ctx.globalAlpha = 1;
+
+  // the rider: an arrow the way they are heading
+  const street = world.streets[streetOf(world.rider.x)] ?? world.streets[0];
+  const hx = street.dir.x * world.rider.facing;
+  const hy = -street.dir.y * world.rider.facing;
+  const px = sx(me.x);
+  const py = sy(me.y);
+  ctx.fillStyle = GOLD;
+  ctx.strokeStyle = '#3a2a1c';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  ctx.moveTo(px + hx * 6, py + hy * 6);
+  ctx.lineTo(px - hx * 4 - hy * 4, py - hy * 4 + hx * 4);
+  ctx.lineTo(px - hx * 4 + hy * 4, py - hy * 4 - hx * 4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
+  text(ctx, 'N', r.x + r.w - 9, r.y + 13, 9, '#cbbfa4', 'center', true);
+}
+
+/** Just after turning at a crossroads the view comes up out of a short fade. */
+export function drawTurnFade(ctx: Ctx, world: World, uiW: number, uiH: number): void {
+  const t = world.rider.turnedAt;
+  if (t === undefined) return;
+  const age = world.time - t;
+  if (age < 0 || age > 0.45) return;
+  ctx.fillStyle = `rgba(20,14,8,${(1 - age / 0.45) * 0.9})`;
+  ctx.fillRect(0, 0, uiW, uiH);
 }
 
 export function drawToasts(ctx: Ctx, toasts: Toast[], now: number, uiW: number): void {
@@ -363,9 +485,10 @@ export function drawPlotPrompt(ctx: Ctx, sx: number, base: number, time: number,
 
 /**
  * Name, purpose, store and workers: the label over a finished building the
- * rider is next to; with `upgradeHint`, how to upgrade it and what that costs.
+ * rider is next to; with `upgradeHint`, how to upgrade it and what that costs;
+ * with `turnHint` (at a crossroads), how to turn onto the other street.
  */
-export function drawBuildingLabel(ctx: Ctx, world: World, b: Building, sx: number, y: number, k: number, viewW: number, upgradeHint: string | null): void {
+export function drawBuildingLabel(ctx: Ctx, world: World, b: Building, sx: number, y: number, k: number, viewW: number, upgradeHint: string | null, turnHint: string | null = null): void {
   const def = BUILDINGS[b.type];
   const name = b.upgraded && def.upgrade ? def.upgrade.name : def.name;
   const lines = [def.purpose];
@@ -394,6 +517,7 @@ export function drawBuildingLabel(ctx: Ctx, world: World, b: Building, sx: numbe
     const short = Object.keys(upgradeShortfall(world, b)).length ? ' — not enough yet' : '';
     lines.push(`${upgradeHint} to a ${def.upgrade.name} (${cost})${short}`);
   }
+  if (turnHint) lines.push(turnHint);
   ctx.font = `12px ${SERIF}`;
   const lineW = Math.max(...lines.map((l) => ctx.measureText(l).width));
   ctx.font = `bold 14px ${SERIF}`;

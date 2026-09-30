@@ -58,6 +58,10 @@ const MUTATORS = [
   'confirmMenu',
   'moveMenu',
   'selectMenu',
+  'turnAtCrossroads',
+  'layStreet',
+  'branchStreet',
+  'clearRoad',
   'updateFarm', // (gone; kept so it can't come back into render)
   'setFieldSpots',
   'syncFarmFields',

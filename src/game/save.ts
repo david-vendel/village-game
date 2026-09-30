@@ -3,7 +3,8 @@
 //
 // What is saved is the simulation's own state: time, buildings (with their
 // stores and farm fields), people (with their jobs and where they are in their
-// working day), animals, the village stockpile, rider, RNG and id counter.
+// working day), animals, the village stockpile, rider, RNG and id counter, and
+// which crossroads opened which street, in order (the streets' places and plots follow from it).
 // What is not:
 // - things derived from the rules: plots and their building links, field layout
 //   (rebuilt on load, so a save survives changes to the street or field rules);
@@ -26,9 +27,9 @@ import { employees, laneY, nameFor, openings, type Animal, type Job, type Look, 
 import { RESOURCES, type Load, type Resource, type Stock } from './resources';
 import type { Worker, WorkerTask } from './worker';
 import { createForest, type Tree } from './nature';
-import { createWorld, WORLD_WIDTH, type Building, type Rider, type World } from './world';
+import { createWorld, layStreet, WORLD_WIDTH, type Building, type Rider, type World } from './world';
 
-export const SAVE_VERSION = 12;
+export const SAVE_VERSION = 13;
 
 /** How often (s) the village used to collect goods from stores (until v9); old migrations need it. */
 const OLD_COLLECT_EVERY = 30;
@@ -47,7 +48,10 @@ export type SavedWorld = Pick<
   | 'lastSelection'
   | 'nextId'
   | 'rngState'
->;
+> & {
+  /** The crossroads (building ids) each street after the main one branches off at, in the order they were opened. */
+  branches: number[];
+};
 
 export interface SaveData {
   version: number;
@@ -333,6 +337,12 @@ const MIGRATIONS: Record<number, (world: unknown) => unknown> = {
     w.nextId = id;
     return world;
   },
+  // v13: crossroads open new streets (the crossroads comes last in the menu, so nothing moves)
+  12: (world) => {
+    const w = typeof world === 'object' && world !== null ? (world as Raw) : undefined;
+    if (w) w.branches = [];
+    return world;
+  },
 };
 
 /** Snapshot the world. The result shares nothing with the live world. */
@@ -349,6 +359,7 @@ export function saveWorld(world: World): SaveData {
     lastSelection: world.lastSelection,
     nextId: world.nextId,
     rngState: world.rngState,
+    branches: world.streets.flatMap((s) => (s.from === null ? [] : [s.from])),
   };
   return { version: SAVE_VERSION, world: JSON.parse(JSON.stringify(saved)) as SavedWorld };
 }
@@ -375,7 +386,21 @@ export function loadWorld(data: unknown): LoadResult {
 
 function build(saved: SavedWorld): World {
   const world = createWorld({ village: false });
-  Object.assign(world, saved);
+  const { branches, ...state } = saved;
+  Object.assign(world, state);
+  // the streets, in the order they were opened: each branches off at a finished crossroads on one before it
+  const layBranch = (b: Building) => {
+    if (!world.plots[b.plotIndex]) throw new SaveError(`building ${b.id}: no plot ${b.plotIndex}`);
+    layStreet(world, b);
+  };
+  for (const id of branches) {
+    const b = world.buildings.find((x) => x.id === id);
+    if (!b || b.type !== 'intersection' || b.status !== 'done') throw new SaveError(`a street branches off at ${id}, which is no finished crossroads`);
+    if (world.streets.some((st) => st.from === id)) throw new SaveError(`two streets branch off at crossroads ${id}`);
+    layBranch(b);
+  }
+  // (a finished crossroads always leads somewhere)
+  for (const b of world.buildings) if (b.type === 'intersection' && b.status === 'done' && !world.streets.some((st) => st.from === b.id)) layBranch(b);
   const ids = new Set<number>();
   for (const b of world.buildings) {
     const plot = world.plots[b.plotIndex];
@@ -474,6 +499,7 @@ function savedWorld(v: unknown): SavedWorld {
     lastSelection: oneOf(w.lastSelection, BUILDING_TYPES.map((_, i) => i), 'lastSelection'),
     nextId: int(w.nextId, 'nextId'),
     rngState: int(w.rngState, 'rngState'),
+    branches: arr(w.branches, 'branches').map((x, i) => int(x, `branches[${i}]`)),
   };
 }
 

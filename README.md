@@ -24,11 +24,20 @@ folder by nginx, the same way as ~/hollow. Not deployed yet.
 | ← / → or 1–9 | Tap a card | Choose building |
 | Enter / Space | Tap the chosen card again, or "Build" | Build |
 | Esc / ↑ | "Cancel" or tap outside | Cancel |
+| ↑ / ↓ (at a crossroads) | ▲ / ▼ buttons | Turn onto the crossing street |
 | C | Tap the Construction pill | Toggle the construction phase on/off |
 | − / + or mouse wheel, 0 to reset | Pinch, or − / + buttons | Zoom out / in |
 
 Touch controls appear automatically on phones and tablets (or after the first
 touch). Portrait phones start zoomed out, with the street lifted above the buttons.
+
+## Streets
+
+A **Crossroads** (10 wood) cuts a road across the street. Once it is built, ride up to it
+and press ↑ or ↓ to turn onto the new street, which runs off at right angles with its own
+plots and woods. A crossroads on that street opens another, so the village grows into a
+net of streets. The map in the top right corner shows the streets and every building.
+Villagers walk round the corners to reach work and goods on other streets.
 
 ## Farms
 

@@ -9,12 +9,14 @@ import {
   canUpgrade,
   closeMenu,
   confirmMenu,
+  crossroadAt,
   getBuilding,
   moveMenu,
   openMenu,
   plotAt,
   selectMenu,
   setConstructionEnabled,
+  turnAtCrossroads,
   upgradeBuilding,
   type World,
 } from '../game/world';
@@ -30,6 +32,10 @@ export interface Actions {
   moveSelection(delta: number): void;
   select(index: number): void;
   build(): void;
+  /** Whether the rider is at a crossroads, where ↑/↓ turn instead. */
+  atCrossroads(): boolean;
+  /** Turn onto the street crossing this one: up (away from the viewer) or down (towards them). */
+  turn(way: 'up' | 'down'): void;
 }
 
 export function createActions(world: World, notify: Notify, isTouch: () => boolean, sound: Sound): Actions {
@@ -78,6 +84,12 @@ export function createActions(world: World, notify: Notify, isTouch: () => boole
     select(index) {
       selectMenu(world, index);
       sound.ui('menuMove');
+    },
+    atCrossroads() {
+      return !world.menu && !!crossroadAt(world);
+    },
+    turn(way) {
+      if (turnAtCrossroads(world, way)) sound.ui('menuMove');
     },
     build() {
       if (!world.menu) return;

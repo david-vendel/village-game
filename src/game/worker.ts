@@ -6,10 +6,11 @@
 //
 // Positions are relative to the workplace's centre (dx) and in world y.
 // Nothing moves by magic: a worker walks to the exact spot where a thing lies
-// to pick it up, and to the exact spot where it will lie to put it down.
+// to pick it up, and to the exact spot where it will lie to put it down. A spot
+// on another street is reached along the road, round the corner (`Nav`).
 
 import type { TimeOfDay } from './daynight';
-import type { Spot } from './layout';
+import { ROAD_Y, type Spot } from './layout';
 import type { Load } from './resources';
 
 /** A job at a workplace: what to do (its own vocabulary, e.g. 'sow') and to which of its things. */
@@ -96,6 +97,15 @@ export interface Workplace {
   deliver(load: Load, job: JobTicket): void;
 }
 
+/**
+ * Where the workplace is (world x) and the way between two world x's (streets.ts
+ * route): straight there, or to a corner (x) that leads on to `turnTo` on the next street.
+ */
+export interface Nav {
+  x: number;
+  route(from: number, to: number): { x: number; turnTo?: number };
+}
+
 /** Walking speed with a load, and with empty hands (px/s). */
 export const WALK_SPEED = 42;
 export const WALK_SPEED_EMPTY = WALK_SPEED * 2;
@@ -162,8 +172,8 @@ export function offDuty(w: Worker, now: TimeOfDay, place: Pick<Workplace, 'dayLa
   return null;
 }
 
-/** Advance one worker. `taken`: jobs the workplace's other workers are on. */
-export function updateWorker(w: Worker, place: Workplace, dt: number, now: TimeOfDay, taken: JobTicket[]): void {
+/** Advance one worker. `taken`: jobs the workplace's other workers are on; `nav`: the way to other streets. */
+export function updateWorker(w: Worker, place: Workplace, dt: number, now: TimeOfDay, taken: JobTicket[], nav?: Nav): void {
   const task = w.task;
   const off = offDuty(w, now, place);
 
@@ -226,8 +236,11 @@ export function updateWorker(w: Worker, place: Workplace, dt: number, now: TimeO
       task.toDx = at.dx;
       task.toY = at.y;
     }
-    const ddx = task.toDx - w.dx;
-    const ddy = task.toY - w.y;
+    // bound for another street: along the road to the corner first
+    const leg = nav?.route(nav.x + w.dx, nav.x + task.toDx);
+    const corner = leg?.turnTo !== undefined ? { dx: leg.x - nav!.x, y: ROAD_Y, next: leg.turnTo - nav!.x } : null;
+    const ddx = (corner ? corner.dx : task.toDx) - w.dx;
+    const ddy = (corner ? corner.y : task.toY) - w.y;
     const d = Math.hypot(ddx, ddy);
     const step = (w.carrying ? WALK_SPEED : WALK_SPEED_EMPTY) * dt;
     if (Math.abs(ddx) > 0.5) w.facing = ddx > 0 ? 1 : -1;
@@ -235,6 +248,13 @@ export function updateWorker(w: Worker, place: Workplace, dt: number, now: TimeO
       w.dx += (ddx / d) * step;
       w.y += (ddy / d) * step;
       w.stride += step;
+      return;
+    }
+    if (corner) {
+      // round the corner: the same spot, seen along the next street
+      w.dx = corner.next;
+      w.y = corner.y;
+      w.stride += d;
       return;
     }
     w.dx = task.toDx;

@@ -8,12 +8,15 @@ import { BUILDINGS, type BuildingType } from './buildings';
 import { BAKERY_SLOTS, BASKET, MILL_SLOTS, PILE_UNIT, SACK, STONECUTTER_SLOTS, TAVERN_SLOTS, SHEAF_SLOTS, STAND_Y, warehouseSlot, WOODCUTTER_SLOTS, type Slot, type Spot } from './layout';
 import { room, RESOURCES, shortfall, stockOf, type Amounts, type Load, type Resource, type Stock } from './resources';
 import { owed } from './site';
+import { streetDist } from './streets';
 import type { Building, World } from './world';
 
 /** What the starting village's warehouse holds. */
 export const WAREHOUSE_START: Stock = stockOf({ wood: 250, stone: 200 });
 
 const xOf = (world: World, b: Building) => world.plots[b.plotIndex].x;
+/** How far building b is from world x, along the streets. */
+const away = (world: World, b: Building, x: number) => streetDist(world, x, xOf(world, b));
 
 /** Finished warehouses. */
 export function warehouses(world: World): Building[] {
@@ -64,7 +67,7 @@ export function warehouseWith(world: World, r: Resource, x: number): Building | 
   let best: Building | null = null;
   for (const w of warehouses(world)) {
     if (w.stock[r] <= 0) continue;
-    if (!best || Math.abs(xOf(world, w) - x) < Math.abs(xOf(world, best) - x)) best = w;
+    if (!best || away(world, w, x) < away(world, best, x)) best = w;
   }
   return best;
 }
@@ -79,7 +82,7 @@ export function takeOut(warehouse: Building, r: Resource, amount: number): numbe
 /** Take whatever there is of `amounts` out of the warehouses, nearest to x first; returns what was taken. */
 export function takeFromWarehouses(world: World, amounts: Amounts, x: number): Stock {
   const got = stockOf();
-  const near = [...warehouses(world)].sort((a, b) => Math.abs(xOf(world, a) - x) - Math.abs(xOf(world, b) - x));
+  const near = [...warehouses(world)].sort((a, b) => away(world, a, x) - away(world, b, x));
   for (const r of RESOURCES) {
     for (const w of near) got[r] += takeOut(w, r, (amounts[r] ?? 0) - got[r]);
   }
@@ -91,7 +94,7 @@ export function putAway(world: World, load: Load, x: number): number {
   const capacity = BUILDINGS.warehouse.storage;
   const fits = warehouses(world)
     .filter((w) => room(w.stock, capacity, load.resource) > 0)
-    .sort((a, b) => Math.abs(xOf(world, a) - x) - Math.abs(xOf(world, b) - x));
+    .sort((a, b) => away(world, a, x) - away(world, b, x));
   let left = load.amount;
   for (const w of fits) {
     const n = Math.min(left, room(w.stock, capacity, load.resource));

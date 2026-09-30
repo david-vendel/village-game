@@ -54,6 +54,9 @@ export function installControls(world: World, screen: Screen, actions: Actions):
       else if (/^[1-9]$/.test(key)) actions.select(Number(key) - 1);
       return;
     }
+    // at a crossroads up and down turn onto the crossing street
+    if (actions.atCrossroads() && (key === 'ArrowUp' || key === 'w')) return actions.turn('up');
+    if (actions.atCrossroads() && (key === 'ArrowDown' || key === 's')) return actions.turn('down');
     if (key === 'ArrowDown' || key === 's' || key === ' ' || key === 'Enter' || key === 'b') actions.openBuildMenu();
   });
   window.addEventListener('keyup', (e) => keys.delete(keyOf(e)));
@@ -117,6 +120,8 @@ export function installControls(world: World, screen: Screen, actions: Actions):
       if (hit(L.zoomOut, ux, uy)) screen.zoomBy(1 / ZOOM_STEP);
       else if (hit(L.zoomIn, ux, uy)) screen.zoomBy(ZOOM_STEP);
       else if (dir) role = dir;
+      else if (screen.touch && actions.atCrossroads() && hit(L.turnUp, ux, uy)) actions.turn('up');
+      else if (screen.touch && actions.atCrossroads() && hit(L.turnDown, ux, uy)) actions.turn('down');
       else if (screen.touch && hit(L.build, ux, uy)) actions.openBuildMenu();
       else role = 'pinch';
     }

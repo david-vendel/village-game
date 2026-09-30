@@ -1036,6 +1036,29 @@ function drawStonecutter(ctx: Ctx, a: DrawArgs): void {
   if (asleep) drawSnore(ctx, x0 + 51, a.base - 58, a.time);
 }
 
+/**
+ * The crossroads: a fingerpost at the corner, one arm along the street and one
+ * pointing down the road that runs off it (the road itself is drawn with the
+ * ground, background.ts drawSideRoad, on both of its streets).
+ */
+function drawCrossroads(ctx: Ctx, a: DrawArgs): void {
+  // a patch of beaten earth where the roads meet (under the road in the street, seen alone in the menu)
+  ellipse(ctx, a.x, a.base + 2, 34, 5, '#a8875b');
+  const px = a.x - 44;
+  const top = a.base - 46;
+  ellipse(ctx, px + 2, a.base + 1, 7, 2, 'rgba(40,28,16,0.3)');
+  rect(ctx, px - 2, top, 4, a.base - top, '#6b4c30');
+  rect(ctx, px + 1, top, 1, a.base - top, '#4f3622');
+  // arm along the street, pointing right
+  poly(ctx, [px - 3, top + 6, px + 24, top + 6, px + 30, top + 10.5, px + 24, top + 15, px - 3, top + 15], '#c9a86a');
+  rect(ctx, px + 2, top + 10, 18, 1, '#7a5a38');
+  // arm down the side road, foreshortened: pointing into the scene
+  poly(ctx, [px + 3, top + 19, px - 14, top + 17, px - 19, top + 21, px - 14, top + 25, px + 3, top + 27], shade('#c9a86a', -0.15));
+  rect(ctx, px - 13, top + 21, 11, 1, '#6d4f30');
+  // cap
+  poly(ctx, [px - 4, top, px + 4, top, px, top - 5], '#5a3f28');
+}
+
 export const BUILDING_ART: Record<BuildingType, BuildingArt> = {
   warehouse: { height: 100, draw: drawWarehouse },
   house: { height: 140, draw: drawHouse },
@@ -1050,6 +1073,7 @@ export const BUILDING_ART: Record<BuildingType, BuildingArt> = {
   well: { height: 90, draw: drawWell },
   woodcutter: { height: 100, draw: drawWoodcutter },
   stonecutter: { height: 100, draw: drawStonecutter },
+  intersection: { height: 56, draw: drawCrossroads },
 };
 
 const DEMO_FARM = demoFarm();

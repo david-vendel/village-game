@@ -4,7 +4,8 @@
 // What is specific to one kind of thing lives in its own module: farm.ts
 // (fields), people.ts (villagers, hiring), worker.ts (the working day),
 // economy.ts (warehouses, costs), workshop.ts (the mill's and bakery's work), transport.ts (errands), tavern.ts (guests eating), site.ts (construction by builders),
-// land.ts (who uses which land), nature.ts (the woods and quarries, and the huts that work them).
+// land.ts (who uses which land), nature.ts (the woods and quarries, and the huts that work them),
+// streets.ts (the street network: crossroads open new streets across the old).
 //
 // Nobody and nothing ever jumps: people walk everywhere from where they
 // stand (hired, let go, or done for the day), and goods only move in
@@ -15,20 +16,21 @@ import { timeOfDay } from './daynight';
 import { buildShortfall, putAway, takeFromWarehouses, upgradeShortfall, WAREHOUSE_START } from './economy';
 import { createFarm, DEFAULT_WORK, farmWorkplace, updateCrops, type FarmState } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
-import { PLOT_SPACING } from './layout';
-import { createForest, gatherWorkplace, isGatherHut, updateForest, type Tree } from './nature';
+import { FIRST_PLOT_X, PLOT_SPACING, STREET_LENGTH } from './layout';
+import { clearRoad, createForest, onRoad, gatherWorkplace, isGatherHut, updateForest, type Tree } from './nature';
 import { employees, laneY, nameFor, openings, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
 import { BUILDERS_PER_SITE, builders, createSite, siteWork, siteWorkplace, upgrading, type Site } from './site';
 import { RESOURCES, stockOf, type Stock } from './resources';
+import { branchStreet, CROSS_PLOT, mainStreet, route, streetOf, streetRange, streetStart, turnFacing, type Street } from './streets';
 import { eatAtTaverns } from './tavern';
 import { serfPositions, transportHub, transportWorkplace } from './transport';
-import { createWorker, currentJob, offDuty, updateWorker, type Worker, type Workplace } from './worker';
+import { createWorker, currentJob, offDuty, updateWorker, type Nav, type Worker, type Workplace } from './worker';
 import { workshopWorkplace } from './workshop';
 
-export const WORLD_WIDTH = 6400;
+/** Length of each street (streets.ts). */
+export const WORLD_WIDTH = STREET_LENGTH;
 export const PLOT_WIDTH = 200;
-export { PLOT_SPACING };
-export const FIRST_PLOT_X = 420;
+export { FIRST_PLOT_X, PLOT_SPACING };
 /** How close (px) the rider's x must be to a plot centre to interact with it. */
 export const INTERACT_RANGE = 90;
 
@@ -64,8 +66,11 @@ export const DEFAULT_PARAMS: WorldParams = {
 
 export interface Plot {
   index: number;
+  /** The street it is on (streets.ts). */
+  street: number;
   /** Centre x in world px. */
   x: number;
+  /** What stands on it; a crossroads stands on a plot of each of its two streets. */
   buildingId: number | null;
 }
 
@@ -96,6 +101,8 @@ export interface Rider {
   facing: 1 | -1;
   /** Accumulated gait phase — advances with distance travelled. */
   gait: number;
+  /** World time of the last turn onto another street at a crossroads (not saved). */
+  turnedAt?: number;
 }
 
 export interface BuildMenu {
@@ -110,6 +117,9 @@ export interface GameEvent {
 
 export interface World {
   time: number;
+  /** The street network (streets.ts): the main street first, then each street in the order it was opened. */
+  streets: Street[];
+  /** Every street's plots, street by street. */
   plots: Plot[];
   buildings: Building[];
   rider: Rider;
@@ -162,14 +172,21 @@ export interface CreateWorldOptions {
   village?: boolean;
 }
 
-export function createWorld(opts: CreateWorldOptions = {}): World {
-  const plots: Plot[] = [];
-  for (let i = 0, x = FIRST_PLOT_X; x < WORLD_WIDTH - 200; i++, x += PLOT_SPACING) {
-    plots.push({ index: i, x, buildingId: null });
+/** Plots along each street, every PLOT_SPACING from FIRST_PLOT_X. */
+export const PLOTS_PER_STREET = Math.ceil((WORLD_WIDTH - 200 - FIRST_PLOT_X) / PLOT_SPACING);
+
+/** Mark out the plots of street i. */
+function layPlots(world: World, street: number): void {
+  for (let k = 0; k < PLOTS_PER_STREET; k++) {
+    world.plots.push({ index: world.plots.length, street, x: streetStart(street) + FIRST_PLOT_X + k * PLOT_SPACING, buildingId: null });
   }
+}
+
+export function createWorld(opts: CreateWorldOptions = {}): World {
   const world: World = {
     time: 0,
-    plots,
+    streets: [mainStreet()],
+    plots: [],
     buildings: [],
     rider: { x: FIRST_PLOT_X + 5 * PLOT_SPACING + PLOT_SPACING / 2, vx: 0, facing: 1, gait: 0 },
     people: [],
@@ -184,6 +201,7 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
     dayClock: 0,
     events: [],
   };
+  layPlots(world, 0);
 
   if (opts.village ?? true) {
     for (const [plotIndex, type] of STARTING_VILLAGE) {
@@ -269,9 +287,10 @@ export function placeBuilding(
   if (!instant) b.site = createSite(type, opts.free ? BUILDINGS[type].cost : {});
   world.buildings.push(b);
   if (instant && type === 'farm') b.farm = createFarm({ spots: farmFieldSpots(world, b) });
+  plot.buildingId = b.id;
+  if (instant && type === 'intersection') openStreet(world, b);
   // the new footprint may cover land neighbouring farms were using
   syncFarmFields(world);
-  plot.buildingId = b.id;
   world.events.push({ kind: 'placed', buildingId: b.id });
   if (instant) world.events.push({ kind: 'completed', buildingId: b.id });
   return b;
@@ -340,7 +359,65 @@ function complete(world: World, b: Building): void {
     return;
   }
   if (b.type === 'farm') b.farm = createFarm({ spots: farmFieldSpots(world, b) });
+  if (b.type === 'intersection') {
+    openStreet(world, b);
+    syncFarmFields(world);
+  }
   world.events.push({ kind: 'completed', buildingId: b.id });
+}
+
+// --- Streets -------------------------------------------------------------------
+
+/**
+ * Lay out the street a finished crossroads opens: the street itself, its
+ * plots, and the crossroads standing on its middle plot too. (Loading a save
+ * rebuilds the streets this way.)
+ */
+export function layStreet(world: World, b: Building): Street {
+  const street = branchStreet(world, b.id, world.plots[b.plotIndex].x);
+  const first = world.plots.length;
+  layPlots(world, street.index);
+  world.plots[first + CROSS_PLOT].buildingId = b.id;
+  return street;
+}
+
+/** A crossroads is finished: its road runs off into a new street, with woods of its own. */
+function openStreet(world: World, b: Building): void {
+  const street = layStreet(world, b);
+  // the road is cut through the woods it runs into, and the new street's own woods grow either side of it
+  clearRoad(world, street.cross!.parentX);
+  const x0 = streetStart(street.index);
+  world.trees.push(...createForest(WORLD_WIDTH, () => rand(world), () => world.nextId++, x0).filter((t) => !onRoad(world, t.x)));
+}
+
+/**
+ * The crossroads the rider is at, if it leads somewhere: the street it turns
+ * onto, and the same spot's x on that street.
+ */
+export function crossroadAt(world: World): { building: Building; street: number; x: number } | null {
+  const plot = plotAt(world, world.rider.x);
+  const b = getBuilding(world, plot?.buildingId ?? null);
+  if (!plot || !b || b.type !== 'intersection' || b.status !== 'done') return null;
+  const s = world.streets.find((o) => o.from === b.id);
+  if (!s?.cross) return null;
+  return plot.street === s.index ? { building: b, street: s.parent, x: s.cross.parentX } : { building: b, street: s.index, x: s.cross.x };
+}
+
+/**
+ * At a crossroads, turn onto the street crossing this one: `up` into the road
+ * running away from the viewer, `down` into the one coming towards them.
+ * Returns whether the rider turned.
+ */
+export function turnAtCrossroads(world: World, way: 'up' | 'down'): boolean {
+  const c = world.menu ? null : crossroadAt(world);
+  if (!c) return false;
+  const r = world.rider;
+  const facing = turnFacing(world, streetOf(r.x), c.street, way);
+  r.x = c.x;
+  r.facing = facing;
+  r.vx = facing * Math.abs(r.vx) * 0.5;
+  r.turnedAt = world.time;
+  return true;
 }
 
 // --- Build menu ------------------------------------------------------------
@@ -387,7 +464,7 @@ export function update(world: World, dt: number, input: MoveInput): void {
   updateRider(world, dt, world.menu ? { left: false, right: false } : input);
   staff(world);
   for (const b of world.buildings) if (b.farm) updateCrops(b.farm, dt);
-  updateForest(world, WORLD_WIDTH, dt, () => rand(world));
+  updateForest(world, dt, () => rand(world));
   updateWorkers(world, dt);
   // a site whose builders have done all the work is finished
   for (const b of world.buildings) if (b.site && b.progress >= 1) complete(world, b);
@@ -432,6 +509,8 @@ function updateWorkers(world: World, dt: number): void {
   const now = timeOfDay(world);
   for (const b of world.buildings) {
     const people = employees(world, b);
+    if (!people.length) continue;
+    const nav: Nav = { x: world.plots[b.plotIndex].x, route: (from, to) => route(world, from, to) };
     // each role at the building works at its own workplace, alongside the others in that role
     const places = new Map<Role, Workplace | null>();
     for (const p of people) {
@@ -453,7 +532,7 @@ function updateWorkers(world: World, dt: number): void {
         release(world, p);
         continue;
       }
-      updateWorker(w, place, dt, now, taken);
+      updateWorker(w, place, dt, now, taken, nav);
     }
   }
 }
@@ -470,9 +549,12 @@ function updateRider(world: World, dt: number, input: MoveInput): void {
     const dv = p.riderDecel * dt;
     r.vx = Math.abs(r.vx) <= dv ? 0 : r.vx - Math.sign(r.vx) * dv;
   }
+  // a street that isn't there (a broken save): back to the main street
+  if (!world.streets[streetOf(r.x)]) r.x = world.plots[0].x;
+  const { min: start, max: end } = streetRange(streetOf(r.x));
   r.x += r.vx * dt;
-  const min = 120;
-  const max = WORLD_WIDTH - 120;
+  const min = start + 120;
+  const max = end - 120;
   if (r.x < min || r.x > max) {
     r.x = Math.max(min, Math.min(max, r.x));
     r.vx = 0;

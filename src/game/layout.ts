@@ -5,6 +5,10 @@
 
 // --- Street (vertical layout, world units) --------------------------------------
 
+/** Length of a street (px); its plots start at FIRST_PLOT_X from its start. */
+export const STREET_LENGTH = 6400;
+export const FIRST_PLOT_X = 420;
+
 /** Scene height that zoom 1 fits to the screen. */
 export const VIEW_H = 600;
 /** Top of the road; buildings stand just behind it. */

@@ -3,6 +3,7 @@
 // fields, a distant village and a meadow behind the street (its trees and
 // the quarries are in the world: render/nature.ts).
 
+import { SIDE_ROAD_HALF } from '../game/streets';
 import { depthScale, groundTiles, groundX } from './ground';
 import { circle, type Ctx, ellipse, GROUND_Y, hash, mix, poly, rect, shade, smoke, VIEW_H } from './util';
 
@@ -260,6 +261,64 @@ function drawStreetGround(ctx: Ctx, v: View): void {
   f.addColorStop(1, '#3a4a1d');
   ctx.fillStyle = f;
   ctx.fillRect(0, 498, v.width, bottom - 498);
+}
+
+/**
+ * A road running off the street at a crossroads, at world x `x`: away from the
+ * viewer through the woods behind the street, fading into the meadow, and
+ * towards the viewer across the land in front of it. `alpha` < 1 while it is
+ * still being laid.
+ */
+export function drawSideRoad(ctx: Ctx, v: View, x: number, alpha = 1): void {
+  const vp = v.width / 2;
+  const sx = x - v.camX;
+  const hw = SIDE_ROAD_HALF;
+  const bottom = Math.max(VIEW_H, v.bottom);
+  // behind the street it narrows faster than the ground does, running off into the distance
+  const far = 396;
+  const street = GROUND_Y + 8;
+  const narrow = (y: number) => 0.45 + 0.55 * ((y - far) / (street - far));
+  const at = (y: number, side: -1 | 1, k = 1) => groundX(sx + side * hw * k, y, vp);
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  const g = ctx.createLinearGradient(0, far, 0, street);
+  g.addColorStop(0, 'rgba(168,135,91,0)');
+  g.addColorStop(0.4, 'rgba(168,135,91,0.85)');
+  g.addColorStop(1, '#a8875b');
+  poly(ctx, [at(far, -1, narrow(far)), far, at(far, 1, narrow(far)), far, at(street, 1), street, at(street, -1), street], undefined);
+  ctx.fillStyle = g;
+  ctx.fill();
+  // in front of the street, down to the bottom of the view
+  const near = 496;
+  const f = ctx.createLinearGradient(0, near, 0, bottom);
+  f.addColorStop(0, '#9b7a50');
+  f.addColorStop(0.3, '#b08e60');
+  f.addColorStop(1, '#94744b');
+  poly(ctx, [at(near, -1), near, at(near, 1), near, at(bottom, 1), bottom, at(bottom, -1), bottom], undefined);
+  ctx.fillStyle = f;
+  ctx.fill();
+  // grassy edges and wheel ruts, in the same perspective
+  ctx.globalAlpha = alpha * 0.35;
+  for (const k of [-0.4, 0.4]) {
+    ctx.beginPath();
+    ctx.moveTo(at(far + 12, 1, k * narrow(far + 12)), far + 12);
+    ctx.lineTo(at(street, 1, k), street);
+    ctx.moveTo(at(near, 1, k), near);
+    ctx.lineTo(at(bottom, 1, k), bottom);
+    ctx.strokeStyle = '#7e6040';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+  }
+  ctx.globalAlpha = alpha * 0.8;
+  for (const side of [-1, 1] as const) {
+    ctx.beginPath();
+    ctx.moveTo(at(near, side), near);
+    ctx.lineTo(at(bottom, side), bottom);
+    ctx.strokeStyle = '#5d7030';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 /** Tall grass and flowers in front of everything, nearest of all in the ground perspective. */

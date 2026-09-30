@@ -6,8 +6,9 @@
 import { employees } from '../game/people';
 import type { Worker } from '../game/worker';
 import { laidOut, onSite, upgrading } from '../game/site';
-import { canUpgrade, getBuilding, plotAt, WORLD_WIDTH, type Building, type World } from '../game/world';
-import { drawBackground, drawForeground, type View } from './background';
+import { crossings, streetOf, streetStart } from '../game/streets';
+import { canUpgrade, crossroadAt, getBuilding, plotAt, WORLD_WIDTH, type Building, type World } from '../game/world';
+import { drawBackground, drawForeground, drawSideRoad, type View } from './background';
 import { BUILDING_ART, type DrawArgs } from './buildings';
 import { drawConstruction, drawConstructionBehind, drawConstructionFront, drawUpgrade } from './construction';
 import { drawWorker } from './farm';
@@ -25,7 +26,9 @@ const BASE = GROUND_Y + 4;
 
 export function cameraX(world: World, viewW: number): number {
   const target = world.rider.x - viewW / 2 + world.rider.facing * viewW * 0.08;
-  return Math.max(0, Math.min(WORLD_WIDTH - viewW, target));
+  // the camera stays on the rider's street
+  const start = streetStart(streetOf(world.rider.x));
+  return Math.max(start, Math.min(start + WORLD_WIDTH - viewW, target));
 }
 
 export interface SceneView {
@@ -42,6 +45,8 @@ export interface SceneView {
   promptLabel: string;
   /** How to upgrade the building the rider is at, e.g. "Press ↓ or Space to upgrade". */
   upgradeLabel: string;
+  /** How to turn at a crossroads onto the street crossing this one. */
+  turnLabel: string;
   /** Overlay the land grid (debug view). */
   showGrid: boolean;
 }
@@ -50,11 +55,17 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   const { camX, width: viewW, labelScale: k } = sv;
   const v: View = { camX, width: viewW, top: sv.top, bottom: sv.bottom, time: world.time };
   drawBackground(ctx, v);
+  const onScreen = (x: number, margin = 280) => x - camX > -margin && x - camX < viewW + margin;
+  // roads running off at crossroads, and those still being laid
+  for (const c of crossings(world)) if (onScreen(c.x)) drawSideRoad(ctx, v, c.x);
+  for (const b of world.buildings) {
+    const x = world.plots[b.plotIndex].x;
+    if (b.type === 'intersection' && b.status !== 'done' && onScreen(x)) drawSideRoad(ctx, v, x, 0.15 + 0.85 * b.progress);
+  }
   // the woods and the quarries along the tree line, behind everything on the street
   drawQuarries(ctx, camX, viewW);
   drawTrees(ctx, world, camX, viewW);
 
-  const onScreen = (x: number, margin = 280) => x - camX > -margin && x - camX < viewW + margin;
   /** Screen x of something standing on the ground at world x and depth y (ground.ts). */
   const onGround = (x: number, y: number) => groundX(x - camX, y, viewW / 2);
   const args = (b: Building): DrawArgs => ({
@@ -112,6 +123,11 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     else if (b.status === 'done') BUILDING_ART[b.type].draw(ctx, a);
     else drawConstruction(ctx, b.type, a, b.progress);
   }
+  // a crossroads' fingerpost also stands on the street its road leads to
+  for (const c of crossings(world)) {
+    const b = getBuilding(world, c.buildingId);
+    if (b && world.plots[b.plotIndex].x !== c.x && onScreen(c.x)) BUILDING_ART.intersection.draw(ctx, { ...args(b), x: c.x - camX });
+  }
 
   // land in front of the road (farm front fields)
   for (const b of world.buildings) {
@@ -152,7 +168,10 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     const sx = plot.x - camX;
     const b = getBuilding(world, plot.buildingId);
     if (!b) drawPlotPrompt(ctx, sx, BASE, world.time, sv.promptLabel, k);
-    else if (b.status === 'done' && !b.site) drawBuildingLabel(ctx, world, b, sx, BASE - BUILDING_ART[b.type].height - 18, k, viewW, canUpgrade(b) ? sv.upgradeLabel : null);
+    else if (b.status === 'done' && !b.site) {
+      const turn = crossroadAt(world) ? sv.turnLabel : null;
+      drawBuildingLabel(ctx, world, b, sx, BASE - BUILDING_ART[b.type].height - 18, k, viewW, canUpgrade(b) ? sv.upgradeLabel : null, turn);
+    }
   }
 }
 

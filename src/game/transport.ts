@@ -25,6 +25,7 @@ import { putAway, storeSpot, tripLoad, warehouses } from './economy';
 import { STAND_Y, type Spot } from './layout';
 import { employees } from './people';
 import { RESOURCES, room, type Load, type Resource } from './resources';
+import { streetDist } from './streets';
 import { currentJob, delivering, type JobTicket, type Workplace } from './worker';
 import type { Building, World } from './world';
 
@@ -91,7 +92,7 @@ function nearestSource(world: World, runs: Underway[], r: Resource, x: number, n
   const places = world.buildings.filter(
     (b) => b !== not && b.status === 'done' && (b.type === 'warehouse' || BUILDINGS[b.type].ships?.includes(r)) && unclaimed(runs, b, r) > 1e-9,
   );
-  const d = (b: Building) => Math.abs(xOf(world, b) - x);
+  const d = (b: Building) => streetDist(world, x, xOf(world, b));
   return places.sort((a, b) => d(a) - d(b) || Number(a.type === 'warehouse') - Number(b.type === 'warehouse'))[0] ?? null;
 }
 
@@ -109,7 +110,7 @@ export function fetchFor(world: World, b: Building, r: Resource): Errand | null 
 
 /** Where what b makes goes: the nearest building that needs it and has room, else the nearest warehouse with room. */
 function shipTo(world: World, runs: Underway[], b: Building, r: Resource): Building | null {
-  const d = (o: Building) => Math.abs(xOf(world, o) - xOf(world, b));
+  const d = (o: Building) => streetDist(world, xOf(world, b), xOf(world, o));
   const byDistance = (list: Building[]) => list.sort((a, c) => d(a) - d(c))[0] ?? null;
   const users = world.buildings.filter((o) => o !== b && o.status === 'done' && BUILDINGS[o.type].needs?.includes(r) && roomLeft(runs, o, r) > 1e-9);
   return byDistance(users) ?? byDistance(warehouses(world).filter((w) => roomLeft(runs, w, r) > 1e-9));
@@ -140,7 +141,7 @@ export function errands(world: World, x = 0): Errand[] {
       if (e) plan(e);
     }
   }
-  return out.sort((a, b) => Math.abs(xOf(world, a.from) - x) - Math.abs(xOf(world, b.from) - x));
+  return out.sort((a, b) => streetDist(world, x, xOf(world, a.from)) - streetDist(world, x, xOf(world, b.from)));
 }
 
 /** Serf jobs the hub offers now: one per errand serfs are running or that is waiting, up to SERFS_MAX. */

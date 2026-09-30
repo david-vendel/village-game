@@ -5,6 +5,9 @@
 // grown trees, leaving a stump that rots away after STUMP_TIME. New saplings
 // sprout on their own now and then, wherever there is room.
 //
+// Every street has woods along it; where a road runs off at a crossroads the
+// trees are cut down for it, and none grow there again (onRoad).
+//
 // The quarries (QUARRIES) are rocky hills that come down to the tree line:
 // a stonecutter walks to the face and cuts blocks out of it, as many as
 // wanted.
@@ -17,8 +20,9 @@
 
 import { BUILDINGS } from './buildings';
 import { putAway, storeSpot } from './economy';
-import { CHOP_SPOT, PILE_UNIT, QUARRIES, QUARRY_SPOTS, QUARRY_W, QUARRY_Y, STONECUTTER_DOOR, WOODCUTTER_DOOR } from './layout';
+import { CHOP_SPOT, PILE_UNIT, QUARRIES, QUARRY_SPOTS, QUARRY_W, QUARRY_Y, STONECUTTER_DOOR, STREET_LENGTH, WOODCUTTER_DOOR } from './layout';
 import { room, type Load } from './resources';
+import { crossings, SIDE_ROAD_HALF, streetDist, streetStart } from './streets';
 import type { JobTicket, Workplace } from './worker';
 import type { Building, World } from './world';
 
@@ -61,10 +65,29 @@ export function treeGrowth(t: Tree): number {
   return t.state === 'growing' ? Math.min(1, t.age / TREE_GROW) : 1;
 }
 
-/** The woods at the start: an uneven line of trees along the street, most of them grown. */
-export function createForest(width: number, rand: () => number, nextId: () => number): Tree[] {
+/** Trees keep this far (px) from the middle of a road running off at a crossroads. */
+const ROAD_CLEAR = SIDE_ROAD_HALF + 28;
+
+/** Whether world x is where a road runs off at a crossroads (built or being built), so no tree stands there. */
+export function onRoad(world: World, x: number): boolean {
+  const near = (at: number) => Math.abs(at - x) < ROAD_CLEAR;
+  return crossings(world).some((c) => near(c.x)) || world.buildings.some((b) => b.type === 'intersection' && near(world.plots[b.plotIndex].x));
+}
+
+/** Cut the trees down where a road runs off at world x (they leave stumps, which rot away). */
+export function clearRoad(world: World, x: number): void {
+  for (const t of world.trees) {
+    if (t.state !== 'stump' && Math.abs(t.x - x) < ROAD_CLEAR) {
+      t.state = 'stump';
+      t.age = 0;
+    }
+  }
+}
+
+/** The woods at the start: an uneven line of trees along a street (starting at world x x0), most of them grown. */
+export function createForest(width: number, rand: () => number, nextId: () => number, x0 = 0): Tree[] {
   const trees: Tree[] = [];
-  for (let x = 60; x < width - 60; x += 70) {
+  for (let x = x0 + 60; x < x0 + width - 60; x += 70) {
     if (rand() < 0.3) continue;
     const tx = x + rand() * 40;
     if (!roomFor(trees, tx)) continue;
@@ -74,24 +97,25 @@ export function createForest(width: number, rand: () => number, nextId: () => nu
   return trees;
 }
 
-/** Trees grow, stumps rot, and now and then a sapling sprouts somewhere with room. */
-export function updateForest(world: World, width: number, dt: number, rand: () => number): void {
+/** Trees grow, stumps rot, and now and then a sapling sprouts somewhere with room, along any street. */
+export function updateForest(world: World, dt: number, rand: () => number): void {
   for (const t of world.trees) {
     t.age += dt;
     if (t.state === 'growing' && t.age >= TREE_GROW) t.state = 'grown';
   }
   world.trees = world.trees.filter((t) => t.state !== 'stump' || t.age < STUMP_TIME);
-  if (world.trees.length < MAX_TREES && rand() < dt / SPROUT_EVERY) {
-    const x = 60 + rand() * (width - 120);
-    if (roomFor(world.trees, x)) world.trees.push({ id: world.nextId++, x, state: 'growing', age: 0 });
+  const streets = world.streets.length;
+  if (world.trees.length < MAX_TREES * streets && rand() < dt / SPROUT_EVERY) {
+    const x = 60 + rand() * (STREET_LENGTH - 120) + (streets > 1 ? streetStart(Math.floor(rand() * streets)) : 0);
+    if (roomFor(world.trees, x) && !onRoad(world, x)) world.trees.push({ id: world.nextId++, x, state: 'growing', age: 0 });
   }
 }
 
-/** The quarry nearest world x. */
-function nearestQuarry(x: number): number {
+/** The quarry nearest world x (along the streets). */
+function nearestQuarry(world: World, x: number): number {
   let best = 0;
   QUARRIES.forEach((q, i) => {
-    if (Math.abs(q.x - x) < Math.abs(QUARRIES[best].x - x)) best = i;
+    if (streetDist(world, x, q.x) < streetDist(world, x, QUARRIES[best].x)) best = i;
   });
   return best;
 }
@@ -133,12 +157,12 @@ export function gatherWorkplace(world: World, b: Building & { type: GatherHut })
         const busy = new Set(taken.map((j) => j.target));
         let best: Tree | null = null;
         for (const t of world.trees) {
-          if (t.state !== 'grown' || busy.has(t.id) || Math.abs(t.x - x) > WOOD_REACH) continue;
-          if (!best || Math.abs(t.x - here) < Math.abs(best.x - here)) best = t;
+          if (t.state !== 'grown' || busy.has(t.id) || streetDist(world, x, t.x) > WOOD_REACH) continue;
+          if (!best || streetDist(world, here, t.x) < streetDist(world, here, best.x)) best = t;
         }
         if (best) job = { action, target: best.id };
       } else {
-        const q = nearestQuarry(x);
+        const q = nearestQuarry(world, x);
         const used = new Set(taken.filter((j) => j.target === q).map((j) => j.slot));
         const free = QUARRY_SPOTS.findIndex((_, k) => !used.has(k));
         if (free >= 0) job = { action, target: q, slot: free };

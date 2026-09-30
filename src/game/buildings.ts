@@ -21,7 +21,8 @@ export type BuildingType =
   | 'watchtower'
   | 'well'
   | 'woodcutter'
-  | 'stonecutter';
+  | 'stonecutter'
+  | 'intersection';
 
 /**
  * Jobs a building can offer (see people.ts); builders work on construction
@@ -236,6 +237,17 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     storage: { stone: 30 },
     jobs: { stonecutter: 1 },
     ships: ['stone'],
+  },
+  intersection: {
+    type: 'intersection',
+    name: 'Crossroads',
+    purpose: 'A road across the street, at right angles. Ride up to it and turn to follow the new street.',
+    // the road it opens is a street of its own (streets.ts); the footprint is where it meets this one
+    width: 60,
+    buildTime: 4,
+    cost: { wood: 10 },
+    storage: {},
+    jobs: {},
   },
 };
 
