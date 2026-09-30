@@ -2,8 +2,8 @@
 // of every resource (the village's stockpile, or a building's own store);
 // `Amounts` lists just some of them (a building cost, a store's capacity).
 
-export type Resource = 'wood' | 'stone' | 'grain' | 'flour';
-export const RESOURCES: readonly Resource[] = ['wood', 'stone', 'grain', 'flour'];
+export type Resource = 'wood' | 'stone' | 'grain' | 'flour' | 'bread';
+export const RESOURCES: readonly Resource[] = ['wood', 'stone', 'grain', 'flour', 'bread'];
 
 export type Stock = Record<Resource, number>;
 export type Amounts = Partial<Record<Resource, number>>;
@@ -20,7 +20,7 @@ export function total(a: Amounts): number {
 }
 
 export function stockOf(amounts: Amounts = {}): Stock {
-  return { wood: amounts.wood ?? 0, stone: amounts.stone ?? 0, grain: amounts.grain ?? 0, flour: amounts.flour ?? 0 };
+  return { wood: amounts.wood ?? 0, stone: amounts.stone ?? 0, grain: amounts.grain ?? 0, flour: amounts.flour ?? 0, bread: amounts.bread ?? 0 };
 }
 
 /** What is still missing to pay `cost` (empty when affordable). */

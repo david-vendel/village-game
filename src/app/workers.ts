@@ -59,6 +59,7 @@ function activity(world: World, p: Person): string {
       if (a === 'sow') return 'sowing a field';
       if (a === 'harvest') return 'harvesting a field';
       if (a === 'grind') return 'grinding grain into flour';
+      if (a === 'bake') return 'baking flour into bread';
       if (a === 'build') return `building ${place}`;
       if (resource(a, 'ship') || resource(a, 'supply')) return `picking up ${resource(a, 'ship') ?? resource(a, 'supply')} at ${named(t.job.target)}`;
       if (resource(a, 'take')) return `picking up ${resource(a, 'take')} from the pile`;

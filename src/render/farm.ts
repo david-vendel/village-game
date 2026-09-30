@@ -4,6 +4,7 @@
 // Fields lie on the ground, so their x goes through the ground perspective
 // (ground.ts), the same projection the land-grid overlay uses.
 
+import { BASKET } from '../game/bakery';
 import { type FarmState, type FieldPlot, growth } from '../game/farm';
 import { drawArm, drawHead, drawLegs, drawTorso, type Figure, HEAD, outfitOf, SHOULDER, swingHand } from './figure';
 import { DOOR_TIME, WALK_SPEED, type Worker } from '../game/worker';
@@ -175,7 +176,7 @@ export function doorProgress(f: Worker): number {
 }
 
 /**
- * A villager at work — the farmer, a builder, the miller or a serf, dressed
+ * A villager at work — the farmer, a builder, the miller, the baker or a serf, dressed
  * for their trade — walking, sowing, scything, hammering, loading up, or
  * carrying a load.
  */
@@ -274,7 +275,15 @@ export function drawWorker(ctx: Ctx, f: Worker, fig: Figure, x: number, y: numbe
   } else {
     const load = f.carrying?.resource;
     const onShoulder = load === 'flour' || load === 'grain' || load === 'wood';
-    if (load === 'stone') {
+    if (load === 'bread') {
+      // a basket of loaves held in both arms
+      body([6, -7.5]);
+      ctx.save();
+      ctx.translate(8, -4);
+      breadBasket(ctx, 0, 0, 0.9, Math.ceil(((f.carrying?.amount ?? 0) / BASKET) * 5));
+      ctx.restore();
+      drawArm(ctx, o, sx, sy, 7, -7);
+    } else if (load === 'stone') {
       // a block of stone held in both arms
       body([6, -7.5]);
       rect(ctx, 3, -12, 10, 7, '#aaa398');
@@ -323,4 +332,17 @@ function drawProgressPips(ctx: Ctx, t: number): void {
   ctx.beginPath();
   ctx.arc(0, -44, 4, -Math.PI / 2, -Math.PI / 2 + Math.PI * 2 * clamp01(t));
   ctx.stroke();
+}
+
+/** A wicker basket of loaves standing on the ground at x (fewer loaves when part-full, of 5). */
+export function breadBasket(ctx: Ctx, x: number, base: number, s = 1, loaves = 5): void {
+  const w = 12 * s;
+  const h = 6 * s;
+  for (let i = 0; i < Math.min(5, loaves); i++) {
+    const lx = x + (i % 3 - 1) * 3.6 * s + (i >= 3 ? 1.8 * s : 0);
+    ellipse(ctx, lx, base - h - (i >= 3 ? 2.6 : 0.6) * s, 2.6 * s, 1.9 * s, i % 2 ? '#b8743a' : '#c98a48', -0.2);
+  }
+  poly(ctx, [x - w / 2, base - h, x + w / 2, base - h, x + w / 2 - 1.5 * s, base, x - w / 2 + 1.5 * s, base], '#a07a46');
+  line(ctx, x - w / 2, base - h, x + w / 2, base - h, '#7a5a30', 1.2 * s);
+  line(ctx, x - w / 2 + 1, base - h / 2, x + w / 2 - 1, base - h / 2, '#8a6a3a', 0.8 * s);
 }

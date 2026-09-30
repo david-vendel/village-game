@@ -12,6 +12,7 @@ export type BuildingType =
   | 'house'
   | 'farm'
   | 'mill'
+  | 'bakery'
   | 'blacksmith'
   | 'market'
   | 'chapel'
@@ -26,8 +27,8 @@ export type BuildingType =
  * work takes it for as long as there is carrying to do. Serf comes last:
  * hiring fills the other jobs first.
  */
-export type Role = 'farmer' | 'builder' | 'miller' | 'serf';
-export const ROLES: readonly Role[] = ['farmer', 'builder', 'miller', 'serf'];
+export type Role = 'farmer' | 'builder' | 'miller' | 'baker' | 'serf';
+export const ROLES: readonly Role[] = ['farmer', 'builder', 'miller', 'baker', 'serf'];
 
 export interface BuildingDef {
   type: BuildingType;
@@ -53,11 +54,11 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   warehouse: {
     type: 'warehouse',
     name: 'Warehouse',
-    purpose: "Holds the village's wood, stone, grain and flour. Builders fetch from here.",
+    purpose: "Holds the village's wood, stone, grain, flour and bread. Builders fetch from here.",
     width: 170,
     buildTime: 14,
     cost: { wood: 60, stone: 40 },
-    storage: { wood: 300, stone: 300, grain: 100, flour: 100 },
+    storage: { wood: 300, stone: 300, grain: 100, flour: 100, bread: 100 },
     jobs: {},
   },
   house: {
@@ -95,6 +96,19 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     ships: ['flour'],
     needs: ['grain'],
   },
+  bakery: {
+    type: 'bakery',
+    name: 'Bakery',
+    purpose: 'Bakes flour from the mill into bread for the tavern.',
+    width: 150,
+    buildTime: 12,
+    cost: { wood: 40, stone: 50 },
+    // a sack of flour waiting per slot, a basket of loaves per slot (layout.ts BAKERY_SLOTS)
+    storage: { flour: 30, bread: 40 },
+    jobs: { baker: 1 },
+    ships: ['bread'],
+    needs: ['flour'],
+  },
   blacksmith: {
     type: 'blacksmith',
     name: 'Blacksmith',
@@ -128,12 +142,14 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   tavern: {
     type: 'tavern',
     name: 'Tavern',
-    purpose: 'Ale, songs and rumours for weary travellers.',
+    purpose: 'Ale, songs, rumours and bread for weary travellers.',
     width: 180,
     buildTime: 13,
     cost: { wood: 80, stone: 40 },
-    storage: {},
+    // baskets of loaves on the bench outside (layout.ts TAVERN_SLOTS); guests eat them (tavern.ts)
+    storage: { bread: 20 },
     jobs: {},
+    needs: ['bread'],
   },
   watchtower: {
     type: 'watchtower',

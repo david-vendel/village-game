@@ -27,7 +27,7 @@ import { RESOURCES, type Load, type Resource, type Stock } from './resources';
 import type { Worker, WorkerTask } from './worker';
 import { createWorld, type Building, type Rider, type World } from './world';
 
-export const SAVE_VERSION = 10;
+export const SAVE_VERSION = 11;
 
 /** How often (s) the village used to collect goods from stores (until v9); old migrations need it. */
 const OLD_COLLECT_EVERY = 30;
@@ -293,6 +293,28 @@ const MIGRATIONS: Record<number, (world: unknown) => unknown> = {
     }
     return world;
   },
+  // v11: bread, and the bakery (listed after the mill, so later menu entries move up one)
+  10: (world) => {
+    const list = (v: unknown) => (Array.isArray(v) ? (v as unknown[]) : []);
+    const rec = (v: unknown) => (typeof v === 'object' && v !== null ? (v as Raw) : undefined);
+    const w = rec(world);
+    if (!w) return world;
+    const addBread = (s: unknown) => {
+      const st = rec(s);
+      if (st) st.bread = 0;
+    };
+    for (const b of list(w.buildings).map(rec)) {
+      if (!b) continue;
+      addBread(b.stock);
+      const site = rec(b.site);
+      addBread(site?.delivered);
+      addBread(site?.pile);
+      for (const l of list(site?.laid)) addBread(l);
+    }
+    const bakery = BUILDING_TYPES.indexOf('bakery');
+    if (typeof w.lastSelection === 'number' && w.lastSelection >= bakery) w.lastSelection += 1;
+    return world;
+  },
 };
 
 /** Snapshot the world. The result shares nothing with the live world. */
@@ -457,7 +479,7 @@ function site(v: unknown, path: string, type: BuildingType): Site {
     const extra = laid.pop()!;
     for (const r of RESOURCES) laid[laid.length - 1][r] += extra[r];
   }
-  while (laid.length < spots) laid.push(stock({ wood: 0, stone: 0, grain: 0, flour: 0 }, path));
+  while (laid.length < spots) laid.push(stock({ wood: 0, stone: 0, grain: 0, flour: 0, bread: 0 }, path));
   return { delivered: stock(s.delivered, `${path}.delivered`), pile: stock(s.pile, `${path}.pile`), laid };
 }
 

@@ -4,11 +4,12 @@
 
 import type { BuildingType } from '../game/buildings';
 import { demoFarm, type FarmState } from '../game/farm';
-import { MILL_SLOTS, pileItems, WAREHOUSE_SHOWN, warehouseSlot } from '../game/layout';
+import { BASKET } from '../game/bakery';
+import { BAKERY_SLOTS, MILL_SLOTS, pileItems, TAVERN_SLOTS, WAREHOUSE_SHOWN, warehouseSlot, type Slot } from '../game/layout';
 import { SACK } from '../game/mill';
 import { stockOf, type Amounts, type Stock } from '../game/resources';
 import type { Worker } from '../game/worker';
-import { doorProgress, drawBackFences, drawBackField, drawFrontField, drawStore } from './farm';
+import { breadBasket, doorProgress, drawBackFences, drawBackField, drawFrontField, drawStore } from './farm';
 import { drawArm, drawHead, drawLegs, drawTorso, HEAD, outfitOf, SHOULDER } from './figure';
 import { circle, type Ctx, ellipse, hash, line, poly, rect, shade, smoke } from './util';
 
@@ -383,6 +384,88 @@ function drawWarehouse(ctx: Ctx, a: DrawArgs): void {
   }
   for (let i = 0; i < shown('grain'); i++) ellipse(ctx, a.x + warehouseSlot('grain', i).dx, a.base - 5, 4, 5.5, '#d8c79a');
   for (let i = 0; i < shown('flour'); i++) ellipse(ctx, a.x + warehouseSlot('flour', i).dx, a.base - 5, 4, 5.5, '#efe9da');
+  for (let i = 0; i < shown('bread'); i++) breadBasket(ctx, a.x + warehouseSlot('bread', i).dx, a.base, 0.75);
+}
+
+/** Baskets of loaves in a store's places: a full basket per BASKET loaves, the last one part-full. */
+function breadStore(ctx: Ctx, a: DrawArgs, slots: readonly Slot[]): void {
+  const bread = a.stock?.bread ?? 0;
+  const n = Math.min(slots.length, Math.ceil(bread / BASKET - 1e-9));
+  for (let i = 0; i < n; i++) {
+    const inBasket = Math.min(BASKET, bread - i * BASKET);
+    breadBasket(ctx, a.x + slots[i].dx, a.base - slots[i].lift, 1, Math.ceil((inBasket / BASKET) * 5));
+  }
+}
+
+function drawBakery(ctx: Ctx, a: DrawArgs): void {
+  // a low stone bakehouse with a domed bread oven built on at the side
+  const w = 90;
+  const d = 40;
+  const ox = d * OX;
+  const x0 = a.x - 55;
+  // the oven: a brick dome glowing at the mouth, its flue smoking
+  const ovx = x0 + w + ox + 8;
+  ctx.globalAlpha = 0.25;
+  ellipse(ctx, ovx, a.base + 1, 30, 4, '#2c2416');
+  ctx.globalAlpha = 1;
+  rect(ctx, ovx - 24, a.base - 12, 48, 12, '#a89c88');
+  const og = ctx.createLinearGradient(ovx - 22, 0, ovx + 22, 0);
+  og.addColorStop(0, '#c2764e');
+  og.addColorStop(1, '#7e4630');
+  ctx.fillStyle = og;
+  ctx.beginPath();
+  ctx.moveTo(ovx - 22, a.base - 12);
+  ctx.quadraticCurveTo(ovx - 22, a.base - 46, ovx, a.base - 46);
+  ctx.quadraticCurveTo(ovx + 22, a.base - 46, ovx + 22, a.base - 12);
+  ctx.fill();
+  ctx.globalAlpha = 0.3;
+  for (let y = a.base - 18; y > a.base - 42; y -= 6) line(ctx, ovx - 20 + (a.base - 12 - y) * 0.35, y, ovx + 20 - (a.base - 12 - y) * 0.35, y, '#4a2a1a', 1);
+  ctx.globalAlpha = 1;
+  const flick = 0.8 + Math.sin(a.time * 7) * 0.1 + Math.sin(a.time * 17) * 0.08;
+  ctx.fillStyle = '#2a1a12';
+  ctx.beginPath();
+  ctx.moveTo(ovx - 9, a.base - 12);
+  ctx.arc(ovx, a.base - 12, 9, Math.PI, 0);
+  ctx.fill();
+  ctx.globalAlpha = flick;
+  ctx.fillStyle = '#f0a040';
+  ctx.beginPath();
+  ctx.moveTo(ovx - 6, a.base - 12);
+  ctx.arc(ovx, a.base - 12, 6, Math.PI, 0);
+  ctx.fill();
+  ctx.globalAlpha = 1;
+  rect(ctx, ovx + 8, a.base - 58, 8, 16, '#8a5a40');
+  smoke(ctx, ovx + 12, a.base - 60, a.time, a.seed, 0.8);
+  // the bakehouse
+  stonePlinth(ctx, x0, a.base, w, 12, d);
+  block(ctx, x0, a.base - 12, w, 40, d, '#e9d6b0');
+  timberFrame(ctx, x0, a.base - 12, w, 40, a.seed + 5);
+  door(ctx, x0 + 36, a.base, 20, 34, '#6b4a2c');
+  window_(ctx, x0 + 10, a.base - 42, 14, 14, true, a.time, a.seed);
+  window_(ctx, x0 + 66, a.base - 42, 14, 14, true, a.time, a.seed + 2);
+  const r = gableRoof(ctx, x0, a.base - 52, w, d, 42, '#a4553a', '#e9d6b0', 'tile', a.seed);
+  chimney(ctx, r.ridgeX1 + 14, r.ridgeY + 10, 16, a, 0.5);
+  // hanging sign with a loaf
+  const sx = x0 - 4;
+  line(ctx, sx, a.base - 50, sx - 22, a.base - 50, '#3a281b', 3);
+  ctx.save();
+  ctx.translate(sx - 14, a.base - 50);
+  ctx.rotate(Math.sin(a.time * 1.1 + 1) * 0.08);
+  line(ctx, -6, 0, -6, 5, '#333', 1);
+  line(ctx, 6, 0, 6, 5, '#333', 1);
+  rect(ctx, -10, 5, 20, 15, '#7a5230');
+  ellipse(ctx, 0, 12.5, 7, 4, '#c98a48');
+  line(ctx, -3, 11, -1, 14, '#8a5a2a', 1);
+  line(ctx, 1, 11, 3, 14, '#8a5a2a', 1);
+  ctx.restore();
+  // the store: sacks of flour waiting left of the door, baskets of loaves right of it
+  const sacks = Math.min(BAKERY_SLOTS.flour.length, Math.ceil((a.stock?.flour ?? 0) / SACK - 1e-9));
+  for (let i = 0; i < sacks; i++) {
+    const s = BAKERY_SLOTS.flour[i];
+    ellipse(ctx, a.x + s.dx, a.base - 6 - s.lift, 7, 7, '#e8e0cc');
+    ellipse(ctx, a.x + s.dx + 2, a.base - 5 - s.lift, 4, 5, '#cbbfa4');
+  }
+  breadStore(ctx, a, BAKERY_SLOTS.bread);
 }
 
 function drawMill(ctx: Ctx, a: DrawArgs): void {
@@ -685,6 +768,8 @@ function drawTavern(ctx: Ctx, a: DrawArgs): void {
   rect(ctx, x0 + 6, a.base - 10, 36, 3, '#6b4a2c');
   rect(ctx, x0 + 8, a.base - 7, 3, 7, '#5a3d24');
   rect(ctx, x0 + 37, a.base - 7, 3, 7, '#5a3d24');
+  // baskets of bread on the bench for the guests
+  breadStore(ctx, a, TAVERN_SLOTS);
 }
 
 function drawWatchtower(ctx: Ctx, a: DrawArgs): void {
@@ -778,6 +863,7 @@ export const BUILDING_ART: Record<BuildingType, BuildingArt> = {
   house: { height: 140, draw: drawHouse },
   farm: { height: 120, behind: drawFarmField, draw: drawFarm, front: drawFarmFrontField },
   mill: { height: 250, draw: drawMill },
+  bakery: { height: 120, draw: drawBakery },
   blacksmith: { height: 150, draw: drawBlacksmith },
   market: { height: 110, draw: drawMarket },
   chapel: { height: 270, draw: drawChapel },
@@ -788,7 +874,7 @@ export const BUILDING_ART: Record<BuildingType, BuildingArt> = {
 
 const DEMO_FARM = demoFarm();
 /** Menu previews show a half-full store. */
-const DEMO_STOCK = stockOf({ grain: 3, wood: 60, stone: 50 });
+const DEMO_STOCK = stockOf({ grain: 3, wood: 60, stone: 50, flour: 20, bread: 25 });
 
 /** Small icon-sized preview for the build menu (draws the real art, scaled). */
 export function drawBuildingIcon(ctx: Ctx, type: BuildingType, x: number, base: number, scale: number, time: number): void {

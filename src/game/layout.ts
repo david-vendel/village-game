@@ -118,14 +118,14 @@ function pyramid(i: number, rows: readonly number[]): { row: number; col: number
 }
 
 /** Most items a warehouse shows outside, per resource (the rest is indoors). */
-export const WAREHOUSE_SHOWN = { wood: 12, stone: 10, grain: 4, flour: 4 } as const;
+export const WAREHOUSE_SHOWN = { wood: 12, stone: 10, grain: 4, flour: 4, bread: 3 } as const;
 
 /**
  * The warehouse's stacks: logs piled against the right-hand wall, a stone heap
- * on the left, sacks of grain along the front left of the doors and sacks of
- * flour to their right. Item i (0 = bottom of the stack).
+ * on the left, sacks of grain along the front left of the doors, sacks of
+ * flour to their right and baskets of bread beside them. Item i (0 = bottom of the stack).
  */
-export function warehouseSlot(r: 'wood' | 'stone' | 'grain' | 'flour', i: number): Slot {
+export function warehouseSlot(r: 'wood' | 'stone' | 'grain' | 'flour' | 'bread', i: number): Slot {
   const n = Math.max(0, Math.min(i, WAREHOUSE_SHOWN[r] - 1));
   if (r === 'wood') {
     const { row, col } = pyramid(n, [5, 4, 2, 1]);
@@ -136,6 +136,7 @@ export function warehouseSlot(r: 'wood' | 'stone' | 'grain' | 'flour', i: number
     return { dx: -110.75 + col * 7 + row * 3.5, lift: 2.5 + row * 5 };
   }
   if (r === 'flour') return { dx: -10 + n * 8, lift: 0 };
+  if (r === 'bread') return { dx: 24 + n * 7, lift: 0 };
   return { dx: -72 + n * 8, lift: 0 };
 }
 
@@ -172,3 +173,27 @@ export const MILL_SLOTS: Record<'grain' | 'flour', readonly Slot[]> = {
     { dx: 34, lift: 9 },
   ],
 };
+
+/** The bakery's door, where the baker goes in and out and bakes. */
+export const BAKERY_DOOR: Spot = { dx: -9, y: STAND_Y };
+
+/** The bakery's store: sacks of flour waiting left of the door, baskets of loaves right of it (bottom row first). */
+export const BAKERY_SLOTS: Record<'flour' | 'bread', readonly Slot[]> = {
+  flour: [
+    { dx: -42, lift: 0 },
+    { dx: -30, lift: 0 },
+    { dx: -36, lift: 9 },
+  ],
+  bread: [
+    { dx: 10, lift: 0 },
+    { dx: 21, lift: 0 },
+    { dx: 32, lift: 0 },
+    { dx: 21, lift: 7 },
+  ],
+};
+
+/** Baskets of loaves on the bench in front of the tavern, where its guests help themselves. */
+export const TAVERN_SLOTS: readonly Slot[] = [
+  { dx: -62, lift: 10 },
+  { dx: -48, lift: 10 },
+];

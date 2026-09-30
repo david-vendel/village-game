@@ -85,7 +85,7 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   people and animals, the village `stock`pile, rider physics, build menu, construction progress
   and stages, the construction toggle, events. `workplaceOf` says what work a building gives its
   workers. Tested by `world.test.ts`.
-- `resources.ts`: resources (wood, stone, grain, flour), `Stock` (an amount of each) and `Amounts` (some
+- `resources.ts`: resources (wood, stone, grain, flour, bread), `Stock` (an amount of each) and `Amounts` (some
   of them, e.g. a cost), with affordability and payment helpers.
 - `economy.ts`: the village's materials are what its warehouses hold (the starting warehouse
   has `WAREHOUSE_START`). A new building can start only if the warehouses hold its cost beyond
@@ -99,6 +99,12 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   and let go where they stand when there are none.
 - `mill.ts`: the mill as a workplace: its miller grinds a sack of grain (`SACK`) into flour in
   `GRIND_TIME`, in the mill's store (grain left of the door, flour right, `MILL_SLOTS`).
+- `bakery.ts`: the bakery as a workplace: its baker bakes a sack of flour into twice as many
+  loaves (`LOAVES_PER_FLOUR`) in `BAKE_TIME`, in the bakery's store (flour left of the door, baskets
+  of `BASKET` loaves right, `BAKERY_SLOTS`). Serfs bring flour and take the bread to a warehouse.
+- `tavern.ts`: the tavern `needs` bread (serfs bring it from a warehouse to the baskets on its
+  bench, `TAVERN_SLOTS`); its guests eat a loaf every `LOAF_HOURS` game hours, worked out from the
+  day clock.
 - `site.ts`: construction. A placed building is a site that hires up to `BUILDERS_PER_SITE`
   idle villagers as builders (day labour: no lunch, let go at nightfall, hired again in the
   morning). They take its cost off the nearest warehouse's stacks `LOAD_SIZE` at a time and
@@ -224,6 +230,6 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
 ## Not done yet / ideas
 
 - Wood and stone can't be produced yet (no woodcutter or quarry), so the starting warehouse is
-  all there is. Grain piles up in the warehouse with nothing to use it. New people don't arrive
+  all there is.  New people don't arrive
   (houses could house newcomers), and there is no way to fire or reassign a worker.
 - No music. No lit windows or lanterns at night yet. One save slot; no offline progress while the page is closed.

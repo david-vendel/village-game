@@ -31,7 +31,7 @@ const STAGE_LABEL: Record<ConstructionStage, string> = {
 };
 
 /** On-screen names of the jobs. */
-const ROLE_NAME: Record<Role, string> = { farmer: 'Farmer', builder: 'Builders', miller: 'Miller', serf: 'Serfs' };
+const ROLE_NAME: Record<Role, string> = { farmer: 'Farmer', builder: 'Builders', miller: 'Miller', baker: 'Baker', serf: 'Serfs' };
 
 /** "50 wood · 20 stone" (only the resources present). */
 function amounts(a: Amounts): string {

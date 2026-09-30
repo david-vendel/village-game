@@ -3,13 +3,14 @@
 // and the rider, and runs each part's update in turn.
 // What is specific to one kind of thing lives in its own module: farm.ts
 // (fields), people.ts (villagers, hiring), worker.ts (the working day),
-// economy.ts (warehouses, costs), site.ts (construction by builders),
+// economy.ts (warehouses, costs), mill.ts / bakery.ts (their work), tavern.ts (guests eating), site.ts (construction by builders),
 // land.ts (who uses which land).
 //
 // Nobody and nothing ever jumps: people walk everywhere from where they
 // stand (hired, let go, or done for the day), and goods only move in
 // someone's arms, from the place they lie to the place they will lie.
 
+import { bakeryWorkplace } from './bakery';
 import { BUILDINGS, BUILDING_TYPES, type BuildingType } from './buildings';
 import { timeOfDay } from './daynight';
 import { buildShortfall, putAway, takeFromWarehouses, WAREHOUSE_START } from './economy';
@@ -20,6 +21,7 @@ import { millWorkplace } from './mill';
 import { employees, laneY, nameFor, openings, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
 import { BUILDERS_PER_SITE, createSite, siteWorkplace, type Site } from './site';
 import { RESOURCES, stockOf, type Stock } from './resources';
+import { eatAtTaverns } from './tavern';
 import { serfPositions, transportHub, transportWorkplace } from './transport';
 import { createWorker, currentJob, offDuty, updateWorker, type Worker, type Workplace } from './worker';
 
@@ -342,7 +344,9 @@ export function closeMenu(world: World): void {
 
 export function update(world: World, dt: number, input: MoveInput): void {
   world.time += dt;
+  const clockBefore = world.dayClock;
   world.dayClock += dt * world.params.timeSpeed;
+  eatAtTaverns(world, clockBefore);
   updateRider(world, dt, world.menu ? { left: false, right: false } : input);
   staff(world);
   for (const b of world.buildings) if (b.farm) updateCrops(b.farm, dt);
@@ -357,6 +361,7 @@ export function workplaceOf(world: World, b: Building): Workplace | null {
   if (b.site) return siteWorkplace(world, b, world.params.buildSpeed);
   if (b.farm) return farmWorkplace(b.farm, b.stock, world.params);
   if (b.type === 'mill' && b.status === 'done') return millWorkplace(b.stock);
+  if (b.type === 'bakery' && b.status === 'done') return bakeryWorkplace(b.stock);
   if (b === transportHub(world)) return transportWorkplace(world, b);
   return null;
 }

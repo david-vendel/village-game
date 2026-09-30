@@ -35,6 +35,7 @@ function carryOf(f: Figure): Carry {
   if (f.look === 'woman') return r < 0.4 ? 'basket' : 'none';
   if (f.role === 'farmer') return 'tool';
   if (f.role === 'miller' || f.role === 'serf') return r < 0.5 ? 'sack' : 'none';
+  if (f.role === 'baker') return r < 0.6 ? 'basket' : 'none';
   return r < 0.3 ? 'sack' : 'none';
 }
 
