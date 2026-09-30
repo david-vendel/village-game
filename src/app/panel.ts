@@ -1,9 +1,14 @@
 // Collapsible side panels (the workers list on the left, tuning on the right).
-// Collapsed, a panel is just a small expand chip at its edge of the screen;
+// Collapsed, a panel is just a small green expand button at its edge of the
+// screen (like a Mac window's green button);
 // whether each is open is remembered in this browser.
 
-const PANEL_BG = 'rgba(20,14,8,0.78)';
-const PANEL_BORDER = '1px solid rgba(232,200,114,0.25)';
+/** The green button: arrows out to the corners to expand, in to the middle to collapse. */
+const ARROWS = { expand: '4,4 8.3,4 4,8.3 M10,10 5.7,10 10,5.7', collapse: '6.6,6.6 2.9,6.6 6.6,2.9 M7.4,7.4 11.1,7.4 7.4,11.1' };
+const icon = (arrows: string) =>
+  '<svg width="14" height="14" viewBox="0 0 14 14" style="display:block">' +
+  '<circle cx="7" cy="7" r="6.5" fill="#28c840" stroke="#1aab29" stroke-width="1"/>' +
+  `<path d="M${arrows.replace(' M', 'Z M')}Z" fill="#0b5a16"/></svg>`;
 
 const remembered = (key: string): boolean | null => {
   try {
@@ -23,14 +28,13 @@ const remember = (key: string, open: boolean) => {
 
 /**
  * Make a fixed side panel collapsible. `root` is the positioned panel, `content`
- * everything inside it; the toggle chip goes at the top of `root`.
+ * everything inside it; the toggle button goes at the top of `root`.
  */
 export function makeCollapsible(root: HTMLElement, content: HTMLElement, side: 'left' | 'right', key: string): void {
   const expanded = root.style.cssText;
   const button = document.createElement('button');
   button.style.cssText =
-    'display:block;font:14px/1 ui-monospace,SFMono-Regular,Menlo,monospace;color:#e8c872;' +
-    'background:none;border:none;padding:0 2px;cursor:pointer;pointer-events:auto;' +
+    'display:block;background:none;border:none;padding:0;cursor:pointer;pointer-events:auto;' +
     // at the panel's outer edge, where it folds away to
     `margin-${side === 'left' ? 'right' : 'left'}:auto`;
   root.prepend(button);
@@ -38,11 +42,11 @@ export function makeCollapsible(root: HTMLElement, content: HTMLElement, side: '
 
   const set = (open: boolean) => {
     content.style.display = open ? '' : 'none';
-    // pointing towards the edge it folds into, or out of it to expand
-    button.textContent = open === (side === 'left') ? '‹' : '›';
+    button.innerHTML = icon(open ? ARROWS.collapse : ARROWS.expand);
     button.title = open ? 'collapse' : 'expand';
     root.style.cssText = expanded;
-    if (!open) Object.assign(root.style, { padding: '4px 6px', background: PANEL_BG, border: PANEL_BORDER, borderRadius: '6px' });
+    // collapsed: nothing but the button
+    if (!open) Object.assign(root.style, { padding: '0', background: 'none', border: 'none' });
     remember(key, open);
   };
   button.addEventListener('click', () => {
