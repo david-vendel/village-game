@@ -94,7 +94,7 @@ export function staffBuildings(world: World, hire: (b: Building, role: Role, who
         const x = world.plots[b.plotIndex].x;
         // everyone keeps their profession: builders build, the farmer farms
         const free = world.people.filter((p) => !p.job && p.profession === role).sort((a, c) => Math.abs(a.stroll.x - x) - Math.abs(c.stroll.x - x));
-        if (!free.length) return; // nobody left to hire
+        if (!free.length) break; // nobody free for this job: on to the next
         free[0].job = { buildingId: b.id, role, worker: hire(b, role, free[0]) };
       }
     }
