@@ -1,22 +1,27 @@
 // Farm simulation. Each finished farm has field plots behind the farmstead
 // and in front of the road, a farmer, and a grain store (0–5 sheaves).
 //
+// Which land the fields cover comes from the land grid (see land.ts): plots
+// fill free cells around the farmstead, and change when a neighbour builds.
+//
 // The farmer works one plot at a time: walk out → sow → walk back to the
 // farm (the plot then grows on its own clock) — or, once a plot is ripe and
 // there is room in the store, walk out → harvest → carry the sheaf back and
 // stack it in front of the house.
-
-
-import { BACK_DX, FRONT_DX, HOME, PLOT_W, STORE, WORK_Y, type FieldZone } from './layout';
+import { BUILDINGS } from './buildings';
+import { CELL_W, FIELD_REACH, HOME, PLOT_CELLS, STORE, WORK_Y, type FieldZone } from './layout';
 
 export type { FieldZone };
 export type PlotState = 'fallow' | 'growing' | 'ripe';
 
-export interface FieldPlot {
+/** Where a field plot lies: zone, centre x relative to the farm's centre, width. */
+export interface FieldSpot {
   zone: FieldZone;
-  /** Centre x relative to the farm's centre. */
   dx: number;
   width: number;
+}
+
+export interface FieldPlot extends FieldSpot {
   state: PlotState;
   /** Seconds since sowing (only meaningful while growing / ripe). */
   age: number;
@@ -53,11 +58,78 @@ export const SOW_TIME = 2.5;
 export const HARVEST_TIME = 3;
 export const FARMER_SPEED = 42; // px/s
 
-export function createFarm(opts: { established?: boolean } = {}): FarmState {
-  const plots: FieldPlot[] = [
-    ...BACK_DX.map((dx): FieldPlot => ({ zone: 'back', dx, width: PLOT_W.back, state: 'fallow', age: 0 })),
-    ...FRONT_DX.map((dx): FieldPlot => ({ zone: 'front', dx, width: PLOT_W.front, state: 'fallow', age: 0 })),
-  ];
+/**
+ * Cut the free land around a farm into field plots. `isFree(zone, c)` says
+ * whether grid cell `c` (relative to the farm centre: it covers dx from
+ * c·CELL_W to (c+1)·CELL_W) may be farmed. Each run of free cells is split
+ * into plots working outward from the farm; a lone leftover cell joins the
+ * plot next to it, and a run too short for a plot stays grass.
+ */
+export function fieldSpots(isFree: (zone: FieldZone, c: number) => boolean): FieldSpot[] {
+  const reach = Math.floor(FIELD_REACH / CELL_W);
+  const spots: FieldSpot[] = [];
+  for (const zone of ['back', 'front'] as const) {
+    for (const side of [-1, 1]) {
+      // cells walking outward from the farm centre on this side
+      const cells = Array.from({ length: reach }, (_, i) => (side > 0 ? i : -1 - i));
+      let run: number[] = [];
+      const flush = () => {
+        const chunks: number[][] = [];
+        for (let i = 0; i < run.length; i += PLOT_CELLS.max) chunks.push(run.slice(i, i + PLOT_CELLS.max));
+        const last = chunks[chunks.length - 1];
+        if (last && last.length < PLOT_CELLS.min) {
+          chunks.pop();
+          if (chunks.length) chunks[chunks.length - 1].push(...last);
+        }
+        for (const ch of chunks) {
+          const lo = Math.min(...ch);
+          spots.push({ zone, dx: (lo + ch.length / 2) * CELL_W, width: ch.length * CELL_W });
+        }
+        run = [];
+      };
+      for (const c of cells) {
+        if (isFree(zone, c)) run.push(c);
+        else flush();
+      }
+      flush();
+    }
+  }
+  return spots;
+}
+
+/** Cells (relative to the centre) a building of this width covers: [-n, n). */
+export function footprintHalfCells(width: number): number {
+  return Math.ceil(width / 2 / CELL_W);
+}
+
+/** Fields of a farm with nothing built around it. */
+export function openFieldSpots(): FieldSpot[] {
+  const n = footprintHalfCells(BUILDINGS.farm.width);
+  return fieldSpots((zone, c) => zone === 'front' || c < -n || c >= n);
+}
+
+const spotKey = (s: FieldSpot) => `${s.zone}:${s.dx}:${s.width}`;
+
+/**
+ * Re-lay the fields on new land. Plots that keep their exact spot keep their
+ * crop; others start fallow. A farmer heading to or working a plot that is
+ * gone walks home.
+ */
+export function setFieldSpots(farm: FarmState, spots: FieldSpot[]): void {
+  const old = new Map(farm.plots.map((p) => [spotKey(p), p]));
+  const plots = spots.map((s): FieldPlot => old.get(spotKey(s)) ?? { ...s, state: 'fallow', age: 0 });
+  const f = farm.farmer;
+  const t = f.task;
+  if ((t.kind === 'walk' && t.then === 'work') || t.kind === 'work') {
+    const next = plots.indexOf(farm.plots[t.plot]);
+    if (next >= 0) t.plot = next;
+    else walkTo(f, HOME.dx, HOME.y, 'home', -1, null);
+  }
+  farm.plots = plots;
+}
+
+export function createFarm(opts: { established?: boolean; spots?: FieldSpot[] } = {}): FarmState {
+  const plots = (opts.spots ?? openFieldSpots()).map((s): FieldPlot => ({ ...s, state: 'fallow', age: 0 }));
   const farm: FarmState = {
     plots,
     farmer: { dx: HOME.dx, y: HOME.y, facing: 1, carrying: false, task: { kind: 'idle', wait: 0.5 }, stride: 0 },

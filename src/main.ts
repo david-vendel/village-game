@@ -4,6 +4,7 @@
 import { announceEvents, createActions } from './app/actions';
 import { installControls } from './app/controls';
 import { createScreen } from './app/screen';
+import { createSound } from './app/sound';
 import { installTuning } from './app/tuning';
 import { createWorld, update } from './game/world';
 import { cameraX, renderFrame, type Toast } from './render';
@@ -18,9 +19,10 @@ const notify = (text: string) => {
   toasts.push({ text, at: world.time });
   while (toasts.length > 4) toasts.shift();
 };
-const actions = createActions(world, notify, () => screen.touch);
+const sound = createSound();
+const actions = createActions(world, notify, () => screen.touch, sound);
 const controls = installControls(world, screen, actions);
-installTuning(world);
+const display = installTuning(world, sound);
 
 let camX = cameraX(world, screen.vp.viewW);
 let last = performance.now();
@@ -30,6 +32,7 @@ function frame(now: number): void {
   last = now;
 
   update(world, dt, controls.move());
+  sound.frame(world, dt);
   announceEvents(world, notify);
 
   // smooth camera follow
@@ -39,7 +42,7 @@ function frame(now: number): void {
   if (Math.abs(target - camX) > vp.viewW) camX = target;
 
   const held = controls.touchHeld();
-  renderFrame(ctx, world, { ...vp, camX, touch: screen.touch, leftHeld: held.left, rightHeld: held.right, toasts });
+  renderFrame(ctx, world, { ...vp, camX, touch: screen.touch, leftHeld: held.left, rightHeld: held.right, toasts, showGrid: display.grid });
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

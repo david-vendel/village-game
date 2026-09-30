@@ -169,7 +169,7 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
   text(ctx, 'Village Crown', 16, 34, 24, GOLD, 'left', true);
   const lines = st.touch
     ? ['Hold the arrows to ride, hammer to build', 'Pinch or tap - + to zoom']
-    : ['← → ride   ↓ / Space build   C construction', '- + or mouse wheel to zoom'];
+    : ['← → ride   ↓ / Space build   C construction   M sound', '- + or mouse wheel to zoom'];
   const maxW = L.zoomOut.x - 28;
   let y = 54;
   for (const s of lines) {

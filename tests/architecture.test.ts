@@ -59,6 +59,8 @@ const MUTATORS = [
   'moveMenu',
   'selectMenu',
   'updateFarm',
+  'setFieldSpots',
+  'syncFarmFields',
   'rand',
 ];
 

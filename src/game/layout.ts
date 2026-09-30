@@ -25,14 +25,19 @@ export const BACK_FIELD = { front: BASE_Y - 3, back: BASE_Y - 30 };
 /** Front field: between the road and the viewer, so it takes more screen height. */
 export const FRONT_FIELD = { top: 512, bottom: VIEW_H - 14 };
 
-/** Back plots flank the farmstead so the farmer stays in view while working them. */
-export const BACK_DX = [-180, -118, 118, 180];
-/**
- * The front field spans the same width as the back one. Being closer to the
- * viewer, its plots look bigger, so fewer of them fit across.
- */
-export const FRONT_DX = [-168, -84, 0, 84, 168];
-export const PLOT_W: Record<FieldZone, number> = { back: 60, front: 84 };
+// --- Land grid ---------------------------------------------------------------------
+// The street is cut into cells CELL_W wide, in two rows: 'back' (the lots behind
+// the road, where buildings stand) and 'front' (the land between the road and the
+// viewer). A building's footprint covers whole cells, and farm fields may only
+// use cells that no building covers. Building plot centres fall on cell edges.
+
+export const CELL_W = 25;
+/** World x of the left edge of cell 0. */
+export const GRID_X0 = 20;
+/** How far (px from the farm centre) a farm's fields may reach, in both rows. */
+export const FIELD_REACH = 225;
+/** A field plot spans 2..MAX cells; a lone free cell stays grass. */
+export const PLOT_CELLS = { min: 2, max: 3 };
 
 /** Where the farmer stands in each zone while working a plot. */
 export const WORK_Y: Record<FieldZone, number> = {
@@ -42,4 +47,4 @@ export const WORK_Y: Record<FieldZone, number> = {
 /** The farmyard: the farmer's home spot, by the farmhouse door. */
 export const HOME = { dx: -24, y: BASE_Y + 3 };
 /** The grain store, between the farmhouse and the street. */
-export const STORE = { dx: -86, y: BASE_Y + 3 };
+export const STORE = { dx: -76, y: BASE_Y + 3 };

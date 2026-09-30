@@ -18,7 +18,7 @@ export interface BuildingDef {
   type: BuildingType;
   name: string;
   purpose: string;
-  /** Footprint width in world px (must fit a plot). */
+  /** Footprint width in world px (must fit a plot). Rounded up to whole land-grid cells. */
   width: number;
   /** Seconds to construct when construction is enabled. */
   buildTime: number;
@@ -36,7 +36,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     type: 'farm',
     name: 'Farm',
     purpose: 'A farmstead with wheat fields. Feeds the village.',
-    width: 150,
+    // farmhouse, barn and grain store; the fields use free land around it
+    width: 200,
     buildTime: 12,
   },
   mill: {

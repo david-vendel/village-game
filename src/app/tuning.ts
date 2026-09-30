@@ -1,20 +1,26 @@
-// Tuning panel: DOM sliders on the right edge that edit world.params live.
-// Each knob writes its value into the URL (replaceState), so a setting
-// survives a reload and can be sent as a link. Same pattern as ../hollow.
+// Tuning panel: DOM sliders on the right edge that edit world.params (and the
+// sound volume) live. Each knob writes its value into the URL (replaceState),
+// so a setting survives a reload and can be sent as a link. Same pattern as
+// ../hollow.
 
 import { DEFAULT_PARAMS, type World, type WorldParams } from '../game/world';
+import type { Sound } from './sound';
 
 interface Knob {
-  key: keyof WorldParams;
   /** URL query name. */
   param: string;
   min: number;
   max: number;
   step: number;
+  def: number;
+  get: () => number;
+  set: (v: number) => void;
   render: (v: number) => string;
 }
 
-const KNOBS: Knob[] = [
+type WorldKnob = Pick<Knob, 'param' | 'min' | 'max' | 'step' | 'render'> & { key: keyof WorldParams };
+
+const WORLD_KNOBS: WorldKnob[] = [
   { key: 'riderMaxSpeed', param: 'hspeed', min: 60, max: 600, step: 10, render: (v) => `horse speed ${v} px/s` },
   { key: 'riderAccel', param: 'haccel', min: 100, max: 2000, step: 20, render: (v) => `horse accel ${v} px/s²` },
   { key: 'riderDecel', param: 'hbrake', min: 100, max: 2000, step: 20, render: (v) => `horse braking ${v} px/s²` },
@@ -28,7 +34,36 @@ function setUrlParam(name: string, v: number | null): void {
   window.history.replaceState(null, '', u);
 }
 
-export function installTuning(world: World): HTMLElement {
+/** Display toggles from the panel, read by the frame loop each frame. */
+export interface DisplayOptions {
+  /** Overlay the land grid (URL: grid=1). */
+  grid: boolean;
+}
+
+export function installTuning(world: World, sound: Sound): DisplayOptions {
+  const knobs: Knob[] = [
+    ...WORLD_KNOBS.map(({ key, ...k }) => ({
+      ...k,
+      def: DEFAULT_PARAMS[key],
+      get: () => world.params[key],
+      set: (v: number) => {
+        world.params[key] = v;
+      },
+    })),
+    {
+      param: 'vol',
+      min: 0,
+      max: 100,
+      step: 5,
+      def: 60,
+      get: () => Math.round(sound.volume * 100),
+      set: (v) => {
+        sound.volume = v / 100;
+      },
+      render: (v) => `volume ${v}%  (M mutes)`,
+    },
+  ];
+
   const params = new URLSearchParams(window.location.search);
   const root = document.createElement('div');
   root.style.cssText =
@@ -37,9 +72,10 @@ export function installTuning(world: World): HTMLElement {
     'background:rgba(20,14,8,0.78);border:1px solid rgba(232,200,114,0.25);' +
     'border-radius:8px;padding:8px 12px 10px;user-select:none;text-align:right';
 
-  for (const k of KNOBS) {
+  for (const k of knobs) {
+    k.set(k.def);
     const fromUrl = Number(params.get(k.param) ?? NaN);
-    if (Number.isFinite(fromUrl)) world.params[k.key] = Math.min(k.max, Math.max(k.min, fromUrl));
+    if (Number.isFinite(fromUrl)) k.set(Math.min(k.max, Math.max(k.min, fromUrl)));
 
     const label = document.createElement('div');
     const input = document.createElement('input');
@@ -47,21 +83,36 @@ export function installTuning(world: World): HTMLElement {
     input.min = String(k.min);
     input.max = String(k.max);
     input.step = String(k.step);
-    input.value = String(world.params[k.key]);
+    input.value = String(k.get());
     input.style.cssText = 'display:block;width:160px;margin-left:auto;accent-color:#e8c872';
-    label.textContent = k.render(world.params[k.key]);
+    label.textContent = k.render(k.get());
     input.addEventListener('input', () => {
       const v = Number(input.value);
-      world.params[k.key] = v;
+      k.set(v);
       label.textContent = k.render(v);
       // keep the URL clean: only values that differ from the default
-      setUrlParam(k.param, v === DEFAULT_PARAMS[k.key] ? null : v);
+      setUrlParam(k.param, v === k.def ? null : v);
     });
     // hand the arrow keys back to the horse once the drag ends
     input.addEventListener('change', () => input.blur());
     root.append(label, input);
   }
 
+  const display: DisplayOptions = { grid: params.get('grid') === '1' };
+  const toggle = document.createElement('label');
+  toggle.style.cssText = 'display:flex;gap:6px;justify-content:flex-end;align-items:center;margin-top:6px;cursor:pointer';
+  const box = document.createElement('input');
+  box.type = 'checkbox';
+  box.checked = display.grid;
+  box.style.cssText = 'accent-color:#e8c872;margin:0';
+  box.addEventListener('change', () => {
+    display.grid = box.checked;
+    setUrlParam('grid', box.checked ? 1 : null);
+    box.blur();
+  });
+  toggle.append('land grid', box);
+  root.append(toggle);
+
   document.body.appendChild(root);
-  return root;
+  return display;
 }

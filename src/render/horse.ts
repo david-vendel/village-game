@@ -12,7 +12,7 @@ const MANE = '#2b1d14';
 const HOOF = '#2a221c';
 
 /** Stride length in px per full gait cycle. */
-const STRIDE = 78;
+export const STRIDE = 78;
 
 interface LegPose {
   hipX: number;

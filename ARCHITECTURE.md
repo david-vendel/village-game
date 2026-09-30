@@ -68,14 +68,20 @@ src/app      input, screen/zoom, actions     main.ts wires it all into the loop
 - `world.ts`: world state and `update()`: plots, building entities, rider physics, villagers,
   build menu, construction progress and stages, the construction toggle, events.
   Tested by `world.test.ts`.
-- `farm.ts`: farm simulation, tested by `farm.test.ts`. A finished farm has 4 plots behind the
-  farmstead (either side of the house) and 5 wider ones in front of the road, a farmer, and a
-  grain store holding 0–5 sheaves. Each plot keeps its own state (fallow → growing → ripe) and
+- `farm.ts`: farm simulation, tested by `farm.test.ts`. A finished farm has field plots on the
+  free land-grid cells around it (see `land.ts`), a farmer, and a grain store holding 0–5 sheaves. Each plot keeps its own state (fallow → growing → ripe) and
   age. To sow, the farmer walks out, sows (2.5 s), then walks back to the farm, and the plot
   grows on its own clock (30 s to ripe). When a plot is ripe and the store has room, he walks
   out, harvests (3 s), carries the sheaf back and stacks it. Harvesting takes priority over
   sowing, and the nearest plot is picked first. A full store stops harvesting.
-- `layout.ts`: the shared world geometry (see above).
+- `land.ts`: the land grid, tested by `land.test.ts`. The street is cut into 25 px cells in two
+  rows: `back` (behind the road, where buildings stand) and `front` (between the road and the
+  viewer). A building claims its footprint cells (its `width` rounded up to whole cells, centred on
+  the plot) as soon as it is placed. A farm's back fields fill the free cells up to the next
+  building on each side (usually one plot per side); its front fields take any front cells within
+  `FIELD_REACH` that are nearer to it than to another farm. Placing a building re-lays neighbouring
+  farms' fields (`syncFarmFields`); plots that keep their spot keep their crop.
+- `layout.ts`: the shared world geometry (see above), including the grid constants.
 
 ### `src/render`: graphics
 - `index.ts`: the renderer's public API: `renderFrame()` (world pass, then screen UI pass),
@@ -89,6 +95,8 @@ src/app      input, screen/zoom, actions     main.ts wires it all into the loop
   `behind`/`front` art, and the drawn `height`.
 - `construction.ts`: generic staged construction for any building: stakes → foundation →
   timber frame → walls → roof. The finished art is revealed bottom-up behind scaffolding.
+- `grid.ts`: the land-grid debug overlay (tuning panel → "land grid", or `?grid=1`): cells tinted
+  by use (building footprint red, field green), plot boundaries dashed.
 - `farm.ts`: field plots in gentle perspective, crops by growth stage, the farmer (walk, sow,
   scythe, carry), and the sheaf store.
 - `horse.ts`: rider with a 4-beat walk and a diagonal trot, plus idle animation. `people.ts`:
@@ -106,6 +114,12 @@ src/app      input, screen/zoom, actions     main.ts wires it all into the loop
   (tested). Zoom 1 fits the 600-unit-tall scene to the screen height. Zooming out shows more
   street and sky, and the UI keeps its own scale. On portrait touch screens the scene is lifted
   above the buttons.
+- `sound.ts`: synthesised Web Audio effects, no audio files. It reads game state each frame:
+  hoofbeats in step with the gait, menu clicks, a thunk when a building is placed and a chime when
+  it's done, hammering during construction, each building's everyday sound, and the farmer's
+  sowing, scything and stacking. World sounds pan and fade with distance from the rider. M mutes.
+- `tuning.ts`: slider panel on the right (horse speed/accel/braking, build speed, volume).
+  Non-default values are kept in the URL query.
 - `src/main.ts`: bootstrap and the frame loop.
 
 ## Rules
@@ -119,5 +133,4 @@ src/app      input, screen/zoom, actions     main.ts wires it all into the loop
 - No economy (coins/resources); building is free. Grain isn't used by anything yet, so a farm
   with a full store (5 sheaves) just keeps sowing until every plot is ripe, then waits. A mill
   or market taking grain would be the natural next step.
-- Two farms on neighbouring plots have overlapping front fields.
-- No sound, no day/night cycle, no save game.
+- No music, no day/night cycle, no save game.

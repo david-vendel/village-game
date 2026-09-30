@@ -34,6 +34,7 @@ export function installControls(world: World, screen: Screen, actions: Actions):
     if (e.repeat) return;
 
     if (e.key === 'c' || e.key === 'C') return actions.toggleConstruction();
+    if (e.key === 'm' || e.key === 'M') return actions.toggleSound();
     if (e.key === '-' || e.key === '_') return screen.zoomBy(1 / ZOOM_STEP);
     if (e.key === '=' || e.key === '+') return screen.zoomBy(ZOOM_STEP);
     if (e.key === '0') return screen.resetZoom();

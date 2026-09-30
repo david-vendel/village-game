@@ -2,11 +2,13 @@
 // people → rider → foreground → world-anchored labels. Screen UI (HUD, menu,
 // touch buttons) is drawn separately by main.ts in its own coordinate space.
 
+import { farmFieldSpots } from '../game/land';
 import { getBuilding, plotAt, WORLD_WIDTH, type Building, type World } from '../game/world';
 import { drawBackground, drawForeground, type View } from './background';
 import { BUILDING_ART, type DrawArgs } from './buildings';
 import { drawConstruction, drawConstructionBehind, drawConstructionFront } from './construction';
 import { drawFarmer } from './farm';
+import { drawLandGrid } from './grid';
 import { drawRider } from './horse';
 import { drawVillager } from './people';
 import { drawBuildingLabel, drawCompletionEffect, drawPlotPrompt, drawProgress } from './ui';
@@ -31,6 +33,8 @@ export interface SceneView {
   labelScale: number;
   /** Text of the "build here" prompt (differs for touch vs keyboard). */
   promptLabel: string;
+  /** Overlay the land grid (debug view). */
+  showGrid: boolean;
 }
 
 export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
@@ -45,6 +49,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     time: world.time,
     seed: b.id * 97,
     farm: b.farm,
+    fields: b.type === 'farm' && !b.farm ? farmFieldSpots(world, b) : undefined,
   });
   const farms = world.buildings.filter((b) => b.farm && onScreen(world.plots[b.plotIndex].x, 300));
   /** Draw farmers whose y satisfies `pred` (depth decides which layer they are in). */
@@ -100,6 +105,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
 
   drawForeground(ctx, v);
   drawGrade(ctx, viewW, sv.top, sv.bottom);
+  if (sv.showGrid) drawLandGrid(ctx, world, camX, viewW);
 
   // world-anchored UI
   for (const b of world.buildings) {

@@ -3,8 +3,8 @@
 // roof. The sun is to the left, so right-hand faces are in shadow.
 
 import type { BuildingType } from '../game/buildings';
-import { demoFarm, type FarmState } from '../game/farm';
-import { drawBackField, drawFrontField, drawStore } from './farm';
+import { demoFarm, type FarmState, type FieldSpot } from '../game/farm';
+import { drawBackFences, drawBackField, drawFrontField, drawStore } from './farm';
 import { circle, type Ctx, ellipse, hash, line, poly, rect, shade, smoke } from './util';
 
 export interface DrawArgs {
@@ -17,6 +17,8 @@ export interface DrawArgs {
   seed: number;
   /** Live farm state (fields, store) — farms only. */
   farm?: FarmState;
+  /** Where a farm's fields lie before it has live state (under construction). */
+  fields?: FieldSpot[];
 }
 
 export interface BuildingArt {
@@ -301,14 +303,7 @@ function drawFarm(ctx: Ctx, a: DrawArgs): void {
   line(ctx, bx + 34, a.base - 30, bx + 10, a.base, '#8b6440', 2.5);
   poly(ctx, [bx - 4, a.base - 38, bx + 50, a.base - 38, bx + 50, a.base - 52, bx - 4, a.base - 58], '#8e4a33');
   // low fences in front of the side plots
-  for (const [s0, e0] of [
-    [a.x - 212, a.x - 150],
-    [a.x + 88, a.x + 212],
-  ]) {
-    for (let fx = s0; fx <= e0; fx += 16) rect(ctx, fx, a.base - 14, 3, 14, '#6b4f35');
-    rect(ctx, s0, a.base - 12, e0 - s0 + 3, 2, '#7d5d3f');
-    rect(ctx, s0, a.base - 6, e0 - s0 + 3, 2, '#7d5d3f');
-  }
+  drawBackFences(ctx, a, a.farm);
   // the grain store between the house and the street
   drawStore(ctx, a, a.farm);
 }

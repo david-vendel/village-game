@@ -7,6 +7,7 @@ import { drawScene } from './scene';
 import { drawBuildMenu, drawHud, drawToasts, type Toast } from './ui';
 
 export { cameraX } from './scene';
+export { STRIDE as HORSE_STRIDE } from './horse';
 export { hit, hudLayout, menuLayout, type Rect, type Toast } from './ui';
 
 /** Everything the renderer needs besides the world: where the camera is and how the screen is scaled. */
@@ -30,6 +31,8 @@ export interface FrameView {
   leftHeld: boolean;
   rightHeld: boolean;
   toasts: Toast[];
+  /** Overlay the land grid. */
+  showGrid: boolean;
 }
 
 export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: FrameView): void {
@@ -42,6 +45,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
     bottom: v.bottom,
     labelScale: Math.max(1, Math.min(3, v.uiScale / v.worldScale)),
     promptLabel: v.touch ? 'Tap the hammer to build' : 'Press ↓ or Space to build',
+    showGrid: v.showGrid,
   });
 
   // screen UI, unaffected by zoom

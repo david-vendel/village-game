@@ -2,9 +2,9 @@
 // simulation geometry in game/farm.ts (world y), shifted onto the building's
 // screen base so the same art works in the street and in menu previews.
 
-import { type FarmState, type Farmer, type FieldPlot, growth, HARVEST_TIME, SOW_TIME } from '../game/farm';
-import { BACK_DX, BACK_FIELD, BASE_Y, FRONT_DX, FRONT_FIELD, PLOT_W, STORE, VIEW_H } from '../game/layout';
-import { circle, clamp01, type Ctx, ellipse, hash, lerp, line, mix, poly } from './util';
+import { type FarmState, type Farmer, type FieldPlot, type FieldSpot, growth, HARVEST_TIME, openFieldSpots, SOW_TIME } from '../game/farm';
+import { BACK_FIELD, BASE_Y, FRONT_FIELD, STORE, VIEW_H } from '../game/layout';
+import { circle, clamp01, type Ctx, ellipse, hash, lerp, line, mix, poly, rect } from './util';
 
 const SOIL = '#7a5a3a';
 const SOIL_DARK = '#5e4329';
@@ -13,6 +13,8 @@ interface Anchor {
   x: number;
   base: number;
   time: number;
+  /** Where the fields lie while the farm has no live state yet (under construction). */
+  fields?: FieldSpot[];
 }
 
 const toScreenY = (a: Anchor, y: number) => a.base + (y - BASE_Y);
@@ -97,7 +99,7 @@ function fieldPlot(ctx: Ctx, a: Anchor, p: FieldPlot, seed: number, pt: PointFn,
 // --- Back field (behind the farmstead) ----------------------------------------
 
 export function drawBackField(ctx: Ctx, a: Anchor, farm: FarmState | undefined, seed: number): void {
-  for (const p of plotsOf(farm, 'back')) {
+  for (const p of plotsOf(a, farm, 'back')) {
     const u0 = p.dx - p.width / 2 - 2;
     const u1 = p.dx + p.width / 2 + 2;
     poly(ctx, quad(a, backPoint, u0, u1, 1.12, -0.08), '#7f9143'); // grass border
@@ -108,23 +110,35 @@ export function drawBackField(ctx: Ctx, a: Anchor, farm: FarmState | undefined, 
 // --- Front field (between the road and the viewer) -----------------------------------
 
 export function drawFrontField(ctx: Ctx, a: Anchor, farm: FarmState | undefined, seed: number): void {
-  const plots = plotsOf(farm, 'front');
-  const ext = Math.max(...plots.map((p) => Math.abs(p.dx) + p.width / 2)) + 4;
-  poly(ctx, quad(a, frontPoint, -ext, ext, -0.08, 1.06), '#6f8338'); // grass border
+  const plots = plotsOf(a, farm, 'front');
+  // grass border, then plots, then a low wattle fence along the near edge;
+  // plots may be split up where the land belongs to another farm
+  for (const p of plots) poly(ctx, quad(a, frontPoint, p.dx - p.width / 2 - 4, p.dx + p.width / 2 + 4, -0.08, 1.06), '#6f8338');
   for (const p of plots) fieldPlot(ctx, a, p, seed + 7, frontPoint, 0, 1, 1.45, 7);
-  // low wattle fence along the near edge
-  const [fl, fy] = frontPoint(a, -ext, 1.06);
-  const [fr] = frontPoint(a, ext, 1.06);
-  for (let x = fl; x <= fr; x += 16) line(ctx, x, fy + 6, x, fy - 12, '#5a4330', 3);
-  line(ctx, fl, fy - 8, fr, fy - 8, '#7a5d43', 2.5);
-  line(ctx, fl, fy - 1, fr, fy - 1, '#7a5d43', 2.5);
+  for (const p of plots) {
+    const [fl, fy] = frontPoint(a, p.dx - p.width / 2 - 4, 1.06);
+    const [fr] = frontPoint(a, p.dx + p.width / 2 + 4, 1.06);
+    for (let x = fl; x <= fr; x += 16) line(ctx, x, fy + 6, x, fy - 12, '#5a4330', 3);
+    line(ctx, fl, fy - 8, fr, fy - 8, '#7a5d43', 2.5);
+    line(ctx, fl, fy - 1, fr, fy - 1, '#7a5d43', 2.5);
+  }
+}
+
+/** Low fences along the road side of the back plots. */
+export function drawBackFences(ctx: Ctx, a: Anchor, farm: FarmState | undefined): void {
+  for (const p of plotsOf(a, farm, 'back')) {
+    const s0 = a.x + p.dx - p.width / 2;
+    const e0 = a.x + p.dx + p.width / 2 - 3;
+    for (let fx = s0; fx <= e0; fx += 16) rect(ctx, fx, a.base - 14, 3, 14, '#6b4f35');
+    rect(ctx, s0, a.base - 12, e0 - s0 + 3, 2, '#7d5d3f');
+    rect(ctx, s0, a.base - 6, e0 - s0 + 3, 2, '#7d5d3f');
+  }
 }
 
 /** Plots of one zone; with no farm state (e.g. under construction) all fallow. */
-function plotsOf(farm: FarmState | undefined, zone: FieldPlot['zone']): FieldPlot[] {
+function plotsOf(a: Anchor, farm: FarmState | undefined, zone: FieldPlot['zone']): FieldPlot[] {
   if (farm) return farm.plots.filter((p) => p.zone === zone);
-  const dxs = zone === 'back' ? BACK_DX : FRONT_DX;
-  return dxs.map((dx) => ({ zone, dx, width: PLOT_W[zone], state: 'fallow', age: 0 }));
+  return (a.fields ?? openFieldSpots()).filter((s) => s.zone === zone).map((s) => ({ ...s, state: 'fallow', age: 0 }));
 }
 
 // --- Grain store -----------------------------------------------------------------------

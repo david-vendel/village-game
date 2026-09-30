@@ -13,11 +13,13 @@ import {
   setConstructionEnabled,
   type World,
 } from '../game/world';
+import type { Sound } from './sound';
 
 export type Notify = (text: string) => void;
 
 export interface Actions {
   toggleConstruction(): void;
+  toggleSound(): void;
   openBuildMenu(): void;
   closeBuildMenu(): void;
   moveSelection(delta: number): void;
@@ -25,23 +27,36 @@ export interface Actions {
   build(): void;
 }
 
-export function createActions(world: World, notify: Notify, isTouch: () => boolean): Actions {
+export function createActions(world: World, notify: Notify, isTouch: () => boolean, sound: Sound): Actions {
   return {
     toggleConstruction() {
+      sound.ui('toggle');
       setConstructionEnabled(world, !world.constructionEnabled);
       notify(world.constructionEnabled ? 'Construction phase ON' : 'Construction phase OFF — buildings appear instantly');
     },
+    toggleSound() {
+      const muted = sound.toggleMute();
+      if (!muted) sound.ui('toggle');
+      notify(muted ? 'Sound off' : 'Sound on');
+    },
     openBuildMenu() {
-      if (!openMenu(world) && isTouch()) notify('Ride to a pennant to build');
+      if (openMenu(world)) sound.ui('menuOpen');
+      else if (isTouch()) {
+        sound.ui('denied');
+        notify('Ride to a pennant to build');
+      }
     },
     closeBuildMenu() {
       closeMenu(world);
+      sound.ui('menuClose');
     },
     moveSelection(delta) {
       moveMenu(world, delta);
+      sound.ui('menuMove');
     },
     select(index) {
       selectMenu(world, index);
+      sound.ui('menuMove');
     },
     build() {
       const b = confirmMenu(world);
