@@ -21,6 +21,8 @@ export interface DrawArgs {
   seed: number;
   /** Live farm state (fields) — farms only. */
   farm?: FarmState;
+  /** Upgraded (BuildingDef.upgrade): drawn as its bigger self. */
+  upgraded?: boolean;
   /** The building's own store. */
   stock?: Stock;
   /** The people working here (for doors, sleepers…). */
@@ -359,6 +361,8 @@ function drawFarm(ctx: Ctx, a: DrawArgs): void {
   door(ctx, x0 + 30, a.base, 18, 34, doorOpen ? '#1c140d' : undefined);
   if (doorOpen) rect(ctx, x0 + 26, a.base - 30, 4, 30, '#6b4a2c'); // the door leaf, swung open
   window_(ctx, x0 + 8, a.base - 40, 13, 13, true, a.time, a.seed);
+  // upgraded: a second room on the other side of the door, for a second farmer
+  if (a.upgraded) window_(ctx, x0 + 59, a.base - 40, 13, 13, true, a.time, a.seed + 1);
   gableRoof(ctx, x0, a.base - 48, w, d, 40, '#b8955a', '#ead9b4', 'thatch', a.seed);
   // barn
   const bx = x0 + w + d * OX - 4;
@@ -372,8 +376,10 @@ function drawFarm(ctx: Ctx, a: DrawArgs): void {
   drawBackFences(ctx, a, a.farm);
   // the grain store between the house and the street
   drawStore(ctx, a, a.stock?.grain ?? 0);
-  // the farmer asleep inside
-  if ((a.workers ?? []).some((wk) => wk.task.kind === 'home' && wk.task.activity === 'sleep')) drawSnore(ctx, x0 + w * 0.3, a.base - 70, a.time);
+  // the farmers asleep inside, each in their own room
+  const sleepers = (a.workers ?? []).filter((wk) => wk.task.kind === 'home' && wk.task.activity === 'sleep').length;
+  if (sleepers > 0) drawSnore(ctx, x0 + w * 0.3, a.base - 70, a.time);
+  if (sleepers > 1) drawSnore(ctx, x0 + w * 0.85, a.base - 70, a.time + 1.3);
 }
 
 /** Little z's drifting up from a sleeper's window. */

@@ -1,6 +1,8 @@
 // Staged construction, generic over every building type:
 // staking → foundation → timber frame → walls (the finished art revealed
 // bottom-up behind scaffolding) → roof (reveal continues to the top).
+// An upgrade is built the same way on the finished building: the upgraded
+// art is revealed bottom-up over it, behind scaffolding.
 
 import { BUILDINGS, type BuildingType } from '../game/buildings';
 import { constructionStage } from '../game/world';
@@ -96,20 +98,43 @@ export function drawConstruction(ctx: Ctx, type: BuildingType, a: DrawArgs, prog
   }
 
   // scaffolding once the walls are going up
-  if (stage !== 'frame') {
-    const sTop = frameTop - 16;
-    for (const sx of [left - 12, a.x, left + W + 10]) line(ctx, sx, a.base + 2, sx, sTop, POLE, 2.5);
-    for (let y = a.base - 34; y > sTop + 10; y -= 38) {
-      line(ctx, left - 16, y, left + W + 14, y, '#a07d52', 4);
-      line(ctx, left - 12, y + 38, left + 10, y, POLE, 1.2);
-    }
-    // a pulley hoisting a stone — only while someone is actually building here
-    const building = (a.workers ?? []).some((w) => w.task.kind === 'job' && w.task.job.action === 'build');
-    const hoist = building ? (Math.sin(a.time * 0.8 + a.seed) + 1) / 2 : 0;
-    line(ctx, left + W + 10, sTop, left + W + 22, sTop, POLE, 2);
-    line(ctx, left + W + 22, sTop, left + W + 22, sTop + 20 + hoist * (a.base - sTop - 34), ROPE, 1);
-    rect(ctx, left + W + 17, sTop + 20 + hoist * (a.base - sTop - 34), 10, 8, '#a89c88');
+  if (stage !== 'frame') scaffolding(ctx, a, left, W, frameTop);
+}
+
+/** A finished building being upgraded: the upgraded art revealed over it, bottom-up, behind scaffolding. */
+export function drawUpgrade(ctx: Ctx, type: BuildingType, a: DrawArgs, progress: number): void {
+  const W = BUILDINGS[type].width;
+  const H = BUILDING_ART[type].height;
+  const left = a.x - W / 2;
+  const art = BUILDING_ART[type];
+  art.draw(ctx, { ...a, upgraded: false });
+  if (progress > 0) {
+    const revealH = (H + 60) * progress;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(left - 120, a.base - revealH, W + 280, revealH + 40);
+    ctx.clip();
+    art.draw(ctx, { ...a, upgraded: true });
+    ctx.restore();
   }
+  materials(ctx, a.x, W, a.base, a.onSite ?? {}, a.seed);
+  for (const spot of a.laid ?? []) laidDown(ctx, a.x + spot.dx, a.base, spot.amounts, a.seed);
+  scaffolding(ctx, a, left, W, a.base - Math.min(H, 150) * 0.78);
+}
+
+/** Poles and boards round the building, and a pulley hoisting a stone while someone is building. */
+function scaffolding(ctx: Ctx, a: DrawArgs, left: number, W: number, frameTop: number): void {
+  const sTop = frameTop - 16;
+  for (const sx of [left - 12, a.x, left + W + 10]) line(ctx, sx, a.base + 2, sx, sTop, POLE, 2.5);
+  for (let y = a.base - 34; y > sTop + 10; y -= 38) {
+    line(ctx, left - 16, y, left + W + 14, y, '#a07d52', 4);
+    line(ctx, left - 12, y + 38, left + 10, y, POLE, 1.2);
+  }
+  const building = (a.workers ?? []).some((w) => w.task.kind === 'job' && w.task.job.action === 'build');
+  const hoist = building ? (Math.sin(a.time * 0.8 + a.seed) + 1) / 2 : 0;
+  line(ctx, left + W + 10, sTop, left + W + 22, sTop, POLE, 2);
+  line(ctx, left + W + 22, sTop, left + W + 22, sTop + 20 + hoist * (a.base - sTop - 34), ROPE, 1);
+  rect(ctx, left + W + 17, sTop + 20 + hoist * (a.base - sTop - 34), 10, 8, '#a89c88');
 }
 
 /**

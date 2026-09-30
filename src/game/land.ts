@@ -96,7 +96,7 @@ export function farmFieldSpots(world: World, farm: Building): FieldSpot[] {
 /** Re-lay every finished farm's fields after the land changed (a building was placed). */
 export function syncFarmFields(world: World): void {
   for (const b of world.buildings) {
-    if (b.farm) setFieldSpots(b.farm, farmFieldSpots(world, b), employees(world, b).map((p) => p.job!.worker));
+    if (b.farm) setFieldSpots(b.farm, farmFieldSpots(world, b), employees(world, b).filter((p) => p.job!.role === 'farmer').map((p) => p.job!.worker));
   }
 }
 

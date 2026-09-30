@@ -5,11 +5,11 @@
 
 import { employees } from '../game/people';
 import type { Worker } from '../game/worker';
-import { laidOut, onSite } from '../game/site';
-import { getBuilding, plotAt, WORLD_WIDTH, type Building, type World } from '../game/world';
+import { laidOut, onSite, upgrading } from '../game/site';
+import { canUpgrade, getBuilding, plotAt, WORLD_WIDTH, type Building, type World } from '../game/world';
 import { drawBackground, drawForeground, type View } from './background';
 import { BUILDING_ART, type DrawArgs } from './buildings';
-import { drawConstruction, drawConstructionBehind, drawConstructionFront } from './construction';
+import { drawConstruction, drawConstructionBehind, drawConstructionFront, drawUpgrade } from './construction';
 import { drawWorker } from './farm';
 import { type Figure, figureOf } from './figure';
 import { drawLandGrid } from './grid';
@@ -39,6 +39,8 @@ export interface SceneView {
   labelScale: number;
   /** Text of the "build here" prompt (differs for touch vs keyboard). */
   promptLabel: string;
+  /** How to upgrade the building the rider is at, e.g. "Press ↓ or Space to upgrade". */
+  upgradeLabel: string;
   /** Overlay the land grid (debug view). */
   showGrid: boolean;
 }
@@ -57,6 +59,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     time: world.time,
     seed: b.id * 97,
     farm: b.farm,
+    upgraded: !!b.upgraded,
     stock: b.stock,
     workers: employees(world, b).map((p) => p.job!.worker),
     crew: employees(world, b).map((p) => ({ worker: p.job!.worker, figure: figureOf(p) })),
@@ -101,7 +104,8 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   for (const b of world.buildings) {
     if (!onScreen(world.plots[b.plotIndex].x)) continue;
     const a = args(b);
-    if (b.status === 'done') BUILDING_ART[b.type].draw(ctx, a);
+    if (upgrading(b)) drawUpgrade(ctx, b.type, a, b.progress);
+    else if (b.status === 'done') BUILDING_ART[b.type].draw(ctx, a);
     else drawConstruction(ctx, b.type, a, b.progress);
   }
 
@@ -136,7 +140,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   for (const b of world.buildings) {
     const sx = world.plots[b.plotIndex].x - camX;
     if (!onScreen(world.plots[b.plotIndex].x)) continue;
-    if (b.status === 'constructing') drawProgress(ctx, world, b, sx, BASE - BUILDING_ART[b.type].height - 20, k);
+    if (b.site) drawProgress(ctx, world, b, sx, BASE - BUILDING_ART[b.type].height - 20, k);
     else if (b.completedAt !== null) drawCompletionEffect(ctx, sx, BASE, BUILDING_ART[b.type].height, world.time - b.completedAt, b.id);
   }
   const plot = plotAt(world, world.rider.x);
@@ -144,7 +148,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     const sx = plot.x - camX;
     const b = getBuilding(world, plot.buildingId);
     if (!b) drawPlotPrompt(ctx, sx, BASE, world.time, sv.promptLabel, k);
-    else if (b.status === 'done') drawBuildingLabel(ctx, world, b, sx, BASE - BUILDING_ART[b.type].height - 18, k, viewW);
+    else if (b.status === 'done' && !b.site) drawBuildingLabel(ctx, world, b, sx, BASE - BUILDING_ART[b.type].height - 18, k, viewW, canUpgrade(b) ? sv.upgradeLabel : null);
   }
 }
 

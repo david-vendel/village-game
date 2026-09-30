@@ -81,10 +81,19 @@ export function employees(world: World, b: Building): Person[] {
   return world.people.filter((p) => p.job?.buildingId === b.id);
 }
 
-/** Jobs a building offers now: its own once finished; builders while it's a construction site. */
+/** The jobs a finished building gives: its own, or its upgrade's once upgraded. */
+export function jobsOf(b: Building): Partial<Record<Role, number>> {
+  const def = BUILDINGS[b.type];
+  return b.upgraded && def.upgrade ? def.upgrade.jobs : def.jobs;
+}
+
+/**
+ * Jobs a building offers now: its own once finished; builders while it's a
+ * construction site (a finished building being upgraded offers both).
+ */
 export function openings(b: Building, buildersPerSite: number, dayLabour: boolean): Partial<Record<Role, number>> {
-  if (b.status === 'done') return BUILDINGS[b.type].jobs;
-  return b.site && dayLabour ? { builder: buildersPerSite } : {};
+  const own = b.status === 'done' ? jobsOf(b) : {};
+  return b.site && dayLabour ? { ...own, builder: buildersPerSite } : own;
 }
 
 /** Where someone is along the street now (world x). */

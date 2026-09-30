@@ -15,6 +15,9 @@
 // still needed from the nearest warehouse that has it; else wait at the site.
 // Progress is the share of the cost built in, so it can never run ahead of
 // the materials.
+//
+// An upgrade (BuildingDef.upgrade) is built the same way, as a site on the
+// finished building: its builders work alongside the building's own workers.
 
 import { BUILDINGS } from './buildings';
 import { takeOut, warehouseSpot, warehouseWith } from './economy';
@@ -43,6 +46,22 @@ export interface Site {
   pile: Stock;
   /** Lying at each work spot (see workSpots), not yet built in. */
   laid: Stock[];
+}
+
+/** An upgrade being built on a finished building. */
+export function upgrading(b: Building): boolean {
+  return !!b.site && b.status === 'done';
+}
+
+/** What a site builds: the building itself, or (on a finished building) its upgrade. */
+export function siteWork(b: Building): { cost: Amounts; buildTime: number } {
+  const def = BUILDINGS[b.type];
+  return b.status === 'done' && def.upgrade ? def.upgrade : def;
+}
+
+/** The builders working at a site (a building being upgraded has its own workers too). */
+export function builders(world: World, b: Building) {
+  return employees(world, b).filter((p) => p.job!.role === 'builder');
 }
 
 /** A new site for a building of this type; `ready` materials (a free building's) lie on its pile already. */
@@ -106,14 +125,14 @@ export function owed(world: World, b: Building): Amounts {
 
 /** Cost not yet delivered. */
 function lacking(b: Building, r: Resource): number {
-  return (BUILDINGS[b.type].cost[r] ?? 0) - (b.site?.delivered[r] ?? 0);
+  return (siteWork(b).cost[r] ?? 0) - (b.site?.delivered[r] ?? 0);
 }
 
 /** Materials on their way from warehouses: carried by the site's builders, and builders heading out to fetch. */
 function underway(world: World, b: Building): { carried: Stock; fetching: Stock } {
   const carried = stockOf();
   const fetching = stockOf();
-  for (const p of employees(world, b)) {
+  for (const p of builders(world, b)) {
     const w = p.job!.worker;
     if (w.carrying && fetchedResource(delivering(w)?.action ?? '')) carried[w.carrying.resource] += w.carrying.amount;
     const r = fetchedResource(currentJob(w)?.action ?? '');
@@ -132,7 +151,7 @@ export function onSite(b: Building): Amounts {
 
 /** How far the materials brought to the site allow the building to get (0..1). */
 export function materialsAllow(b: Building): number {
-  const cost = total(BUILDINGS[b.type].cost);
+  const cost = total(siteWork(b).cost);
   return !b.site || cost <= 0 ? 1 : Math.min(1, total(b.site.delivered) / cost);
 }
 
@@ -140,9 +159,10 @@ export function materialsAllow(b: Building): number {
 export function siteWorkplace(world: World, b: Building, buildSpeed: number): Workplace {
   const site = b.site!;
   const x = world.plots[b.plotIndex].x;
-  const costTotal = total(BUILDINGS[b.type].cost);
+  const work = siteWork(b);
+  const costTotal = total(work.cost);
   /** Materials one build job works in. */
-  const perJob = (BUILD_CHUNK * buildSpeed * costTotal) / BUILDINGS[b.type].buildTime;
+  const perJob = (BUILD_CHUNK * buildSpeed * costTotal) / work.buildTime;
   const spots = workSpots(b.type);
   const warehouse = (id: number) => world.buildings.find((o) => o.id === id && o.type === 'warehouse' && o.status === 'done');
   const laidAt = (k: number) => total(site.laid[k] ?? {});

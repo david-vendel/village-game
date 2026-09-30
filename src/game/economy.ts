@@ -54,6 +54,11 @@ export function buildShortfall(world: World, type: BuildingType): Amounts {
   return shortfall(available(world), BUILDINGS[type].cost);
 }
 
+/** What the village still lacks to upgrade this building (empty when it can). */
+export function upgradeShortfall(world: World, b: Building): Amounts {
+  return shortfall(available(world), BUILDINGS[b.type].upgrade?.cost ?? {});
+}
+
 /** The warehouse nearest x that has some of r, if any. */
 export function warehouseWith(world: World, r: Resource, x: number): Building | null {
   let best: Building | null = null;

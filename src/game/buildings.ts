@@ -50,6 +50,18 @@ export interface Recipe {
   at?: Spot;
 }
 
+/**
+ * What a finished building can be upgraded to: builders bring `cost` and build
+ * it on (site.ts) for `buildTime` seconds of labour, while it keeps working.
+ * Once upgraded it employs `jobs` instead of its own.
+ */
+export interface Upgrade {
+  name: string;
+  cost: Amounts;
+  buildTime: number;
+  jobs: Partial<Record<Role, number>>;
+}
+
 export interface BuildingDef {
   type: BuildingType;
   name: string;
@@ -70,6 +82,7 @@ export interface BuildingDef {
   needs?: Resource[];
   /** A workshop: what its worker makes of what it needs (workshop.ts). */
   makes?: Recipe;
+  upgrade?: Upgrade;
 }
 
 export const BUILDINGS: Record<BuildingType, BuildingDef> = {
@@ -105,6 +118,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     storage: { grain: 5 },
     jobs: { farmer: 1 },
     ships: ['grain'],
+    // a second room built on: two farmers live and work here
+    upgrade: { name: 'Large farm', cost: { wood: 40, stone: 20 }, buildTime: 8, jobs: { farmer: 2 } },
   },
   mill: {
     type: 'mill',

@@ -10,14 +10,14 @@
 // stand (hired, let go, or done for the day), and goods only move in
 // someone's arms, from the place they lie to the place they will lie.
 
-import { BUILDINGS, BUILDING_TYPES, type BuildingType } from './buildings';
+import { BUILDINGS, BUILDING_TYPES, type BuildingType, type Role } from './buildings';
 import { timeOfDay } from './daynight';
-import { buildShortfall, putAway, takeFromWarehouses, WAREHOUSE_START } from './economy';
+import { buildShortfall, putAway, takeFromWarehouses, upgradeShortfall, WAREHOUSE_START } from './economy';
 import { createFarm, DEFAULT_WORK, farmWorkplace, updateCrops, type FarmState } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
 import { PLOT_SPACING } from './layout';
 import { employees, laneY, nameFor, openings, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
-import { BUILDERS_PER_SITE, createSite, siteWorkplace, type Site } from './site';
+import { BUILDERS_PER_SITE, builders, createSite, siteWork, siteWorkplace, upgrading, type Site } from './site';
 import { RESOURCES, stockOf, type Stock } from './resources';
 import { eatAtTaverns } from './tavern';
 import { serfPositions, transportHub, transportWorkplace } from './transport';
@@ -74,15 +74,17 @@ export interface Building {
   id: number;
   type: BuildingType;
   plotIndex: number;
-  /** 0..1 construction progress. */
+  /** 0..1 construction progress (of its upgrade, while one is being built). */
   progress: number;
   status: BuildingStatus;
   /** World time (s) at which the building was completed; used for the completion effect. */
   completedAt: number | null;
   /** The building's own store (capacities in its BuildingDef). */
   stock: Stock;
-  /** While under construction: the materials brought so far (site.ts). */
+  /** While under construction or being upgraded: the materials brought so far (site.ts). */
   site?: Site;
+  /** Upgraded (BuildingDef.upgrade): it gives the upgrade's jobs. */
+  upgraded?: true;
   /** Fields — farms only, once finished. */
   farm?: FarmState;
 }
@@ -101,7 +103,7 @@ export interface BuildMenu {
 }
 
 export interface GameEvent {
-  kind: 'placed' | 'completed';
+  kind: 'placed' | 'completed' | 'upgraded';
   buildingId: number;
 }
 
@@ -270,17 +272,41 @@ export function placeBuilding(
   return b;
 }
 
+/** Whether a building can be upgraded now: finished, with an upgrade it hasn't had, and not already being upgraded. */
+export function canUpgrade(b: Building): boolean {
+  return b.status === 'done' && !!BUILDINGS[b.type].upgrade && !b.upgraded && !b.site;
+}
+
+/**
+ * Start upgrading a building: builders bring the materials and build it on
+ * while it keeps working (with construction off it is upgraded at once).
+ * Returns whether it started; the warehouses must hold the materials.
+ */
+export function upgradeBuilding(world: World, b: Building): boolean {
+  const upgrade = BUILDINGS[b.type].upgrade;
+  if (!upgrade || !canUpgrade(b) || Object.keys(upgradeShortfall(world, b)).length) return false;
+  if (world.constructionEnabled) {
+    b.site = createSite(b.type);
+    b.progress = 0;
+  } else {
+    takeFromWarehouses(world, upgrade.cost, world.plots[b.plotIndex].x);
+    b.site = createSite(b.type, upgrade.cost);
+    complete(world, b);
+  }
+  return true;
+}
+
 /**
  * Toggle the construction phase. Turning it off finishes every building
- * currently under construction immediately, taking whatever materials it
- * still lacks from the warehouses.
+ * currently under construction (or being upgraded) immediately, taking
+ * whatever materials it still lacks from the warehouses.
  */
 export function setConstructionEnabled(world: World, enabled: boolean): void {
   world.constructionEnabled = enabled;
   if (!enabled) {
     for (const b of world.buildings) {
-      if (b.status !== 'constructing') continue;
-      const lacks = { ...BUILDINGS[b.type].cost };
+      if (!b.site) continue;
+      const lacks = { ...siteWork(b).cost };
       for (const r of RESOURCES) lacks[r] = Math.max(0, (lacks[r] ?? 0) - (b.site?.delivered[r] ?? 0));
       takeFromWarehouses(world, lacks, world.plots[b.plotIndex].x);
       complete(world, b);
@@ -289,6 +315,7 @@ export function setConstructionEnabled(world: World, enabled: boolean): void {
 }
 
 function complete(world: World, b: Building): void {
+  const upgrade = upgrading(b);
   b.progress = 1;
   b.status = 'done';
   b.completedAt = world.time;
@@ -296,10 +323,16 @@ function complete(world: World, b: Building): void {
   // the builders are done here and walk off from where they stand (nobody
   // carries anything by then: every load was put in place before the last
   // of the work, unless construction was just switched off, which is instant)
-  for (const p of employees(world, b)) {
+  for (const p of builders(world, b)) {
     const load = p.job!.worker.carrying;
     if (load) putAway(world, load, world.plots[b.plotIndex].x + p.job!.worker.dx);
     release(world, p);
+  }
+  if (upgrade) {
+    // the building's own workers carry on; it now gives the upgrade's jobs
+    b.upgraded = true;
+    world.events.push({ kind: 'upgraded', buildingId: b.id });
+    return;
   }
   if (b.type === 'farm') b.farm = createFarm({ spots: farmFieldSpots(world, b) });
   world.events.push({ kind: 'completed', buildingId: b.id });
@@ -351,13 +384,17 @@ export function update(world: World, dt: number, input: MoveInput): void {
   for (const b of world.buildings) if (b.farm) updateCrops(b.farm, dt);
   updateWorkers(world, dt);
   // a site whose builders have done all the work is finished
-  for (const b of world.buildings) if (b.status === 'constructing' && b.progress >= 1) complete(world, b);
+  for (const b of world.buildings) if (b.site && b.progress >= 1) complete(world, b);
   updateStrolls(world, dt, () => rand(world));
 }
 
-/** A building as a workplace for the people it employs; null if it has no work to give. */
-export function workplaceOf(world: World, b: Building): Workplace | null {
-  if (b.site) return siteWorkplace(world, b, world.params.buildSpeed);
+/**
+ * A building as a workplace for the people it employs in `role`; null if it
+ * has no work to give. Builders work on its site (a building being upgraded
+ * is a site for them, and its usual workplace for everyone else).
+ */
+export function workplaceOf(world: World, b: Building, role: Role): Workplace | null {
+  if (b.site && (b.status !== 'done' || role === 'builder')) return siteWorkplace(world, b, world.params.buildSpeed);
   if (b.farm) return farmWorkplace(b.farm, b.stock, world.params);
   const recipe = BUILDINGS[b.type].makes;
   if (recipe && b.status === 'done') return workshopWorkplace(world, b, recipe);
@@ -370,12 +407,12 @@ function staff(world: World): void {
   const dayLabour = timeOfDay(world).daylight;
   const hub = transportHub(world);
   const openingsOf = (b: Building) => (b === hub ? (dayLabour ? { serf: serfPositions(world) } : {}) : openings(b, BUILDERS_PER_SITE, dayLabour));
-  staffBuildings(world, (b, _role, who) => newWorker(world, b, who), openingsOf);
+  staffBuildings(world, (b, role, who) => newWorker(world, b, role, who), openingsOf);
 }
 
 /** A new hand walks over from exactly where they are on the street. */
-function newWorker(world: World, b: Building, who: Person): Worker {
-  const place = workplaceOf(world, b)!;
+function newWorker(world: World, b: Building, role: Role, who: Person): Worker {
+  const place = workplaceOf(world, b, role)!;
   const w = createWorker(place);
   w.dx = who.stroll.x - world.plots[b.plotIndex].x;
   w.y = who.stroll.y;
@@ -387,11 +424,15 @@ function newWorker(world: World, b: Building, who: Person): Worker {
 function updateWorkers(world: World, dt: number): void {
   const now = timeOfDay(world);
   for (const b of world.buildings) {
-    const place = workplaceOf(world, b);
-    if (!place) continue;
     const people = employees(world, b);
-    const staffers = people.map((p) => p.job!.worker);
+    // each role at the building works at its own workplace, alongside the others in that role
+    const places = new Map<Role, Workplace | null>();
     for (const p of people) {
+      const role = p.job!.role;
+      if (!places.has(role)) places.set(role, workplaceOf(world, b, role));
+      const place = places.get(role);
+      if (!place) continue;
+      const staffers = people.filter((o) => o.job?.role === role).map((o) => o.job!.worker);
       const w = p.job!.worker;
       // day labourers are let go at nightfall, once they've finished the job in
       // hand and delivered what they carry (they're hired again in the morning)

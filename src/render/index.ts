@@ -2,7 +2,7 @@
 // frame; everything about how things look — draw order, art, HUD, menus — is
 // decided in src/render. Rendering only reads game state, never changes it.
 
-import { plotAt, type World } from '../game/world';
+import { canUpgrade, getBuilding, plotAt, type World } from '../game/world';
 import { drawScene } from './scene';
 import { drawBuildMenu, drawHud, drawToasts, type Toast } from './ui';
 
@@ -48,17 +48,19 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
     bottom: v.bottom,
     labelScale: Math.max(1, Math.min(3, v.uiScale / v.worldScale)),
     promptLabel: v.touch ? 'Tap the hammer to build' : 'Press ↓ or Space to build',
+    upgradeLabel: v.touch ? 'Tap the hammer to upgrade' : 'Press ↓ or Space to upgrade',
     showGrid: v.showGrid,
   });
 
   // screen UI, unaffected by zoom
   ctx.setTransform(v.uiScale, 0, 0, v.uiScale, 0, 0);
   const plot = plotAt(world, world.rider.x);
+  const here = getBuilding(world, plot?.buildingId ?? null);
   drawHud(ctx, world, v.uiW, v.uiH, {
     touch: v.touch,
     leftHeld: v.leftHeld,
     rightHeld: v.rightHeld,
-    canBuild: !!plot && plot.buildingId === null,
+    canBuild: (!!plot && plot.buildingId === null) || (!!here && canUpgrade(here)),
   });
   drawToasts(ctx, v.toasts, world.time, v.uiW);
   drawBuildMenu(ctx, world, v.uiW, v.uiH);

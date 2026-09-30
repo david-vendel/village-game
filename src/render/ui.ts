@@ -8,10 +8,10 @@
 
 import { BUILDINGS, BUILDING_TYPES, ROLES, type Role } from '../game/buildings';
 import { clock } from '../game/daynight';
-import { buildShortfall, villageStock } from '../game/economy';
-import { materialsAllow } from '../game/site';
+import { buildShortfall, upgradeShortfall, villageStock } from '../game/economy';
+import { materialsAllow, siteWork, upgrading } from '../game/site';
 import { isBorrowed } from '../game/farm';
-import { employees } from '../game/people';
+import { employees, jobsOf } from '../game/people';
 import { RESOURCES, type Amounts } from '../game/resources';
 import { constructionStage, type Building, type ConstructionStage, type World } from '../game/world';
 import { BUILDING_ART, drawBuildingIcon } from './buildings';
@@ -185,8 +185,8 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
   const L = hudLayout(uiW, uiH);
   text(ctx, 'Village Crown', 16, 34, 24, GOLD, 'left', true);
   const lines = st.touch
-    ? ['Hold the arrows to ride, hammer to build', 'Pinch or tap - + to zoom']
-    : ['A D / ← → ride   S / ↓ / Space build   C construction   M sound', 'In the menu: WASD choose, Space build, Esc / Q close   - + zoom'];
+    ? ['Hold the arrows to ride, hammer to build or upgrade', 'Pinch or tap - + to zoom']
+    : ['A D / ← → ride   S / ↓ / Space build/upgrade   C construction   M sound', 'In the menu: WASD choose, Space build, Esc / Q close   - + zoom'];
   const maxW = L.zoomOut.x - 28;
   let y = 54;
   for (const s of lines) {
@@ -360,14 +360,18 @@ export function drawPlotPrompt(ctx: Ctx, sx: number, base: number, time: number,
   });
 }
 
-/** Name, purpose, store and workers: the label over a finished building the rider is next to. */
-export function drawBuildingLabel(ctx: Ctx, world: World, b: Building, sx: number, y: number, k: number, viewW: number): void {
+/**
+ * Name, purpose, store and workers: the label over a finished building the
+ * rider is next to; with `upgradeHint`, how to upgrade it and what that costs.
+ */
+export function drawBuildingLabel(ctx: Ctx, world: World, b: Building, sx: number, y: number, k: number, viewW: number, upgradeHint: string | null): void {
   const def = BUILDINGS[b.type];
+  const name = b.upgraded && def.upgrade ? def.upgrade.name : def.name;
   const lines = [def.purpose];
   const stored = RESOURCES.filter((r) => def.storage[r]);
   if (stored.length) lines.push(`Store: ${stored.map((r) => `${r} ${b.stock[r]}/${def.storage[r]}`).join(' · ')}`);
   for (const role of ROLES) {
-    const slots = def.jobs[role] ?? 0;
+    const slots = jobsOf(b)[role] ?? 0;
     if (!slots) continue;
     const staff = employees(world, b).filter((p) => p.job!.role === role);
     const names = staff.map((p) => `${p.name} (#${p.id})`).join(', ');
@@ -378,17 +382,22 @@ export function drawBuildingLabel(ctx: Ctx, world: World, b: Building, sx: numbe
     const n = (st: string) => b.farm!.plots.filter((p) => p.state === st && (st !== 'fallow' || !isBorrowed(p))).length;
     lines.push(`Fields: ${n('ripe')} ripe · ${n('growing')} growing · ${n('fallow')} to sow`);
   }
+  if (upgradeHint && def.upgrade) {
+    const cost = RESOURCES.filter((r) => def.upgrade!.cost[r]).map((r) => `${def.upgrade!.cost[r]} ${r}`).join(' · ');
+    const short = Object.keys(upgradeShortfall(world, b)).length ? ' — not enough yet' : '';
+    lines.push(`${upgradeHint} to a ${def.upgrade.name} (${cost})${short}`);
+  }
   ctx.font = `12px ${SERIF}`;
   const lineW = Math.max(...lines.map((l) => ctx.measureText(l).width));
   ctx.font = `bold 14px ${SERIF}`;
-  const w = Math.max(60, lineW, ctx.measureText(def.name).width) + 24;
+  const w = Math.max(60, lineW, ctx.measureText(name).width) + 24;
   // keep the label on screen (it may be wider than a phone's view)
   const half = (w / 2) * k + 6;
   sx = half * 2 > viewW ? viewW / 2 : Math.max(half, Math.min(viewW - half, sx));
   around(ctx, sx, y, k, () => {
     const h = 24 + lines.length * 16;
     panel(ctx, sx - w / 2, y - h - 4, w, h, 0.6);
-    text(ctx, def.name, sx, y - h + 13, 14, GOLD, 'center', true);
+    text(ctx, name, sx, y - h + 13, 14, GOLD, 'center', true);
     lines.forEach((l, i) => text(ctx, l, sx, y - h + 29 + i * 16, 12, i ? '#e8d9a8' : '#f3ead8', 'center'));
   });
 }
@@ -397,10 +406,11 @@ export function drawBuildingLabel(ctx: Ctx, world: World, b: Building, sx: numbe
 export function drawProgress(ctx: Ctx, world: World, b: Building, sx: number, y: number, k: number): void {
   const w = 110;
   const { stage } = constructionStage(b.progress);
-  const caption = `${BUILDINGS[b.type].name} — ${STAGE_LABEL[stage]}`;
-  const cost = BUILDINGS[b.type].cost;
+  const def = BUILDINGS[b.type];
+  const caption = upgrading(b) && def.upgrade ? `${def.name} — upgrading to a ${def.upgrade.name}` : `${def.name} — ${STAGE_LABEL[stage]}`;
+  const cost = siteWork(b).cost;
   const delivered = b.site?.delivered;
-  const builders = employees(world, b).length;
+  const builders = employees(world, b).filter((p) => p.job!.role === 'builder').length;
   const materials =
     RESOURCES.filter((r) => cost[r])
       .map((r) => `${r} ${delivered?.[r] ?? 0}/${cost[r]}`)

@@ -3,16 +3,19 @@
 // Messages are plain text here; how they look is up to the renderer.
 
 import { BUILDING_TYPES, BUILDINGS } from '../game/buildings';
-import { buildShortfall } from '../game/economy';
-import { RESOURCES } from '../game/resources';
+import { buildShortfall, upgradeShortfall } from '../game/economy';
+import { RESOURCES, type Amounts } from '../game/resources';
 import {
+  canUpgrade,
   closeMenu,
   confirmMenu,
   getBuilding,
   moveMenu,
   openMenu,
+  plotAt,
   selectMenu,
   setConstructionEnabled,
+  upgradeBuilding,
   type World,
 } from '../game/world';
 import type { Sound } from './sound';
@@ -42,8 +45,24 @@ export function createActions(world: World, notify: Notify, isTouch: () => boole
       notify(muted ? 'Sound off' : 'Sound on');
     },
     openBuildMenu() {
-      if (openMenu(world)) sound.ui('menuOpen');
-      else if (isTouch()) {
+      if (openMenu(world)) {
+        sound.ui('menuOpen');
+        return;
+      }
+      // at a building that can be upgraded, the same key upgrades it
+      const b = getBuilding(world, plotAt(world, world.rider.x)?.buildingId ?? null);
+      const upgrade = b && BUILDINGS[b.type].upgrade;
+      if (b && upgrade && canUpgrade(b)) {
+        const lack = upgradeShortfall(world, b);
+        if (Object.keys(lack).length) {
+          sound.ui('denied');
+          notify(`Not enough for a ${upgrade.name}: need ${needText(lack)}`);
+          return;
+        }
+        upgradeBuilding(world, b);
+        sound.ui('toggle');
+        notify(b.upgraded ? `${upgrade.name} built` : `Upgrading the ${BUILDINGS[b.type].name} to a ${upgrade.name}`);
+      } else if (isTouch()) {
         sound.ui('denied');
         notify('Ride to a pennant to build');
       }
@@ -67,8 +86,7 @@ export function createActions(world: World, notify: Notify, isTouch: () => boole
       const lack = buildShortfall(world, type);
       if (Object.keys(lack).length) {
         sound.ui('denied');
-        const need = RESOURCES.filter((r) => lack[r]).map((r) => `${lack[r]} more ${r}`).join(' and ');
-        notify(`Not enough for a ${BUILDINGS[type].name}: need ${need}`);
+        notify(`Not enough for a ${BUILDINGS[type].name}: need ${needText(lack)}`);
         return;
       }
       const b = confirmMenu(world);
@@ -79,11 +97,17 @@ export function createActions(world: World, notify: Notify, isTouch: () => boole
   };
 }
 
+/** What is lacking, in words: "10 more wood and 5 more stone". */
+function needText(lack: Amounts): string {
+  return RESOURCES.filter((r) => lack[r]).map((r) => `${lack[r]} more ${r}`).join(' and ');
+}
+
 /** Turn game events from the last update into messages, and clear them. */
 export function announceEvents(world: World, notify: Notify): void {
   for (const ev of world.events) {
     const b = getBuilding(world, ev.buildingId);
     if (ev.kind === 'completed' && b && world.constructionEnabled) notify(`The ${BUILDINGS[b.type].name} is complete!`);
+    if (ev.kind === 'upgraded' && b && world.constructionEnabled) notify(`The ${BUILDINGS[b.type].upgrade?.name} is complete!`);
   }
   world.events.length = 0;
 }

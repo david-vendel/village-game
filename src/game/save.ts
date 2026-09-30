@@ -368,17 +368,20 @@ function build(saved: SavedWorld): World {
   }
   const maxId = Math.max(0, ...[...world.buildings, ...world.people, ...world.animals].map((x) => x.id));
   world.nextId = Math.max(world.nextId, maxId + 1);
+  // a construction site record belongs to buildings under construction, or
+  // being upgraded, only; an upgrade only to buildings that have one
+  for (const b of world.buildings) {
+    const upgrade = BUILDINGS[b.type].upgrade;
+    if (!upgrade || b.status !== 'done') delete b.upgraded;
+    if (b.status === 'done' && (!upgrade || b.upgraded)) delete b.site;
+    else if (b.status !== 'done') b.site ??= createSite(b.type);
+  }
   // a job must be at a building that offers it (its own jobs once finished,
   // builders while a site); otherwise the person is out of work
   for (const p of world.people) {
     const b = p.job && world.buildings.find((x) => x.id === p.job!.buildingId);
     const offered = b && (p.job?.role === 'serf' ? b === transportHub(world) && !!p.seeker : !!openings(b, BUILDERS_PER_SITE, true)[p.job!.role]);
     if (p.job && !offered) p.job = null;
-  }
-  // a construction site record belongs to buildings under construction only
-  for (const b of world.buildings) {
-    if (b.status === 'done') delete b.site;
-    else b.site ??= createSite(b.type);
   }
   // farm state belongs to finished farms only
   for (const b of world.buildings) {
@@ -388,7 +391,7 @@ function build(saved: SavedWorld): World {
   // re-lay fields under the current land rules (crops carry over), and make
   // sure what was loaded obeys the farm's rules
   syncFarmFields(world);
-  for (const b of world.buildings) if (b.farm) repairFarm(b.farm, employees(world, b).map((p) => p.job!.worker));
+  for (const b of world.buildings) if (b.farm) repairFarm(b.farm, employees(world, b).filter((p) => p.job!.role === 'farmer').map((p) => p.job!.worker));
   return world;
 }
 
@@ -465,6 +468,7 @@ function building(v: unknown, path: string): Building {
     completedAt: b.completedAt === null ? null : num(b.completedAt, `${path}.completedAt`),
     stock: stock(b.stock, `${path}.stock`),
   };
+  if (b.upgraded !== undefined && bool(b.upgraded, `${path}.upgraded`)) out.upgraded = true;
   if (b.site !== undefined) out.site = site(b.site, `${path}.site`, out.type);
   if (b.farm !== undefined) out.farm = farm(b.farm, `${path}.farm`);
   return out;
