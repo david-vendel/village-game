@@ -8,6 +8,17 @@ export const RESOURCES: readonly Resource[] = ['wood', 'stone', 'grain'];
 export type Stock = Record<Resource, number>;
 export type Amounts = Partial<Record<Resource, number>>;
 
+/** What one person carries at a time. */
+export interface Load {
+  resource: Resource;
+  amount: number;
+}
+
+/** Total amount across all resources. */
+export function total(a: Amounts): number {
+  return RESOURCES.reduce((sum, r) => sum + (a[r] ?? 0), 0);
+}
+
 export function stockOf(amounts: Amounts = {}): Stock {
   return { wood: amounts.wood ?? 0, stone: amounts.stone ?? 0, grain: amounts.grain ?? 0 };
 }

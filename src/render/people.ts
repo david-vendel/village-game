@@ -30,10 +30,44 @@ export function drawVillager(ctx: Ctx, v: Walker, x: number, base: number, time:
   ctx.restore();
 }
 
+/**
+ * A person's clothes, the same whether they stroll the street or work
+ * (farm.ts draws them at work with the same colours and head).
+ */
+export function tunicOf(look: Look, seed: number): string {
+  return look === 'monk' ? '#5a4632' : TUNICS[Math.floor(hash(seed, 1) * TUNICS.length)];
+}
+
+/** Head and hair or headscarf, centred at (x, y); `gear` is worn on top (a work hat). */
+export function drawHead(ctx: Ctx, look: Look, x: number, y: number, gear: 'none' | 'straw' | 'cap' = 'none'): void {
+  circle(ctx, x, y, 4.5, '#e0b48e');
+  if (look === 'woman') {
+    ctx.fillStyle = '#e9e1d2';
+    ctx.beginPath();
+    ctx.arc(x, y - 1, 5.2, Math.PI, 0);
+    ctx.fill();
+  } else if (look === 'monk') {
+    circle(ctx, x - 1, y - 2, 3, '#c89c78');
+  } else if (gear === 'none') {
+    ctx.fillStyle = '#5a3d24';
+    ctx.beginPath();
+    ctx.arc(x, y - 2, 5, Math.PI, 0);
+    ctx.fill();
+  }
+  if (gear === 'straw') {
+    ellipse(ctx, x, y - 3, 8, 2.2, '#d8bf6a');
+    ellipse(ctx, x, y - 5, 4, 3, '#d8bf6a');
+  } else if (gear === 'cap') {
+    ellipse(ctx, x, y - 3.5, 5, 3, '#5b4a3a');
+    ellipse(ctx, x + 3, y - 2.5, 3.5, 1.2, '#4a3b2e');
+  }
+}
+
 function drawPerson(ctx: Ctx, v: Walker, phase: number, walking: boolean, time: number): void {
   const swing = walking ? Math.sin(phase) * 0.45 : 0;
   const bob = walking ? Math.abs(Math.cos(phase)) * 1.2 : Math.sin(time * 1.5 + v.seed) * 0.3;
-  const tunic = v.kind === 'monk' ? '#5a4632' : TUNICS[Math.floor(hash(v.seed, 1) * TUNICS.length)];
+  const look = v.kind as Look;
+  const tunic = tunicOf(look, v.seed);
   ctx.lineCap = 'round';
   // legs
   line(ctx, 0, -14 - bob, Math.sin(swing) * 9, 0, '#3d3128', 3);
@@ -50,20 +84,8 @@ function drawPerson(ctx: Ctx, v: Walker, phase: number, walking: boolean, time: 
   }
   // arms
   line(ctx, 1, -24 - bob, 1 + Math.sin(-swing) * 6, -14 - bob, tunic, 3);
-  // head
-  circle(ctx, 0, -31 - bob, 4.5, '#e0b48e');
-  if (v.kind === 'woman') {
-    ctx.fillStyle = '#e9e1d2';
-    ctx.beginPath();
-    ctx.arc(0, -32 - bob, 5.2, Math.PI, 0);
-    ctx.fill();
-  } else if (v.kind === 'monk') {
-    circle(ctx, -1, -33 - bob, 3, '#c89c78');
-  } else {
-    ctx.fillStyle = '#5a3d24';
-    ctx.beginPath();
-    ctx.arc(0, -33 - bob, 5, Math.PI, 0);
-    ctx.fill();
+  drawHead(ctx, look, 0, -31 - bob);
+  if (look === 'peasant') {
     // carries a sack or tool
     if (hash(v.seed, 2) < 0.5) {
       ellipse(ctx, -5, -22 - bob, 5, 7, '#c9b48a');

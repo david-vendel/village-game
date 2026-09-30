@@ -4,11 +4,12 @@
 // touch buttons) is drawn separately by main.ts in its own coordinate space.
 
 import { employees } from '../game/people';
+import { onSite } from '../game/site';
 import { getBuilding, plotAt, WORLD_WIDTH, type Building, type World } from '../game/world';
 import { drawBackground, drawForeground, type View } from './background';
 import { BUILDING_ART, type DrawArgs } from './buildings';
 import { drawConstruction, drawConstructionBehind, drawConstructionFront } from './construction';
-import { drawFarmer } from './farm';
+import { drawWorker } from './farm';
 import { drawLandGrid } from './grid';
 import { groundX } from './ground';
 import { drawSkyBehind, lightAt, tintLand } from './sky';
@@ -56,18 +57,21 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     farm: b.farm,
     stock: b.stock,
     workers: employees(world, b).map((p) => p.job!.worker),
+    onSite: onSite(b),
     vpX: viewW / 2,
   });
   // people at work, with their workplace's position
   const atWork = world.people.flatMap((p) => {
     const b = p.job && getBuilding(world, p.job.buildingId);
-    return b && onScreen(world.plots[b.plotIndex].x, 300) ? [{ w: p.job!.worker, x: world.plots[b.plotIndex].x }] : [];
+    // builders fetching from a far warehouse can be anywhere along the street
+    const x = b ? world.plots[b.plotIndex].x : 0;
+    return b && onScreen(x + p.job!.worker.dx, 300) ? [{ w: p.job!.worker, role: p.job!.role, who: p, x }] : [];
   });
   /** Draw workers whose y satisfies `pred` (depth decides which layer they are in). */
   const farmers = (pred: (y: number) => boolean) => {
-    for (const { w, x } of atWork) {
+    for (const { w, role, who, x } of atWork) {
       // they walk on the ground, so they follow its perspective like the fields do
-      if (pred(w.y)) drawFarmer(ctx, w, groundX(x + w.dx - camX, w.y, viewW / 2), w.y, world.time);
+      if (pred(w.y)) drawWorker(ctx, w, role, who, groundX(x + w.dx - camX, w.y, viewW / 2), w.y, world.time);
     }
   };
   // the unemployed and the animals stroll the street (odd ids on the far side)
@@ -130,7 +134,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   for (const b of world.buildings) {
     const sx = world.plots[b.plotIndex].x - camX;
     if (!onScreen(world.plots[b.plotIndex].x)) continue;
-    if (b.status === 'constructing') drawProgress(ctx, b, sx, BASE - BUILDING_ART[b.type].height - 20, k);
+    if (b.status === 'constructing') drawProgress(ctx, world, b, sx, BASE - BUILDING_ART[b.type].height - 20, k);
     else if (b.completedAt !== null) drawCompletionEffect(ctx, sx, BASE, BUILDING_ART[b.type].height, world.time - b.completedAt, b.id);
   }
   const plot = plotAt(world, world.rider.x);

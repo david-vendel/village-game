@@ -7,7 +7,7 @@
 // Positions are relative to the workplace's centre (dx) and in world y.
 
 import type { TimeOfDay } from './daynight';
-import type { Resource } from './resources';
+import type { Load } from './resources';
 
 /** A job at a workplace: what to do (its own vocabulary, e.g. 'sow') and to which of its things. */
 export interface JobTicket {
@@ -31,8 +31,8 @@ export interface Worker {
   dx: number;
   y: number;
   facing: 1 | -1;
-  /** What the worker is carrying to the store, if anything. */
-  carrying: Resource | null;
+  /** What the worker is carrying, if anything (they walk slower with a load). */
+  carrying: Load | null;
   task: WorkerTask;
   /** Distance walked, drives the walk cycle. */
   stride: number;
@@ -42,6 +42,11 @@ export interface Worker {
 
 /** What a workplace tells its workers. */
 export interface Workplace {
+  /**
+   * Day labour (a construction site): no lunch break, and at nightfall the
+   * workers are let go rather than going indoors (the world does that).
+   */
+  dayLabour?: boolean;
   /** The front door, where workers go in and out and wait for work. */
   door: { dx: number; y: number };
   /** Where carried goods are dropped off. */
@@ -51,12 +56,14 @@ export interface Workplace {
   /** Arrived at a job: start it and return how long it takes (s), or null if it no longer needs doing. */
   begin(job: JobTicket): number | null;
   /** A job is done: returns what the worker now carries to the store, if anything. */
-  finish(job: JobTicket): Resource | null;
-  /** Goods dropped off at the store. */
-  deliver(r: Resource): void;
+  finish(job: JobTicket): Load | null;
+  /** A load dropped off at the store. */
+  deliver(load: Load): void;
 }
 
-export const WALK_SPEED = 42; // px/s
+/** Walking speed with a load, and with empty hands (px/s). */
+export const WALK_SPEED = 42;
+export const WALK_SPEED_EMPTY = 66;
 /** Seconds to step through a door, in or out. */
 export const DOOR_TIME = 0.9;
 /** Workers head home for lunch from this hour (finishing the job in hand first)… */
@@ -107,17 +114,17 @@ function goHome(w: Worker, place: Pick<Workplace, 'door'>): void {
 
 const atDoor = (w: Worker, place: Workplace) => Math.abs(w.dx - place.door.dx) < 0.5 && Math.abs(w.y - place.door.y) < 0.5;
 
-/** Why the worker should be indoors now, if they should. */
-function offDuty(w: Worker, now: TimeOfDay): 'lunch' | 'sleep' | null {
+/** Why the worker should stop for now, if they should. */
+export function offDuty(w: Worker, now: TimeOfDay, place: Pick<Workplace, 'dayLabour'>): 'lunch' | 'sleep' | null {
   if (!now.daylight) return 'sleep';
-  if (now.hour >= LUNCH_AT && now.hour < LUNCH_LATEST && w.lunchDay !== now.day) return 'lunch';
+  if (!place.dayLabour && now.hour >= LUNCH_AT && now.hour < LUNCH_LATEST && w.lunchDay !== now.day) return 'lunch';
   return null;
 }
 
 /** Advance one worker. `taken`: jobs the workplace's other workers are on. */
 export function updateWorker(w: Worker, place: Workplace, dt: number, now: TimeOfDay, taken: JobTicket[]): void {
   const task = w.task;
-  const off = offDuty(w, now);
+  const off = offDuty(w, now, place);
 
   if (task.kind === 'enter' || task.kind === 'exit') {
     task.t += dt;
@@ -171,7 +178,7 @@ export function updateWorker(w: Worker, place: Workplace, dt: number, now: TimeO
     const ddx = task.toDx - w.dx;
     const ddy = task.toY - w.y;
     const d = Math.hypot(ddx, ddy);
-    const step = WALK_SPEED * dt;
+    const step = (w.carrying ? WALK_SPEED : WALK_SPEED_EMPTY) * dt;
     if (Math.abs(ddx) > 0.5) w.facing = ddx > 0 ? 1 : -1;
     if (d > step) {
       w.dx += (ddx / d) * step;

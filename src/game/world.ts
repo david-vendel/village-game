@@ -1,19 +1,21 @@
 // Pure game state + update logic. No DOM, no canvas — unit-tested in world.test.ts.
 // The world holds the street's plots and buildings, the people and animals,
-// the village stockpile and the rider, and runs each part's update in turn.
+// and the rider, and runs each part's update in turn.
 // What is specific to one kind of thing lives in its own module: farm.ts
 // (fields), people.ts (villagers, hiring), worker.ts (the working day),
-// economy.ts (stockpile, costs, collection), land.ts (who uses which land).
+// economy.ts (warehouses, costs, collection), site.ts (construction by
+// builders), land.ts (who uses which land).
 
 import { BUILDINGS, BUILDING_TYPES, type BuildingType } from './buildings';
 import { timeOfDay } from './daynight';
-import { collectGoods, COLLECT_EVERY, payForBuilding, STARTING_STOCK } from './economy';
+import { buildShortfall, collectGoods, COLLECT_EVERY, putAway, takeFromWarehouses, WAREHOUSE_START } from './economy';
 import { createFarm, DEFAULT_WORK, farmWorkplace, updateCrops, type FarmState } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
 import { PLOT_SPACING } from './layout';
-import { employees, nameFor, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
-import { stockOf, type Stock } from './resources';
-import { createWorker, currentJob, updateWorker, type Workplace } from './worker';
+import { employees, nameFor, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
+import { BUILDERS_PER_SITE, createSite, siteWorkplace, type Site } from './site';
+import { RESOURCES, stockOf, type Stock } from './resources';
+import { createWorker, currentJob, offDuty, updateWorker, type Worker, type Workplace } from './worker';
 
 export const WORLD_WIDTH = 6400;
 export const PLOT_WIDTH = 200;
@@ -74,6 +76,8 @@ export interface Building {
   stock: Stock;
   /** Seconds until the village next collects from the store (economy.ts). */
   collectIn: number;
+  /** While under construction: the materials brought so far (site.ts). */
+  site?: Site;
   /** Fields — farms only, once finished. */
   farm?: FarmState;
 }
@@ -104,8 +108,6 @@ export interface World {
   /** Every villager, employed or not (people.ts). */
   people: Person[];
   animals: Animal[];
-  /** The village stockpile: pays for buildings, fed by their stores (economy.ts). */
-  stock: Stock;
   constructionEnabled: boolean;
   params: WorldParams;
   menu: BuildMenu | null;
@@ -133,6 +135,7 @@ export function rand(world: World): number {
 }
 
 const STARTING_VILLAGE: Array<[number, BuildingType]> = [
+  [5, 'warehouse'],
   [2, 'house'],
   [3, 'well'],
   [4, 'tavern'],
@@ -161,7 +164,6 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
     rider: { x: FIRST_PLOT_X + 5 * PLOT_SPACING + PLOT_SPACING / 2, vx: 0, facing: 1, gait: 0 },
     people: [],
     animals: [],
-    stock: { ...STARTING_STOCK },
     constructionEnabled: true,
     params: { ...DEFAULT_PARAMS },
     menu: null,
@@ -177,9 +179,11 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
       const b = placeBuilding(world, plotIndex, type, { instant: true, free: true });
       if (!b) continue;
       b.completedAt = -100; // no completion effect for the starting village
+      if (type === 'warehouse') b.stock = { ...WAREHOUSE_START };
     }
     world.events.length = 0;
-    const kinds: Array<Look | 'chicken'> = ['peasant', 'woman', 'monk', 'peasant', 'chicken', 'chicken', 'woman'];
+    // six villagers: one takes the farm, five are free to build
+    const kinds: Array<Look | 'chicken'> = ['peasant', 'woman', 'monk', 'peasant', 'chicken', 'chicken', 'woman', 'peasant'];
     for (const kind of kinds) {
       const id = world.nextId++;
       const stroll = {
@@ -190,9 +194,9 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
       };
       const seed = Math.floor(rand(world) * 1e6);
       if (kind === 'chicken') world.animals.push({ id, kind, seed, stroll });
-      else world.people.push({ id, name: nameFor(kind, seed), look: kind, seed, job: null, stroll });
+      else world.people.push({ id, name: nameFor(kind, seed, new Set(world.people.map((p) => p.name))), look: kind, seed, job: null, stroll });
     }
-    staffBuildings(world, (b) => createWorker(workplaceOf(world, b)!));
+    staff(world);
   }
   return world;
 }
@@ -220,13 +224,18 @@ export function placeBuilding(
   world: World,
   plotIndex: number,
   type: BuildingType,
-  /** instant: skip construction; free: don't charge the stockpile (the starting village). */
+  /**
+   * instant: skip construction (materials are taken from the warehouses at
+   * once); free: needs nothing from the warehouses (the starting village).
+   */
   opts: { instant?: boolean; free?: boolean } = {},
 ): Building | null {
   const plot = world.plots[plotIndex];
   if (!plot || plot.buildingId !== null) return null;
-  if (!opts.free && !payForBuilding(world, type)) return null;
+  // the warehouses must hold its materials, beyond what other sites are owed
+  if (!opts.free && Object.keys(buildShortfall(world, type)).length) return null;
   const instant = opts.instant ?? !world.constructionEnabled;
+  if (instant && !opts.free) takeFromWarehouses(world, BUILDINGS[type].cost, plot.x);
   const b: Building = {
     id: world.nextId++,
     type,
@@ -237,6 +246,8 @@ export function placeBuilding(
     stock: stockOf(),
     collectIn: COLLECT_EVERY,
   };
+  // builders bring the materials and build it (a free one has its materials on site already)
+  if (!instant) b.site = createSite(opts.free ? BUILDINGS[type].cost : {});
   world.buildings.push(b);
   if (instant && type === 'farm') b.farm = createFarm({ spots: farmFieldSpots(world, b) });
   // the new footprint may cover land neighbouring farms were using
@@ -249,13 +260,18 @@ export function placeBuilding(
 
 /**
  * Toggle the construction phase. Turning it off finishes every building
- * currently under construction immediately.
+ * currently under construction immediately, taking whatever materials it
+ * still lacks from the warehouses.
  */
 export function setConstructionEnabled(world: World, enabled: boolean): void {
   world.constructionEnabled = enabled;
   if (!enabled) {
     for (const b of world.buildings) {
-      if (b.status === 'constructing') complete(world, b);
+      if (b.status !== 'constructing') continue;
+      const lacks = { ...BUILDINGS[b.type].cost };
+      for (const r of RESOURCES) lacks[r] = Math.max(0, (lacks[r] ?? 0) - (b.site?.delivered[r] ?? 0));
+      takeFromWarehouses(world, lacks, world.plots[b.plotIndex].x);
+      complete(world, b);
     }
   }
 }
@@ -264,6 +280,13 @@ function complete(world: World, b: Building): void {
   b.progress = 1;
   b.status = 'done';
   b.completedAt = world.time;
+  delete b.site;
+  // the builders are done here; anything still in their arms goes back to a warehouse
+  for (const p of employees(world, b)) {
+    const load = p.job!.worker.carrying;
+    if (load) putAway(world, load, world.plots[b.plotIndex].x + p.job!.worker.dx);
+    release(world, p);
+  }
   if (b.type === 'farm') b.farm = createFarm({ spots: farmFieldSpots(world, b) });
   world.events.push({ kind: 'completed', buildingId: b.id });
 }
@@ -308,18 +331,36 @@ export function update(world: World, dt: number, input: MoveInput): void {
   world.time += dt;
   world.dayClock += dt * world.params.timeSpeed;
   updateRider(world, dt, world.menu ? { left: false, right: false } : input);
-  updateConstruction(world, dt);
-  staffBuildings(world, (b) => createWorker(workplaceOf(world, b)!));
+  staff(world);
   for (const b of world.buildings) if (b.farm) updateCrops(b.farm, dt);
   updateWorkers(world, dt);
+  // a site whose builders have done all the work is finished
+  for (const b of world.buildings) if (b.status === 'constructing' && b.progress >= 1) complete(world, b);
   collectGoods(world, dt);
   updateStrolls(world, dt, () => rand(world));
 }
 
 /** A building as a workplace for the people it employs; null if it has no work to give. */
 export function workplaceOf(world: World, b: Building): Workplace | null {
+  if (b.site) return siteWorkplace(world, b, world.params.buildSpeed);
   if (b.farm) return farmWorkplace(b.farm, b.stock, world.params);
   return null;
+}
+
+/** Hire for open jobs; construction sites only hire while it's light enough to work. */
+function staff(world: World): void {
+  const dayLabour = timeOfDay(world).daylight;
+  staffBuildings(world, (b, _role, who) => newWorker(world, b, who), { buildersPerSite: BUILDERS_PER_SITE, dayLabour });
+}
+
+/** A new hand walks over from wherever they are on the street. */
+function newWorker(world: World, b: Building, who: Person): Worker {
+  const place = workplaceOf(world, b)!;
+  const w = createWorker(place);
+  w.dx = who.stroll.x - world.plots[b.plotIndex].x;
+  w.facing = w.dx > 0 ? -1 : 1;
+  w.task = { kind: 'idle', wait: 0.2 };
+  return w;
 }
 
 function updateWorkers(world: World, dt: number): void {
@@ -327,9 +368,17 @@ function updateWorkers(world: World, dt: number): void {
   for (const b of world.buildings) {
     const place = workplaceOf(world, b);
     if (!place) continue;
-    const staff = employees(world, b).map((p) => p.job!.worker);
-    for (const w of staff) {
-      const taken = staff.filter((o) => o !== w).flatMap((o) => currentJob(o) ?? []);
+    const people = employees(world, b);
+    const staffers = people.map((p) => p.job!.worker);
+    for (const p of people) {
+      const w = p.job!.worker;
+      // day labourers are let go at nightfall, once they've finished the job in
+      // hand and delivered what they carry (they're hired again in the morning)
+      if (place.dayLabour && offDuty(w, now, place) && !w.carrying && w.task.kind !== 'job') {
+        release(world, p);
+        continue;
+      }
+      const taken = staffers.filter((o) => o !== w).flatMap((o) => currentJob(o) ?? []);
       updateWorker(w, place, dt, now, taken);
     }
   }
@@ -355,14 +404,6 @@ function updateRider(world: World, dt: number, input: MoveInput): void {
     r.vx = 0;
   }
   r.gait += Math.abs(r.vx) * dt;
-}
-
-function updateConstruction(world: World, dt: number): void {
-  for (const b of world.buildings) {
-    if (b.status !== 'constructing') continue;
-    b.progress += (dt * world.params.buildSpeed) / BUILDINGS[b.type].buildTime;
-    if (b.progress >= 1) complete(world, b);
-  }
 }
 
 // --- Construction stages ---------------------------------------------------

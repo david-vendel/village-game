@@ -8,7 +8,8 @@
 
 import { BUILDINGS, BUILDING_TYPES, ROLES, type Role } from '../game/buildings';
 import { clock } from '../game/daynight';
-import { buildShortfall } from '../game/economy';
+import { buildShortfall, villageStock } from '../game/economy';
+import { materialsAllow } from '../game/site';
 import { isBorrowed } from '../game/farm';
 import { employees } from '../game/people';
 import { RESOURCES, type Amounts } from '../game/resources';
@@ -30,7 +31,7 @@ const STAGE_LABEL: Record<ConstructionStage, string> = {
 };
 
 /** On-screen names of the jobs. */
-const ROLE_NAME: Record<Role, string> = { farmer: 'Farmer' };
+const ROLE_NAME: Record<Role, string> = { farmer: 'Farmer', builder: 'Builders' };
 
 /** "50 wood · 20 stone" (only the resources present). */
 function amounts(a: Amounts): string {
@@ -194,7 +195,7 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
   const hhmm = `${String(c.hours).padStart(2, '0')}:${String(c.minutes).padStart(2, '0')}`;
   text(ctx, `Day ${c.day} · ${hhmm}   Buildings: ${built}`, 16, y + 2, 12, '#cbbfa4');
   const working = world.people.filter((p) => p.job).length;
-  const stockLine = `${amounts(world.stock)}   People ${world.people.length} (${working} at work)`;
+  const stockLine = `Warehouse: ${amounts(villageStock(world))}   People ${world.people.length} (${working} at work)`;
   text(ctx, stockLine, 16, y + 18, fitSize(ctx, stockLine, 12, maxW), '#e8d9a8');
 
   button(ctx, L.zoomOut, false);
@@ -385,20 +386,32 @@ export function drawBuildingLabel(ctx: Ctx, world: World, b: Building, sx: numbe
   });
 }
 
-export function drawProgress(ctx: Ctx, b: Building, sx: number, y: number, k: number): void {
+/** Progress bar over a construction site, with how much of its materials have arrived. */
+export function drawProgress(ctx: Ctx, world: World, b: Building, sx: number, y: number, k: number): void {
   const w = 110;
   const { stage } = constructionStage(b.progress);
   const caption = `${BUILDINGS[b.type].name} — ${STAGE_LABEL[stage]}`;
+  const cost = BUILDINGS[b.type].cost;
+  const delivered = b.site?.delivered;
+  const builders = employees(world, b).length;
+  const materials =
+    RESOURCES.filter((r) => cost[r])
+      .map((r) => `${r} ${delivered?.[r] ?? 0}/${cost[r]}`)
+      .join(' · ') + `  ·  ${builders ? `${builders} builder${builders > 1 ? 's' : ''}` : 'no builders (night, or nobody free)'}`;
   ctx.font = `10px ${SERIF}`;
-  // box grows with the caption; the bar keeps its fixed width
-  const pw = Math.max(w, ctx.measureText(caption).width) + 12;
+  // box grows with the captions; the bar keeps its fixed width
+  const pw = Math.max(w, ctx.measureText(caption).width, ctx.measureText(materials).width) + 12;
   around(ctx, sx, y, k, () => {
-    panel(ctx, sx - pw / 2, y - 30, pw, 30, 0.6);
+    panel(ctx, sx - pw / 2, y - 44, pw, 44, 0.6);
     ctx.fillStyle = '#3a2e22';
-    ctx.fillRect(sx - w / 2, y - 12, w, 6);
+    ctx.fillRect(sx - w / 2, y - 26, w, 6);
+    // how far the materials allow, then how far it is built
+    ctx.fillStyle = 'rgba(232,200,114,0.3)';
+    ctx.fillRect(sx - w / 2, y - 26, w * materialsAllow(b), 6);
     ctx.fillStyle = GOLD;
-    ctx.fillRect(sx - w / 2, y - 12, w * b.progress, 6);
-    text(ctx, caption, sx, y - 17, 10, '#f3ead8', 'center');
+    ctx.fillRect(sx - w / 2, y - 26, w * b.progress, 6);
+    text(ctx, caption, sx, y - 31, 10, '#f3ead8', 'center');
+    text(ctx, materials, sx, y - 8, 10, '#cbbfa4', 'center');
   });
 }
 

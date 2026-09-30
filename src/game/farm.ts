@@ -7,7 +7,7 @@
 // worker routine.
 import { BUILDINGS } from './buildings';
 import { CELL_W, FIELD_REACH, FIELD_ROWS, HOME, PLOT_CELLS, PLOT_SPACING, STORE, workY, type FieldZone } from './layout';
-import { room, type Resource, type Stock } from './resources';
+import { room, type Load, type Stock } from './resources';
 import { currentJob, retarget, type JobTicket, type Worker, type Workplace } from './worker';
 
 export type { FieldZone };
@@ -236,7 +236,7 @@ export function farmWorkplace(farm: FarmState, stock: Stock, work: FarmWork = DE
       const perCell = job.action === 'sow' ? work.sowPerCell : work.harvestPerCell;
       return (p.width / CELL_W) * perCell;
     },
-    finish(job): Resource | null {
+    finish(job): Load | null {
       const p = farm.plots[job.target];
       if (!p) return null;
       p.age = 0;
@@ -246,10 +246,10 @@ export function farmWorkplace(farm: FarmState, stock: Stock, work: FarmWork = DE
       }
       p.state = 'fallow';
       if (isBorrowed(p)) p.tilled = false; // borrowed land goes back to grass
-      return 'grain';
+      return { resource: 'grain', amount: 1 }; // a sheaf
     },
-    deliver(r) {
-      stock[r] = Math.min(capacity[r] ?? 0, stock[r] + 1);
+    deliver(load) {
+      stock[load.resource] = Math.min(capacity[load.resource] ?? 0, stock[load.resource] + load.amount);
     },
   };
 }

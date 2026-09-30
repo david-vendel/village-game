@@ -19,7 +19,7 @@ const overlaps = ([a0, a1]: [number, number], [b0, b1]: [number, number]) => a0 
 describe('land grid', () => {
   it('plot centres fall on cell edges and footprints cover whole cells', () => {
     const w = createWorld({ village: false });
-    const b = placeBuilding(w, 3, 'blacksmith', { instant: true })!;
+    const b = placeBuilding(w, 3, 'blacksmith', { instant: true, free: true })!;
     const { from, to } = footprint(w, b);
     expect(to - from).toBe(8); // 170 px → 8 cells of 25
     const [x0, x1] = footprintX(w, b);
@@ -28,9 +28,9 @@ describe('land grid', () => {
 
   it('a farm between a chapel and a blacksmith keeps its back fields off their footprints', () => {
     const w = createWorld({ village: false });
-    const chapel = placeBuilding(w, 2, 'chapel', { instant: true })!;
-    const farm = placeBuilding(w, 3, 'farm', { instant: true })!;
-    const smith = placeBuilding(w, 4, 'blacksmith', { instant: true })!;
+    const chapel = placeBuilding(w, 2, 'chapel', { instant: true, free: true })!;
+    const farm = placeBuilding(w, 3, 'farm', { instant: true, free: true })!;
+    const smith = placeBuilding(w, 4, 'blacksmith', { instant: true, free: true })!;
     const back = spans(w, farm, 'back');
     for (const s of back) {
       expect(overlaps(s, footprintX(w, chapel))).toBe(false);
@@ -47,9 +47,9 @@ describe('land grid', () => {
 
   it('building next to a farm takes back the land its fields were on', () => {
     const w = createWorld({ village: false });
-    const farm = placeBuilding(w, 3, 'farm', { instant: true })!;
+    const farm = placeBuilding(w, 3, 'farm', { instant: true, free: true })!;
     const before = spans(w, farm, 'back').length;
-    const house = placeBuilding(w, 4, 'house')!; // still under construction: the land is claimed anyway
+    const house = placeBuilding(w, 4, 'house', { free: true })!; // still under construction: the land is claimed anyway
     const after = spans(w, farm, 'back');
     expect(after.length).toBeLessThan(before);
     for (const s of after) expect(overlaps(s, footprintX(w, house))).toBe(false);
@@ -57,14 +57,14 @@ describe('land grid', () => {
 
   it('the field next to the farmhouse keeps its crop when a neighbour trims it', () => {
     const w = createWorld({ village: false });
-    const farm = placeBuilding(w, 3, 'farm', { instant: true })!;
+    const farm = placeBuilding(w, 3, 'farm', { instant: true, free: true })!;
     const fx = w.plots[3].x;
     const nearest = () =>
       farm.farm!.plots.filter((p) => p.zone === 'back' && p.dx > 0).reduce((a, b) => (a.dx < b.dx ? a : b));
     const before = nearest();
     before.state = 'growing';
     before.age = 17;
-    const smith = placeBuilding(w, 4, 'blacksmith', { instant: true })!;
+    const smith = placeBuilding(w, 4, 'blacksmith', { instant: true, free: true })!;
     const after = nearest();
     expect(after.width).toBeLessThan(before.width); // the blacksmith took a cell of it
     expect(fx + after.dx + after.width / 2).toBeLessThanOrEqual(footprintX(w, smith)[0]);
@@ -74,9 +74,9 @@ describe('land grid', () => {
 
   it('a farm may borrow the land in front of both neighbouring lots, even with buildings on them', () => {
     const w = createWorld({ village: false });
-    placeBuilding(w, 7, 'chapel', { instant: true });
-    const farm = placeBuilding(w, 8, 'farm', { instant: true })!;
-    placeBuilding(w, 9, 'blacksmith', { instant: true });
+    placeBuilding(w, 7, 'chapel', { instant: true, free: true });
+    const farm = placeBuilding(w, 8, 'farm', { instant: true, free: true })!;
+    placeBuilding(w, 9, 'blacksmith', { instant: true, free: true });
     const x = w.plots[8].x;
     const front = spans(w, farm, 'front');
     expect(Math.min(...front.map((s) => s[0]))).toBe(w.plots[7].x - 125);
@@ -88,8 +88,8 @@ describe('land grid', () => {
 
   it('neighbouring farms share the land in front of the road without overlap', () => {
     const w = createWorld({ village: false });
-    const a = placeBuilding(w, 3, 'farm', { instant: true })!;
-    const b = placeBuilding(w, 4, 'farm', { instant: true })!;
+    const a = placeBuilding(w, 3, 'farm', { instant: true, free: true })!;
+    const b = placeBuilding(w, 4, 'farm', { instant: true, free: true })!;
     for (const zone of ['back', 'front'] as const) {
       for (const sa of spans(w, a, zone)) for (const sb of spans(w, b, zone)) expect(overlaps(sa, sb)).toBe(false);
     }

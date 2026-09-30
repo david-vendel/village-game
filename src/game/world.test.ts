@@ -1,3 +1,4 @@
+import { stockOf } from './resources';
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS, BUILDING_TYPES } from './buildings';
 import {
@@ -36,7 +37,7 @@ describe('building registry', () => {
 describe('placement', () => {
   it('places a building on an empty plot and marks the plot taken', () => {
     const w = emptyWorld();
-    const b = placeBuilding(w, 0, 'mill');
+    const b = placeBuilding(w, 0, 'mill', { free: true });
     expect(b).not.toBeNull();
     expect(w.plots[0].buildingId).toBe(b!.id);
     expect(b!.status).toBe('constructing');
@@ -44,9 +45,9 @@ describe('placement', () => {
 
   it('refuses to place on an occupied or missing plot', () => {
     const w = emptyWorld();
-    placeBuilding(w, 0, 'house');
-    expect(placeBuilding(w, 0, 'farm')).toBeNull();
-    expect(placeBuilding(w, 9999, 'farm')).toBeNull();
+    placeBuilding(w, 0, 'house', { free: true });
+    expect(placeBuilding(w, 0, 'farm', { free: true })).toBeNull();
+    expect(placeBuilding(w, 9999, 'farm', { free: true })).toBeNull();
     expect(w.buildings).toHaveLength(1);
   });
 
@@ -66,6 +67,7 @@ describe('placement', () => {
 describe('build menu', () => {
   it('opens only at an empty plot and places the selected type', () => {
     const w = emptyWorld();
+    placeBuilding(w, 10, 'warehouse', { instant: true, free: true })!.stock = stockOf({ wood: 300, stone: 300 });
     w.rider.x = w.plots[2].x + 10;
     expect(openMenu(w)).toBe(true);
     moveMenu(w, 2);
@@ -104,29 +106,35 @@ describe('build menu', () => {
 });
 
 describe('construction', () => {
-  it('progresses over buildTime and completes with an event', () => {
-    const w = emptyWorld();
-    const b = placeBuilding(w, 0, 'well')!;
+  it('is built by its builders over buildTime of labour, and completes with an event', () => {
+    const w = createWorld(); // villagers to hire
+    const b = placeBuilding(w, 7, 'well', { free: true })!; // materials already on site
     w.events.length = 0;
-    runFor(w, BUILDINGS.well.buildTime / 2);
-    expect(b.progress).toBeGreaterThan(0.45);
-    expect(b.status).toBe('constructing');
-    runFor(w, BUILDINGS.well.buildTime / 2 + 0.1);
-    expect(b.status).toBe('done');
+    // builders walk over from the street, then two of them share the labour
+    const done = () => b.status === 'done';
+    for (let t = 0; t < 120 && !done(); t += 1 / 30) update(w, 1 / 30, { left: false, right: false });
+    expect(done()).toBe(true);
     expect(b.progress).toBe(1);
     expect(w.events).toContainEqual({ kind: 'completed', buildingId: b.id });
+  });
+
+  it('nothing gets built without anyone to build it', () => {
+    const w = emptyWorld();
+    const b = placeBuilding(w, 0, 'well', { free: true })!;
+    runFor(w, BUILDINGS.well.buildTime * 2);
+    expect(b.progress).toBe(0);
   });
 
   it('with construction disabled buildings appear finished instantly', () => {
     const w = emptyWorld();
     setConstructionEnabled(w, false);
-    const b = placeBuilding(w, 1, 'chapel')!;
+    const b = placeBuilding(w, 1, 'chapel', { free: true })!;
     expect(b.status).toBe('done');
   });
 
   it('disabling construction finishes buildings in progress', () => {
     const w = emptyWorld();
-    const b = placeBuilding(w, 1, 'chapel')!;
+    const b = placeBuilding(w, 1, 'chapel', { free: true })!;
     runFor(w, 1);
     setConstructionEnabled(w, false);
     expect(b.status).toBe('done');

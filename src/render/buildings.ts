@@ -4,7 +4,7 @@
 
 import type { BuildingType } from '../game/buildings';
 import { demoFarm, type FarmState } from '../game/farm';
-import { stockOf, type Stock } from '../game/resources';
+import { stockOf, type Amounts, type Stock } from '../game/resources';
 import type { Worker } from '../game/worker';
 import { doorProgress, drawBackFences, drawBackField, drawFrontField, drawStore } from './farm';
 import { circle, type Ctx, ellipse, hash, line, poly, rect, shade, smoke } from './util';
@@ -23,6 +23,8 @@ export interface DrawArgs {
   stock?: Stock;
   /** The people working here (for doors, sleepers…). */
   workers?: Worker[];
+  /** Under construction: materials lying on the site, not yet built with. */
+  onSite?: Amounts;
   /** Ground-perspective vanishing point x (see ground.ts); defaults to `x`. */
   vpX?: number;
 }
@@ -332,6 +334,46 @@ function drawSnore(ctx: Ctx, x: number, y: number, time: number): void {
     ctx.fillText('z', x + t * 18 + Math.sin(t * 6) * 3, y - t * 34);
   }
   ctx.restore();
+}
+
+function drawWarehouse(ctx: Ctx, a: DrawArgs): void {
+  // a long timber storehouse on a stone base, with wide double doors
+  const w = 104;
+  const d = 40;
+  const x0 = a.x - 84;
+  stonePlinth(ctx, x0, a.base, w, 12, d, '#a89c88');
+  block(ctx, x0, a.base - 12, w, 46, d, '#9a7650');
+  for (let px = x0 + 4; px < x0 + w; px += 7) line(ctx, px, a.base - 12, px, a.base - 58, '#7d5d3d', 1); // boards
+  rect(ctx, x0 - 2, a.base - 60, w + 4, 4, '#5e452e'); // top beam
+  door(ctx, x0 + 36, a.base, 32, 44, '#6b4a2c');
+  line(ctx, x0 + 52, a.base - 44, x0 + 52, a.base, '#4a3322', 1.5); // between the two leaves
+  line(ctx, x0 + 36, a.base - 30, x0 + 68, a.base - 8, '#4a3322', 1.5); // bracing
+  gableRoof(ctx, x0 - 4, a.base - 58, w + 8, d, 40, '#8e4a33', '#9a7650', 'tile', a.seed);
+
+  // what's inside shows in the stacks outside: a log pile and a stone heap, and sacks of grain
+  const stock = a.stock;
+  const logs = Math.min(12, Math.ceil((stock?.wood ?? 0) / 10));
+  const px = x0 + w + d * OX + 6;
+  for (let i = 0; i < logs; i++) {
+    const row = i < 5 ? 0 : i < 9 ? 1 : i < 11 ? 2 : 3;
+    const inRow = [0, 5, 9, 11][row];
+    const lx = px + (i - inRow) * 7 + row * 3.5;
+    const ly = a.base - 3 - row * 6;
+    ellipse(ctx, lx, ly, 3.4, 3.2, '#8b6440');
+    ellipse(ctx, lx, ly, 2.2, 2, '#c9a577');
+  }
+  const stones = Math.min(10, Math.ceil((stock?.stone ?? 0) / 10));
+  const sx = x0 - 30;
+  for (let i = 0; i < stones; i++) {
+    const row = i < 4 ? 0 : i < 7 ? 1 : i < 9 ? 2 : 3;
+    const inRow = [0, 4, 7, 9][row];
+    const bx = sx + (i - inRow) * 7 + row * 3.5;
+    const by = a.base - 5 - row * 5;
+    rect(ctx, bx, by, 6.5, 5, shade('#aaa398', -hash(a.seed, i) * 0.15));
+    rect(ctx, bx, by, 6.5, 1.5, '#c4beb3');
+  }
+  const sacks = Math.min(4, Math.ceil((stock?.grain ?? 0) / 10));
+  for (let i = 0; i < sacks; i++) ellipse(ctx, x0 + 12 + i * 8, a.base - 5, 4, 5.5, '#d8c79a');
 }
 
 function drawMill(ctx: Ctx, a: DrawArgs): void {
@@ -720,6 +762,7 @@ function drawWell(ctx: Ctx, a: DrawArgs): void {
 }
 
 export const BUILDING_ART: Record<BuildingType, BuildingArt> = {
+  warehouse: { height: 120, draw: drawWarehouse },
   house: { height: 140, draw: drawHouse },
   farm: { height: 120, behind: drawFarmField, draw: drawFarm, front: drawFarmFrontField },
   mill: { height: 250, draw: drawMill },
@@ -733,7 +776,7 @@ export const BUILDING_ART: Record<BuildingType, BuildingArt> = {
 
 const DEMO_FARM = demoFarm();
 /** Menu previews show a half-full store. */
-const DEMO_STOCK = stockOf({ grain: 3 });
+const DEMO_STOCK = stockOf({ grain: 3, wood: 60, stone: 50 });
 
 /** Small icon-sized preview for the build menu (draws the real art, scaled). */
 export function drawBuildingIcon(ctx: Ctx, type: BuildingType, x: number, base: number, scale: number, time: number): void {

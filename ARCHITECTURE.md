@@ -79,16 +79,25 @@ src/app      input, screen/zoom, actions     main.ts wires it all into the loop
   workers. Tested by `world.test.ts`.
 - `resources.ts`: resources (wood, stone, grain), `Stock` (an amount of each) and `Amounts` (some
   of them, e.g. a cost), with affordability and payment helpers.
-- `economy.ts`: the village stockpile: what a new village starts with (`STARTING_STOCK`), paying
-  for buildings (placing one charges its cost; the menu shows costs and what is missing), and
-  collecting goods from buildings' stores into the stockpile, one of each every `COLLECT_EVERY` s.
+- `economy.ts`: the village's materials are what its warehouses hold (the starting warehouse
+  has `WAREHOUSE_START`: 50 wood, 50 stone). A new building can start only if the warehouses
+  hold its cost beyond what other sites are still owed. Goods from producers' stores (a farm's
+  sheaves) are collected into a warehouse, one of each every `COLLECT_EVERY` s.
+- `site.ts`: construction. A placed building is a site that hires up to `BUILDERS_PER_SITE`
+  idle villagers as builders (day labour: no lunch, let go at nightfall, hired again in the
+  morning). They fetch its cost from the nearest warehouse `LOAD_SIZE` at a time, carry it over
+  and build with it in `BUILD_CHUNK`s of labour (`buildTime` in all, scaled by the build-speed
+  slider); progress never runs ahead of the materials delivered. With construction off,
+  buildings are finished at once from the warehouses' stock.
 - `people.ts`: every villager is a `Person` with an id number, a name, a look and a `job` (a
   building and role, plus their `Worker` state) or none. The unemployed stroll the street;
-  `staffBuildings` fills finished buildings' open jobs with the nearest of them. Chickens are
-  `Animal`s.
+  `staffBuildings` fills open jobs (a finished building's own, builders at sites) with the
+  nearest of them, who walk over from where they are. A new village has six: one farmer and
+  five free hands. Chickens are `Animal`s.
 - `worker.ts`: the working day, the same for every job: work in daylight, go home at 11:30
   (`LUNCH_AT`) and eat for an hour (`LUNCH_HOURS`) once inside, once a day; sleep at night; step
-  in and out of the door (`DOOR_TIME`); carry goods to the store. What the work *is* comes from the
+  in and out of the door (`DOOR_TIME`); carry loads (walking faster with empty hands,
+  `WALK_SPEED_EMPTY`). What the work *is* comes from the
   building as a `Workplace`: its door and store, the next job, how long a job takes, what it yields.
 - `farm.ts`: the farm's fields, and the farm as a `Workplace`. Tested by `farm.test.ts`. Plots lie
   on the free land-grid cells around it (see `land.ts`) in rows (`FIELD_ROWS` in `layout.ts`): one
@@ -184,7 +193,8 @@ src/app      input, screen/zoom, actions     main.ts wires it all into the loop
 
 ## Not done yet / ideas
 
-- Wood and stone can't be produced yet (no woodcutter or quarry), so the starting stockpile is
-  all there is. Grain piles up in the stockpile with nothing to use it. New people don't arrive
+- Wood and stone can't be produced yet (no woodcutter or quarry), so the starting warehouse is
+  all there is. Grain piles up in the warehouse with nothing to use it. Farm grain is moved to
+  the warehouse by an invisible collection, not carried. New people don't arrive
   (houses could house newcomers), and there is no way to fire or reassign a worker.
 - No music. No lit windows or lanterns at night yet. One save slot; no offline progress while the page is closed.

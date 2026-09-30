@@ -5,6 +5,9 @@
 // (ground.ts), the same projection the land-grid overlay uses.
 
 import { type FarmState, type FieldPlot, growth } from '../game/farm';
+import type { Role } from '../game/buildings';
+import type { Look } from '../game/people';
+import { drawHead, tunicOf } from './people';
 import { DOOR_TIME, WALK_SPEED, type Worker } from '../game/worker';
 import { BACK_FIELD, BASE_Y, FIELD_ROWS, FRONT_FIELD, STORE, VIEW_H } from '../game/layout';
 import { groundX } from './ground';
@@ -180,7 +183,11 @@ export function doorProgress(f: Worker): number {
   return t.kind === 'home' ? 1 : 0;
 }
 
-export function drawFarmer(ctx: Ctx, f: Worker, x: number, y: number, time: number): void {
+/**
+ * A villager at work: the farmer (straw hat) or a builder (cap), walking,
+ * sowing, scything, hammering, loading up, or carrying a load.
+ */
+export function drawWorker(ctx: Ctx, f: Worker, role: Role, who: { look: Look; seed: number }, x: number, y: number, time: number): void {
   const inDoor = doorProgress(f);
   if (inDoor >= 1) return; // indoors
   const s = farmerScale(f.y) * (1 - 0.15 * inDoor); // a step back into the doorway
@@ -205,18 +212,27 @@ export function drawFarmer(ctx: Ctx, f: Worker, x: number, y: number, time: numb
   const job = task.kind === 'job' ? task : null;
   const working = !!job;
   const action = job?.job.action;
-  const bend = working ? (action === 'sow' ? 0.12 : 0.25 + Math.sin(time * 4) * 0.08) : 0;
+  const bend = !working ? 0 : action === 'sow' ? 0.12 : action === 'build' ? 0.08 : action === 'harvest' ? 0.25 + Math.sin(time * 4) * 0.08 : 0.4;
 
   line(ctx, 0, -14 - bob, Math.sin(swing) * 9, 0, '#3d3128', 3);
   line(ctx, 0, -14 - bob, Math.sin(-swing) * 9, 0, '#4d3f33', 3);
   ctx.save();
   ctx.translate(0, -14 - bob);
   ctx.rotate(bend);
-  poly(ctx, [-6, 2, 6, 2, 5, -13, -5, -13], '#8a6a3c'); // smock
-  line(ctx, -6, -1, 6, -1, '#5a4330', 1.5); // belt
-  circle(ctx, 0, -17, 4.5, '#e0b48e');
-  ellipse(ctx, 0, -20, 8, 2.2, '#d8bf6a'); // straw hat
-  ellipse(ctx, 0, -22, 4, 3, '#d8bf6a');
+  // their own clothes (the same as on the street), with a hat for the job
+  const builder = role === 'builder';
+  const tunic = tunicOf(who.look, who.seed);
+  if (who.look === 'woman') {
+    poly(ctx, [-8, 12, 8, 12, 4, -12, -4, -12], tunic); // dress
+    poly(ctx, [-4, 0, 5, 0, 6, 12, -3, 12], '#e9e1d2'); // apron
+  } else if (who.look === 'monk') {
+    poly(ctx, [-7, 14, 7, 14, 5, -13, -5, -13], tunic); // robe
+    line(ctx, -5, 0, 5, 0, '#c9b07a', 1.5); // cord
+  } else {
+    poly(ctx, [-6, 2, 6, 2, 5, -13, -5, -13], tunic); // tunic
+    line(ctx, -6, -1, 6, -1, '#5a4330', 1.5); // belt
+  }
+  drawHead(ctx, who.look, 0, -17, builder ? 'cap' : 'straw');
 
   if (job && action === 'sow') {
     // seed bag at the hip; the arm casts seed in an arc
@@ -250,13 +266,45 @@ export function drawFarmer(ctx: Ctx, f: Worker, x: number, y: number, time: numb
     line(ctx, 1, -11, 5, -5, '#e0b48e', 2.5);
     ctx.restore();
     drawProgressPips(ctx, job.t / job.duration);
+  } else if (job && action === 'build') {
+    // hammering at the work
+    const swingArm = -0.9 + Math.abs(Math.sin(time * 6)) * 1.4;
+    ctx.save();
+    ctx.translate(1, -11);
+    ctx.rotate(swingArm);
+    line(ctx, 0, 0, 9, 0, '#e0b48e', 2.5);
+    line(ctx, 9, 0, 9, -8, '#6b4a2c', 1.8);
+    rect(ctx, 6, -10, 7, 3, '#8a8a8a');
+    ctx.restore();
+    ctx.restore();
+    drawProgressPips(ctx, job.t / job.duration);
+  } else if (job) {
+    // loading up at the warehouse
+    line(ctx, 1, -11, 6, -1, '#e0b48e', 2.5);
+    ctx.restore();
+    drawProgressPips(ctx, job.t / job.duration);
   } else {
-    line(ctx, 1, -11, 1 + Math.sin(-swing) * 6, -2, '#8a6a3c', 3);
-    if (f.carrying) {
+    const load = f.carrying?.resource;
+    if (load === 'stone') {
+      // a block of stone held in both arms
+      line(ctx, 1, -11, 7, -7, '#e0b48e', 2.5);
+      rect(ctx, 3, -12, 10, 7, '#aaa398');
+      rect(ctx, 3, -12, 10, 2, '#c4beb3');
+    } else {
+      line(ctx, 1, -11, 1 + Math.sin(-swing) * 6, -2, tunic, 3);
+    }
+    if (load === 'grain') {
       // a sheaf over the shoulder
       ctx.rotate(-0.9);
       poly(ctx, [8, -8, 12, -8, 14, -26, 6, -26], '#caa24a');
       line(ctx, 7, -16, 13, -16, '#7a5a2a', 2);
+    } else if (load === 'wood') {
+      // two logs over the shoulder
+      ctx.rotate(-0.25);
+      for (const dy of [-15, -11]) {
+        rect(ctx, -12, dy, 24, 4, '#8b6440');
+        circle(ctx, 12, dy + 2, 2, '#c9a577');
+      }
     }
     ctx.restore();
   }

@@ -8,6 +8,7 @@
 import type { Amounts } from './resources';
 
 export type BuildingType =
+  | 'warehouse'
   | 'house'
   | 'farm'
   | 'mill'
@@ -18,9 +19,9 @@ export type BuildingType =
   | 'watchtower'
   | 'well';
 
-/** Jobs a building can offer (see people.ts). */
-export type Role = 'farmer';
-export const ROLES: readonly Role[] = ['farmer'];
+/** Jobs a building can offer (see people.ts); builders work on construction sites (site.ts). */
+export type Role = 'farmer' | 'builder';
+export const ROLES: readonly Role[] = ['farmer', 'builder'];
 
 export interface BuildingDef {
   type: BuildingType;
@@ -30,7 +31,7 @@ export interface BuildingDef {
   width: number;
   /** Seconds to construct when construction is enabled. */
   buildTime: number;
-  /** Paid from the village stockpile when construction starts. */
+  /** Materials builders must bring from the warehouse to build it (site.ts). */
   cost: Amounts;
   /** What the building's own store holds, and how much of each. */
   storage: Amounts;
@@ -39,6 +40,16 @@ export interface BuildingDef {
 }
 
 export const BUILDINGS: Record<BuildingType, BuildingDef> = {
+  warehouse: {
+    type: 'warehouse',
+    name: 'Warehouse',
+    purpose: "Holds the village's wood, stone and grain. Builders fetch from here.",
+    width: 170,
+    buildTime: 14,
+    cost: { wood: 60, stone: 40 },
+    storage: { wood: 300, stone: 300, grain: 100 },
+    jobs: {},
+  },
   house: {
     type: 'house',
     name: 'House',

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS } from './buildings';
 import type { TimeOfDay } from './daynight';
-import { COLLECT_EVERY, STARTING_STOCK } from './economy';
+import { COLLECT_EVERY, villageStock, WAREHOUSE_START } from './economy';
 import { createFarm, farmWorkplace, GROW_TIME, isBorrowed, updateCrops, type FieldPlot } from './farm';
 import { HOME, STORE } from './layout';
 import { employees } from './people';
@@ -162,38 +162,89 @@ describe('farms in the world', () => {
     expect(w.people.filter((p) => !p.job).length).toBe(w.people.length - 1);
   });
 
-  it('a farm hires only once construction is finished, and only if someone is free', () => {
+  it('a farm hires its farmer once finished, and only if someone is free', () => {
     const w = createWorld();
     const b = placeBuilding(w, 0, 'farm')!;
     expect(b.farm).toBeUndefined();
-    expect(employees(w, b)).toHaveLength(0);
-    tick(w, 13);
-    expect(b.status).toBe('done');
-    expect(employees(w, b)).toHaveLength(1);
+    tick(w, 1);
+    expect(employees(w, b).every((p) => p.job!.role === 'builder')).toBe(true);
+    const done = placeBuilding(w, 1, 'farm', { instant: true, free: true })!;
+    tick(w, 1);
+    expect(employees(w, done).map((p) => p.job!.role)).toEqual(['farmer']);
     const empty = createWorld({ village: false });
-    const lonely = placeBuilding(empty, 0, 'farm', { instant: true })!;
+    const lonely = placeBuilding(empty, 0, 'farm', { instant: true, free: true })!;
     tick(empty, 1);
     expect(employees(empty, lonely)).toHaveLength(0);
   });
 
-  it('building costs wood and stone, and the village can run short', () => {
-    const w = createWorld({ village: false });
-    placeBuilding(w, 0, 'farm');
-    expect(w.stock.wood).toBe(STARTING_STOCK.wood - BUILDINGS.farm.cost.wood!);
-    expect(w.stock.stone).toBe(STARTING_STOCK.stone - BUILDINGS.farm.cost.stone!);
-    w.stock.stone = 0;
-    expect(placeBuilding(w, 1, 'chapel')).toBeNull();
-    expect(w.plots[1].buildingId).toBeNull();
-  });
-
-  it('the village collects the harvest from the farm store into its stockpile', () => {
+  it('the village collects the harvest from the farm store into the warehouse', () => {
     const w = createWorld();
     const farm = w.buildings.find((b) => b.type === 'farm')!;
     farm.stock.grain = 3;
     farm.collectIn = 0.01;
     tick(w, 0.1);
     expect(farm.stock.grain).toBe(2);
-    expect(w.stock.grain).toBe(1);
+    expect(villageStock(w).grain).toBe(1);
     expect(farm.collectIn).toBeGreaterThan(COLLECT_EVERY - 1);
+  });
+});
+
+describe('construction by builders', () => {
+  const tick = (w: ReturnType<typeof createWorld>, seconds: number) => {
+    for (let t = 0; t < seconds; t += 1 / 30) update(w, 1 / 30, { left: false, right: false });
+  };
+
+  it('the village starts with a stocked warehouse and five idle villagers', () => {
+    const w = createWorld();
+    expect(w.buildings.some((b) => b.type === 'warehouse' && b.status === 'done')).toBe(true);
+    expect(villageStock(w)).toMatchObject({ wood: WAREHOUSE_START.wood, stone: WAREHOUSE_START.stone });
+    expect(w.people.filter((p) => !p.job)).toHaveLength(5);
+  });
+
+  it('builders carry the materials from the warehouse and build with them', () => {
+    const w = createWorld();
+    const everyone = w.people.map((p) => p.id).sort();
+    const well = placeBuilding(w, 7, 'well')!;
+    const cost = BUILDINGS.well.cost;
+    // nothing is taken up front: builders fetch it
+    expect(villageStock(w).stone).toBe(WAREHOUSE_START.stone);
+    tick(w, 1);
+    expect(employees(w, well).every((p) => p.job!.role === 'builder')).toBe(true);
+    expect(employees(w, well).length).toBeGreaterThan(0);
+    let carried = false;
+    let aheadOfMaterials = false;
+    for (let t = 0; t < 400 && well.status !== 'done'; t += 1 / 30) {
+      update(w, 1 / 30, { left: false, right: false });
+      carried ||= employees(w, well).some((p) => p.job!.worker.carrying?.resource === 'stone');
+      const delivered = well.site ? well.site.delivered.wood + well.site.delivered.stone : 0;
+      if (well.site && well.progress > delivered / (cost.wood! + cost.stone!) + 1e-9) aheadOfMaterials = true;
+    }
+    expect(well.status).toBe('done');
+    expect(carried).toBe(true);
+    expect(aheadOfMaterials).toBe(false);
+    expect(villageStock(w)).toMatchObject({ wood: WAREHOUSE_START.wood - cost.wood!, stone: WAREHOUSE_START.stone - cost.stone! });
+    // the builders go back to strolling; nobody appeared or vanished along the way
+    expect(employees(w, well)).toHaveLength(0);
+    expect(w.people.map((p) => p.id).sort()).toEqual(everyone);
+  });
+
+  it('a new building must be covered by what the warehouses hold beyond other sites', () => {
+    const w = createWorld();
+    expect(placeBuilding(w, 7, 'farm')).not.toBeNull(); // 50 wood, 20 stone: all the wood
+    expect(placeBuilding(w, 9, 'house')).toBeNull(); // the wood is promised to the farm
+    expect(w.plots[9].buildingId).toBeNull();
+  });
+
+  it('empty-handed people walk faster than loaded ones', () => {
+    const r = rig();
+    r.w.task = { kind: 'walk', toDx: r.w.dx + 500, toY: r.w.y, then: 'home', job: null };
+    const x0 = r.w.dx;
+    r.run(0.5);
+    const empty = Math.abs(r.w.dx - x0);
+    r.w.carrying = { resource: 'grain', amount: 1 };
+    r.w.task = { kind: 'walk', toDx: r.w.dx + 500, toY: r.w.y, then: 'deliver', job: null };
+    const x1 = r.w.dx;
+    r.run(0.5);
+    expect(Math.abs(r.w.dx - x1)).toBeLessThan(empty);
   });
 });

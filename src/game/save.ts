@@ -17,16 +17,17 @@
 //    migration chain; a save newer than this code is refused, never overwritten.
 
 import { BUILDING_TYPES, BUILDINGS, ROLES, type BuildingType } from './buildings';
-import { COLLECT_EVERY, STARTING_STOCK } from './economy';
+import { COLLECT_EVERY } from './economy';
 import { createFarm, repairFarm, type FarmState, type FieldPlot } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
 import { FIELD_ROWS, type FieldZone } from './layout';
-import { employees, nameFor, type Animal, type Job, type Look, type Person, type Stroll } from './people';
-import { RESOURCES, type Resource, type Stock } from './resources';
+import { BUILDERS_PER_SITE, createSite } from './site';
+import { employees, nameFor, openings, type Animal, type Job, type Look, type Person, type Stroll } from './people';
+import { RESOURCES, type Load, type Resource, type Stock } from './resources';
 import type { Worker, WorkerTask } from './worker';
 import { createWorld, type Building, type Rider, type World } from './world';
 
-export const SAVE_VERSION = 7;
+export const SAVE_VERSION = 8;
 
 /** The persisted part of the world. */
 export type SavedWorld = Pick<
@@ -37,7 +38,6 @@ export type SavedWorld = Pick<
   | 'rider'
   | 'people'
   | 'animals'
-  | 'stock'
   | 'constructionEnabled'
   | 'lastSelection'
   | 'nextId'
@@ -162,8 +162,52 @@ const MIGRATIONS: Record<number, (world: unknown) => unknown> = {
     w.people = people;
     w.animals = animals;
     delete w.villagers;
-    w.stock = { ...STARTING_STOCK };
+    w.stock = { wood: 250, stone: 250, grain: 0 }; // the stockpile v7 started with
     w.nextId = nextId;
+    return world;
+  },
+  // v8: the village's materials live in a warehouse (one is built for old saves,
+  // holding the old stockpile); builders now carry materials to construction
+  // sites (old sites were paid in full up front, so count as fully supplied);
+  // what a worker carries is a load with an amount
+  7: (world) => {
+    const rec = (v: unknown) => (typeof v === 'object' && v !== null ? (v as Raw) : undefined);
+    const list = (v: unknown) => (Array.isArray(v) ? (v as unknown[]) : []);
+    const w = rec(world);
+    if (!w) return world;
+    const buildings = list(w.buildings).map(rec).filter((b): b is Raw => !!b);
+    for (const b of buildings) {
+      if (b.status === 'constructing') {
+        const cost = BUILDINGS[b.type as BuildingType]?.cost ?? {};
+        b.site = { delivered: { wood: cost.wood ?? 0, stone: cost.stone ?? 0, grain: cost.grain ?? 0 } };
+      }
+    }
+    for (const p of list(w.people)) {
+      const worker = rec(rec(rec(p)?.job)?.worker);
+      if (worker && typeof worker.carrying === 'string') worker.carrying = { resource: worker.carrying, amount: 1 };
+    }
+    const old = rec(w.stock) ?? {};
+    if (!buildings.some((b) => b.type === 'warehouse')) {
+      const taken = new Set(buildings.map((b) => b.plotIndex));
+      const plotIndex = [5, 7, 9, 1, 10, 12, 14, 15, 0, 17, 18, 19, 20, 21, 22].find((i) => !taken.has(i));
+      if (plotIndex !== undefined) {
+        const cap = BUILDINGS.warehouse.storage;
+        const amount = (r: 'wood' | 'stone' | 'grain') => Math.min(cap[r] ?? 0, typeof old[r] === 'number' ? (old[r] as number) : 0);
+        const id = typeof w.nextId === 'number' ? w.nextId : 1;
+        w.nextId = id + 1;
+        (w.buildings as unknown[]).push({
+          id,
+          type: 'warehouse',
+          plotIndex,
+          progress: 1,
+          status: 'done',
+          completedAt: -100,
+          stock: { wood: amount('wood'), stone: amount('stone'), grain: amount('grain') },
+          collectIn: COLLECT_EVERY,
+        });
+      }
+    }
+    delete w.stock;
     return world;
   },
 };
@@ -177,7 +221,6 @@ export function saveWorld(world: World): SaveData {
     rider: world.rider,
     people: world.people,
     animals: world.animals,
-    stock: world.stock,
     constructionEnabled: world.constructionEnabled,
     lastSelection: world.lastSelection,
     nextId: world.nextId,
@@ -220,10 +263,16 @@ function build(saved: SavedWorld): World {
   }
   const maxId = Math.max(0, ...[...world.buildings, ...world.people, ...world.animals].map((x) => x.id));
   world.nextId = Math.max(world.nextId, maxId + 1);
-  // a job must be at a finished building that offers it; otherwise the person is out of work
+  // a job must be at a building that offers it (its own jobs once finished,
+  // builders while a site); otherwise the person is out of work
   for (const p of world.people) {
     const b = p.job && world.buildings.find((x) => x.id === p.job!.buildingId);
-    if (p.job && (!b || b.status !== 'done' || !BUILDINGS[b.type].jobs[p.job.role])) p.job = null;
+    if (p.job && (!b || !openings(b, BUILDERS_PER_SITE, true)[p.job.role])) p.job = null;
+  }
+  // a construction site record belongs to buildings under construction only
+  for (const b of world.buildings) {
+    if (b.status === 'done') delete b.site;
+    else b.site ??= createSite();
   }
   // farm state belongs to finished farms only
   for (const b of world.buildings) {
@@ -292,7 +341,6 @@ function savedWorld(v: unknown): SavedWorld {
     rider: rider(w.rider, 'rider'),
     people: arr(w.people, 'people').map((x, i) => person(x, `people[${i}]`)),
     animals: arr(w.animals, 'animals').map((x, i) => animal(x, `animals[${i}]`)),
-    stock: stock(w.stock, 'stock'),
     constructionEnabled: bool(w.constructionEnabled, 'constructionEnabled'),
     lastSelection: oneOf(w.lastSelection, BUILDING_TYPES.map((_, i) => i), 'lastSelection'),
     nextId: int(w.nextId, 'nextId'),
@@ -312,6 +360,7 @@ function building(v: unknown, path: string): Building {
     stock: stock(b.stock, `${path}.stock`),
     collectIn: num(b.collectIn, `${path}.collectIn`),
   };
+  if (b.site !== undefined) out.site = { delivered: stock(obj(b.site, `${path}.site`).delivered, `${path}.site.delivered`) };
   if (b.farm !== undefined) out.farm = farm(b.farm, `${path}.farm`);
   return out;
 }
@@ -379,11 +428,16 @@ function worker(v: unknown, path: string): Worker {
     dx: num(w.dx, `${path}.dx`),
     y: num(w.y, `${path}.y`),
     facing: dir(w.facing, `${path}.facing`),
-    carrying: w.carrying === null ? null : oneOf<Resource>(w.carrying, RESOURCES, `${path}.carrying`),
+    carrying: w.carrying === null ? null : load(w.carrying, `${path}.carrying`),
     task: task(w.task, `${path}.task`),
     stride: num(w.stride, `${path}.stride`),
     lunchDay: int(w.lunchDay, `${path}.lunchDay`),
   };
+}
+
+function load(v: unknown, path: string): Load {
+  const l = obj(v, path);
+  return { resource: oneOf<Resource>(l.resource, RESOURCES, `${path}.resource`), amount: Math.max(0, num(l.amount, `${path}.amount`)) };
 }
 
 /** A job ticket; whether its target still exists is checked by the workplace on load (repairFarm). */

@@ -48,10 +48,16 @@ const NAMES: Record<Look, readonly string[]> = {
   monk: ['Brother Anselm', 'Brother Bede', 'Brother Cuthbert', 'Brother Dunstan'],
 };
 
-/** A name for a new villager, picked by seed. */
-export function nameFor(look: Look, seed: number): string {
+/** A name for a new villager, picked by seed, and not one already `taken` in the village. */
+export function nameFor(look: Look, seed: number, taken: ReadonlySet<string> = new Set()): string {
   const list = NAMES[look];
-  return list[Math.floor(seed) % list.length];
+  const start = Math.floor(Math.abs(seed)) % list.length;
+  for (let i = 0; i < list.length; i++) {
+    const name = list[(start + i) % list.length];
+    if (!taken.has(name)) return name;
+  }
+  // every name of that kind is in use: number them
+  for (let k = 2; ; k++) if (!taken.has(`${list[start]} ${k}`)) return `${list[start]} ${k}`;
 }
 
 /** The people working at a building. */
@@ -59,21 +65,37 @@ export function employees(world: World, b: Building): Person[] {
   return world.people.filter((p) => p.job?.buildingId === b.id);
 }
 
-/** Fill every finished building's open jobs with the nearest unemployed villagers. */
-export function staffBuildings(world: World, hire: (b: Building, role: Role) => Worker): void {
+/** Jobs a building offers now: its own once finished; builders while it's a construction site. */
+export function openings(b: Building, buildersPerSite: number, dayLabour: boolean): Partial<Record<Role, number>> {
+  if (b.status === 'done') return BUILDINGS[b.type].jobs;
+  return b.site && dayLabour ? { builder: buildersPerSite } : {};
+}
+
+/**
+ * Fill every building's open jobs with the nearest unemployed villagers.
+ * `dayLabour`: whether construction sites hire now (only while it's light).
+ */
+export function staffBuildings(world: World, hire: (b: Building, role: Role, who: Person) => Worker, opts: { buildersPerSite: number; dayLabour: boolean }): void {
   for (const b of world.buildings) {
-    if (b.status !== 'done') continue;
-    const jobs = BUILDINGS[b.type].jobs;
+    const jobs = openings(b, opts.buildersPerSite, opts.dayLabour);
     for (const role of ROLES) {
       const open = (jobs[role] ?? 0) - employees(world, b).filter((p) => p.job!.role === role).length;
       for (let n = 0; n < open; n++) {
         const x = world.plots[b.plotIndex].x;
         const free = world.people.filter((p) => !p.job).sort((a, c) => Math.abs(a.stroll.x - x) - Math.abs(c.stroll.x - x));
         if (!free.length) return; // nobody left to hire
-        free[0].job = { buildingId: b.id, role, worker: hire(b, role) };
+        free[0].job = { buildingId: b.id, role, worker: hire(b, role, free[0]) };
       }
     }
   }
+}
+
+/** Let someone go: they walk off from where they stand and stroll the street again. */
+export function release(world: World, p: Person): void {
+  const b = p.job && world.buildings.find((x) => x.id === p.job!.buildingId);
+  if (b) p.stroll.x = world.plots[b.plotIndex].x + p.job!.worker.dx;
+  p.stroll.idle = 0.5;
+  p.job = null;
 }
 
 /** Unemployed people and animals wander the street, stopping now and then. */

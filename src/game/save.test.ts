@@ -18,8 +18,8 @@ function roundTrip(world: World): World {
 function busyWorld(): World {
   const w = createWorld();
   run(w, 20, { left: false, right: true });
-  placeBuilding(w, 12, 'farm'); // under construction
-  placeBuilding(w, 9, 'mill', { instant: true });
+  placeBuilding(w, 12, 'farm', { free: true }); // under construction
+  placeBuilding(w, 9, 'mill', { instant: true, free: true });
   run(w, 5);
   w.events.length = 0;
   return w;
