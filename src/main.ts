@@ -10,7 +10,8 @@ import { createSound } from './app/sound';
 import { installTuning } from './app/tuning';
 import { installWorkersPanel } from './app/workers';
 import { update } from './game/world';
-import { cameraX, renderFrame, type Toast } from './render';
+import { sizePanelButtons } from './app/panel';
+import { cameraX, HUD_BUTTON, renderFrame, type Toast } from './render';
 
 const canvas = document.getElementById('canvas') as HTMLCanvasElement;
 const ctx = canvas.getContext('2d')!;
@@ -49,6 +50,8 @@ function frame(now: number): void {
   const target = cameraX(world, vp.viewW);
   camX += (target - camX) * Math.min(1, dt * 4);
   if (Math.abs(target - camX) > vp.viewW) camX = target;
+
+  sizePanelButtons((HUD_BUTTON * vp.uiScale) / screen.dpr);
 
   const held = controls.touchHeld();
   renderFrame(ctx, world, { ...vp, camX, touch: screen.touch, leftHeld: held.left, rightHeld: held.right, toasts, showGrid: display.grid });

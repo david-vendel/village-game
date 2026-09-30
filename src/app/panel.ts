@@ -6,7 +6,7 @@
 /** The round button: arrows out to the corners to expand, in to the middle to collapse. */
 const ARROWS = { expand: '4,4 8.3,4 4,8.3 M10,10 5.7,10 10,5.7', collapse: '6.6,6.6 2.9,6.6 6.6,2.9 M7.4,7.4 11.1,7.4 7.4,11.1' };
 const icon = (arrows: string) =>
-  '<svg width="14" height="14" viewBox="0 0 14 14" style="display:block">' +
+  '<svg viewBox="0 0 14 14" style="display:block;width:var(--hud-button,14px);height:var(--hud-button,14px)">' +
   '<circle cx="7" cy="7" r="6.5" fill="#e8c872" stroke="#b8963e" stroke-width="1"/>' +
   `<path d="M${arrows.replace(' M', 'Z M')}Z" fill="#3a2a1c"/></svg>`;
 
@@ -54,4 +54,12 @@ export function makeCollapsible(root: HTMLElement, content: HTMLElement, side: '
     button.blur(); // hand the keys back to the game
   });
   set(remembered(key) ?? true);
+}
+
+let buttonPx = 0;
+/** Size the panels' buttons to match the HUD's zoom buttons (CSS px); call when the screen scale may have changed. */
+export function sizePanelButtons(px: number): void {
+  if (Math.abs(px - buttonPx) < 0.1) return;
+  buttonPx = px;
+  document.documentElement.style.setProperty('--hud-button', `${px}px`);
 }

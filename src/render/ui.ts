@@ -105,7 +105,7 @@ function button(ctx: Ctx, r: Rect, pressed: boolean, round = false): void {
   if (round) {
     ctx.beginPath();
     ctx.arc(r.x + r.w / 2, r.y + r.h / 2, r.w / 2, 0, Math.PI * 2);
-  } else roundRect(ctx, r.x, r.y, r.w, r.h, 12);
+  } else roundRect(ctx, r.x, r.y, r.w, r.h, Math.min(12, r.w * 0.3));
   ctx.fill();
   ctx.globalAlpha = 0.9;
   ctx.strokeStyle = GOLD;
@@ -142,7 +142,7 @@ function plusMinusIcon(ctx: Ctx, r: Rect, plus: boolean): void {
   const cx = r.x + r.w / 2;
   const cy = r.y + r.h / 2;
   const s = r.w * 0.28;
-  const t = Math.max(2, r.w * 0.08);
+  const t = Math.max(1.5, r.w * 0.1);
   ctx.fillStyle = GOLD;
   ctx.fillRect(cx - s, cy - t / 2, s * 2, t);
   if (plus) ctx.fillRect(cx - t / 2, cy - s, t, s * 2);
@@ -158,8 +158,11 @@ export interface HudLayout {
   build: Rect;
 }
 
+/** Size of the small round-cornered HUD buttons (zoom), in UI units; the side panels' buttons match it. */
+export const HUD_BUTTON = 14;
+
 export function hudLayout(uiW: number, uiH: number): HudLayout {
-  const z = 20;
+  const z = HUD_BUTTON;
   const b = 76;
   return {
     zoomOut: { x: uiW - 12 - z * 2 - 4, y: 12, w: z, h: z },

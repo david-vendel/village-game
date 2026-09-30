@@ -8,7 +8,7 @@ import { drawBuildMenu, drawHud, drawToasts, type Toast } from './ui';
 
 export { cameraX } from './scene';
 export { STRIDE as HORSE_STRIDE } from './horse';
-export { hit, hudLayout, menuLayout, type Rect, type Toast } from './ui';
+export { hit, HUD_BUTTON, hudLayout, menuLayout, type Rect, type Toast } from './ui';
 
 /** Everything the renderer needs besides the world: where the camera is and how the screen is scaled. */
 export interface FrameView {
