@@ -90,8 +90,7 @@ export function installControls(world: World, screen: Screen, actions: Actions):
     } else {
       const L = hudLayout(uiW, uiH);
       const dir = screen.touch ? dirAt(ux, uy) : null;
-      if (hit(L.construction, ux, uy)) actions.toggleConstruction();
-      else if (hit(L.zoomOut, ux, uy)) screen.zoomBy(1 / ZOOM_STEP);
+      if (hit(L.zoomOut, ux, uy)) screen.zoomBy(1 / ZOOM_STEP);
       else if (hit(L.zoomIn, ux, uy)) screen.zoomBy(ZOOM_STEP);
       else if (dir) role = dir;
       else if (screen.touch && hit(L.build, ux, uy)) actions.openBuildMenu();

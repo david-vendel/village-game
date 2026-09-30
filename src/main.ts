@@ -4,6 +4,7 @@
 import { announceEvents, createActions } from './app/actions';
 import { installControls } from './app/controls';
 import { createScreen } from './app/screen';
+import { installTuning } from './app/tuning';
 import { createWorld, update } from './game/world';
 import { cameraX, renderFrame, type Toast } from './render';
 
@@ -19,6 +20,7 @@ const notify = (text: string) => {
 };
 const actions = createActions(world, notify, () => screen.touch);
 const controls = installControls(world, screen, actions);
+installTuning(world);
 
 let camX = cameraX(world, screen.vp.viewW);
 let last = performance.now();

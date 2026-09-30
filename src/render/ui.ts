@@ -127,16 +127,16 @@ function hammerIcon(ctx: Ctx, cx: number, cy: number, s: number): void {
 function plusMinusIcon(ctx: Ctx, r: Rect, plus: boolean): void {
   const cx = r.x + r.w / 2;
   const cy = r.y + r.h / 2;
-  const s = r.w * 0.24;
+  const s = r.w * 0.28;
+  const t = Math.max(2, r.w * 0.08);
   ctx.fillStyle = GOLD;
-  ctx.fillRect(cx - s, cy - 1.5, s * 2, 3);
-  if (plus) ctx.fillRect(cx - 1.5, cy - s, 3, s * 2);
+  ctx.fillRect(cx - s, cy - t / 2, s * 2, t);
+  if (plus) ctx.fillRect(cx - t / 2, cy - s, t, s * 2);
 }
 
 // --- HUD -------------------------------------------------------------------------
 
 export interface HudLayout {
-  construction: Rect;
   zoomOut: Rect;
   zoomIn: Rect;
   left: Rect;
@@ -145,13 +145,11 @@ export interface HudLayout {
 }
 
 export function hudLayout(uiW: number, uiH: number): HudLayout {
-  const pillW = 176;
-  const z = 38;
+  const z = 20;
   const b = 76;
   return {
-    construction: { x: uiW - pillW - 12, y: 12, w: pillW, h: 30 },
-    zoomOut: { x: uiW - 12 - z * 2 - 8, y: 50, w: z, h: z },
-    zoomIn: { x: uiW - 12 - z, y: 50, w: z, h: z },
+    zoomOut: { x: uiW - 12 - z * 2 - 4, y: 12, w: z, h: z },
+    zoomIn: { x: uiW - 12 - z, y: 12, w: z, h: z },
     left: { x: 16, y: uiH - 16 - b, w: b, h: b },
     right: { x: 16 + b + 14, y: uiH - 16 - b, w: b, h: b },
     build: { x: uiW - 16 - 86, y: uiH - 16 - 86, w: 86, h: 86 },
@@ -180,15 +178,6 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
   }
   const built = world.buildings.filter((b) => b.status === 'done').length;
   text(ctx, `Buildings: ${built}`, 16, y + 2, 12, '#cbbfa4');
-
-  const on = world.constructionEnabled;
-  const r = L.construction;
-  panel(ctx, r.x, r.y, r.w, r.h, 0.65);
-  ctx.fillStyle = on ? '#8fd16a' : '#c9695a';
-  ctx.beginPath();
-  ctx.arc(r.x + 14, r.y + r.h / 2, 4.5, 0, Math.PI * 2);
-  ctx.fill();
-  text(ctx, `Construction: ${on ? 'ON' : 'OFF'}${st.touch ? '' : '  (C)'}`, r.x + 24, r.y + 20, 13, '#f3ead8', 'left', true);
 
   button(ctx, L.zoomOut, false);
   plusMinusIcon(ctx, L.zoomOut, false);
@@ -301,7 +290,7 @@ export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number):
 
   const def = BUILDINGS[BUILDING_TYPES[world.menu.selection]];
   text(ctx, def.purpose, uiW / 2, M.infoY, fitSize(ctx, def.purpose, 14, M.panel.w - 24), '#f3ead8', 'center');
-  const time = world.constructionEnabled ? `Builds in ${def.buildTime}s` : 'Builds instantly (construction off)';
+  const time = world.constructionEnabled ? `Builds in ${+(def.buildTime / world.params.buildSpeed).toFixed(1)}s` : 'Builds instantly (construction off)';
   text(ctx, time, uiW / 2, M.infoY + 20, 12, '#cbbfa4', 'center');
 
   button(ctx, M.cancel, false);
@@ -349,7 +338,9 @@ export function drawBuildingLabel(ctx: Ctx, b: Building, sx: number, y: number, 
     lines.push(`Grain store ${b.farm.storage}/${STORAGE_MAX} · ${n('ripe')} ripe · ${n('growing')} growing · ${n('fallow')} to sow`);
   }
   ctx.font = `12px ${SERIF}`;
-  const w = Math.max(60, ...lines.map((l) => ctx.measureText(l).width)) + 24;
+  const lineW = Math.max(...lines.map((l) => ctx.measureText(l).width));
+  ctx.font = `bold 14px ${SERIF}`;
+  const w = Math.max(60, lineW, ctx.measureText(def.name).width) + 24;
   // keep the label on screen (it may be wider than a phone's view)
   const half = (w / 2) * k + 6;
   sx = half * 2 > viewW ? viewW / 2 : Math.max(half, Math.min(viewW - half, sx));
@@ -364,13 +355,17 @@ export function drawBuildingLabel(ctx: Ctx, b: Building, sx: number, y: number, 
 export function drawProgress(ctx: Ctx, b: Building, sx: number, y: number, k: number): void {
   const w = 110;
   const { stage } = constructionStage(b.progress);
+  const caption = `${BUILDINGS[b.type].name} — ${STAGE_LABEL[stage]}`;
+  ctx.font = `10px ${SERIF}`;
+  // box grows with the caption; the bar keeps its fixed width
+  const pw = Math.max(w, ctx.measureText(caption).width) + 12;
   around(ctx, sx, y, k, () => {
-    panel(ctx, sx - w / 2 - 6, y - 30, w + 12, 30, 0.6);
+    panel(ctx, sx - pw / 2, y - 30, pw, 30, 0.6);
     ctx.fillStyle = '#3a2e22';
     ctx.fillRect(sx - w / 2, y - 12, w, 6);
     ctx.fillStyle = GOLD;
     ctx.fillRect(sx - w / 2, y - 12, w * b.progress, 6);
-    text(ctx, `${BUILDINGS[b.type].name} — ${STAGE_LABEL[stage]}`, sx, y - 17, 10, '#f3ead8', 'center');
+    text(ctx, caption, sx, y - 17, 10, '#f3ead8', 'center');
   });
 }
 

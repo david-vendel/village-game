@@ -10,9 +10,25 @@ export const FIRST_PLOT_X = 420;
 /** How close (px) the rider's x must be to a plot centre to interact with it. */
 export const INTERACT_RANGE = 90;
 
-export const RIDER_MAX_SPEED = 170; // px/s
-export const RIDER_ACCEL = 420; // px/s²
-export const RIDER_DECEL = 520; // px/s²
+export const RIDER_MAX_SPEED = 240; // px/s
+export const RIDER_ACCEL = 600; // px/s²
+export const RIDER_DECEL = 740; // px/s²
+
+/** Live-tunable knobs (the tuning panel edits these; defaults are the constants above). */
+export interface WorldParams {
+  riderMaxSpeed: number; // px/s
+  riderAccel: number; // px/s²
+  riderDecel: number; // px/s²
+  /** Construction speed multiplier: 2 builds twice as fast. */
+  buildSpeed: number;
+}
+
+export const DEFAULT_PARAMS: WorldParams = {
+  riderMaxSpeed: RIDER_MAX_SPEED,
+  riderAccel: RIDER_ACCEL,
+  riderDecel: RIDER_DECEL,
+  buildSpeed: 1,
+};
 
 export interface Plot {
   index: number;
@@ -72,6 +88,7 @@ export interface World {
   rider: Rider;
   villagers: Villager[];
   constructionEnabled: boolean;
+  params: WorldParams;
   menu: BuildMenu | null;
   /** Last chosen menu entry, so repeat-building the same type is quick. */
   lastSelection: number;
@@ -123,6 +140,7 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
     rider: { x: FIRST_PLOT_X + 5 * PLOT_SPACING + PLOT_SPACING / 2, vx: 0, facing: 1, gait: 0 },
     villagers: [],
     constructionEnabled: true,
+    params: { ...DEFAULT_PARAMS },
     menu: null,
     lastSelection: 0,
     nextId: 1,
@@ -265,13 +283,14 @@ export function update(world: World, dt: number, input: MoveInput): void {
 
 function updateRider(world: World, dt: number, input: MoveInput): void {
   const r = world.rider;
+  const p = world.params;
   const dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
   if (dir !== 0) {
     r.facing = dir as 1 | -1;
-    r.vx += dir * RIDER_ACCEL * dt;
-    r.vx = Math.max(-RIDER_MAX_SPEED, Math.min(RIDER_MAX_SPEED, r.vx));
+    r.vx += dir * p.riderAccel * dt;
+    r.vx = Math.max(-p.riderMaxSpeed, Math.min(p.riderMaxSpeed, r.vx));
   } else {
-    const dv = RIDER_DECEL * dt;
+    const dv = p.riderDecel * dt;
     r.vx = Math.abs(r.vx) <= dv ? 0 : r.vx - Math.sign(r.vx) * dv;
   }
   r.x += r.vx * dt;
@@ -287,7 +306,7 @@ function updateRider(world: World, dt: number, input: MoveInput): void {
 function updateConstruction(world: World, dt: number): void {
   for (const b of world.buildings) {
     if (b.status !== 'constructing') continue;
-    b.progress += dt / BUILDINGS[b.type].buildTime;
+    b.progress += (dt * world.params.buildSpeed) / BUILDINGS[b.type].buildTime;
     if (b.progress >= 1) complete(world, b);
   }
 }

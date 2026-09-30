@@ -48,7 +48,7 @@ function drawLeg(ctx: Ctx, p: LegPose, color: string, far: boolean): void {
 }
 
 export function drawRider(ctx: Ctx, rider: Rider, screenX: number, groundY: number, time: number): void {
-  const speed = Math.abs(rider.vx) / RIDER_MAX_SPEED; // 0..1
+  const speed = Math.min(1, Math.abs(rider.vx) / RIDER_MAX_SPEED); // 0..1, vs the default top speed
   const moving = speed > 0.02;
   const phase = rider.gait / STRIDE;
   const trot = speed > 0.6;
