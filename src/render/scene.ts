@@ -7,7 +7,8 @@ import { chapelBell } from '../game/daynight';
 import { employees } from '../game/people';
 import type { Worker } from '../game/worker';
 import { laidOut, onSite, upgrading } from '../game/site';
-import { crossings, streetOf, streetRange } from '../game/streets';
+import { backOf, crossings, SIDE_ROAD_HALF, streetOf, streetRange } from '../game/streets';
+import { BUILDINGS } from '../game/buildings';
 import { canUpgrade, crossroadAt, getBuilding, plotAt, type Building, type World } from '../game/world';
 import { drawBackground, drawForeground, drawSideRoad, drawStreetEnds, type View } from './background';
 import { BUILDING_ART, type DrawArgs } from './buildings';
@@ -68,6 +69,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     const x = world.plots[b.plotIndex].x;
     if (b.type === 'intersection' && b.status !== 'done' && onScreen(x)) drawSideRoad(ctx, v, x, 0.15 + 0.85 * b.progress);
   }
+  drawDownTheRoads(ctx, world, camX, onScreen);
   // the woods and the quarries along the tree line, behind everything on the street
   drawQuarries(ctx, camX, viewW);
   drawTrees(ctx, world, camX, viewW);
@@ -179,6 +181,52 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     else if (b.status === 'done' && !b.site) {
       const turn = crossroadAt(world) ? sv.turnLabel : null;
       drawBuildingLabel(ctx, world, b, sx, BASE - BUILDING_ART[b.type].height - 18, k, viewW, canUpgrade(b) ? sv.upgradeLabel : null, turn);
+    }
+  }
+}
+
+/** How far along a side road (px) a building looks half its size. */
+const HALF_SIZE_AT = 260;
+/** How far up a side road buildings can be made out (px). */
+const SEEN_UP_TO = 3200;
+/** Depth where a side road fades out into the distance, and where it leaves the street. */
+const ROAD_FAR_Y = 396;
+const ROAD_NEAR_Y = GROUND_Y + 8;
+
+/**
+ * Looking up the road that runs off at a crossroads: the buildings along the
+ * street it leads to, standing either side of it and growing smaller into the
+ * distance. They are seen end-on (their fronts face that road), so they are
+ * drawn narrowed.
+ */
+function drawDownTheRoads(ctx: Ctx, world: World, camX: number, onScreen: (x: number, margin?: number) => boolean): void {
+  const here = world.streets[streetOf(world.rider.x)];
+  if (!here) return;
+  const back = backOf(here.dir);
+  for (const c of crossings(world)) {
+    if (streetOf(c.x) !== here.index || !onScreen(c.x, 400)) continue;
+    const other = world.streets[streetOf(c.to)];
+    if (!other) continue;
+    // which way along the other street runs away from the viewer, and which side of it its lots lie on screen
+    const up = other.dir.x * back.x + other.dir.y * back.y >= 0 ? 1 : -1;
+    const lots = backOf(other.dir);
+    const side = lots.x * here.dir.x + lots.y * here.dir.y >= 0 ? 1 : -1;
+    const seen = world.buildings
+      .map((b) => ({ b, d: (world.plots[b.plotIndex].x - c.to) * up }))
+      .filter(({ b, d }) => d > 1 && d < SEEN_UP_TO && b.status === 'done' && b.type !== 'intersection' && streetOf(world.plots[b.plotIndex].x) === other.index)
+      .sort((a, b) => b.d - a.d);
+    const sx = c.x - camX;
+    for (const { b, d } of seen) {
+      const s = 1 / (1 + d / HALF_SIZE_AT);
+      const y = ROAD_FAR_Y + (ROAD_NEAR_Y - ROAD_FAR_Y) * s;
+      // beside the road, which narrows as it runs off (background.ts drawSideRoad)
+      const roadHalf = SIDE_ROAD_HALF * (0.45 + 0.55 * s);
+      const x = sx + side * (roadHalf + (BUILDINGS[b.type].width * 0.35 + 10) * s);
+      ctx.save();
+      ctx.translate(x, y);
+      ctx.scale(s * 0.7, s);
+      BUILDING_ART[b.type].draw(ctx, { x: 0, base: 0, time: world.time, seed: b.id * 97, farm: b.farm, upgraded: !!b.upgraded, stock: b.stock, vpX: 0 });
+      ctx.restore();
     }
   }
 }
