@@ -271,7 +271,6 @@ export function drawWorker(ctx: Ctx, f: Worker, fig: Figure, x: number, y: numbe
     body([5, -1]);
     drawArm(ctx, o, sx, sy, 6.5, -0.5);
     ctx.restore();
-    drawProgressPips(ctx, job.t / job.duration);
   } else {
     const load = f.carrying?.resource;
     const onShoulder = load === 'flour' || load === 'grain' || load === 'wood';
