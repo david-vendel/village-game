@@ -2,46 +2,94 @@
 // their number, occupation and what they are doing right now.
 
 import { BUILDINGS } from '../game/buildings';
-import type { Person } from '../game/people';
-import { getBuilding, type World } from '../game/world';
+import { timeOfDay } from '../game/daynight';
+import { PLOT_SPACING } from '../game/layout';
+import { laneY, type Person } from '../game/people';
+import { offDuty } from '../game/worker';
+import { getBuilding, type Building, type World } from '../game/world';
 
 function occupation(p: Person): string {
   if (p.profession) return p.profession;
   return p.look === 'monk' ? 'monk' : 'townswoman';
 }
 
+const nameOf = (b: Building) => BUILDINGS[b.type].name.toLowerCase();
+const resource = (action: string, verb: string) => (action.startsWith(`${verb}-`) ? action.slice(verb.length + 1) : null);
+
+/** What stands where someone is: the building whose lot holds world x, else the open street. */
+function whereAt(world: World, x: number): string {
+  const plot = world.plots.reduce((best, p) => (Math.abs(p.x - x) < Math.abs(best.x - x) ? p : best));
+  const b = Math.abs(plot.x - x) <= PLOT_SPACING / 2 ? getBuilding(world, plot.buildingId) : undefined;
+  return b ? `the ${nameOf(b)}${b.site ? ' site' : ''}` : 'the street';
+}
+
+/**
+ * What someone is doing, read straight from the simulation: their task, the
+ * job ticket it carries (and for a delivery, the job the load came from), why
+ * they are off duty (the game's own offDuty), and where they actually stand.
+ */
 function activity(world: World, p: Person): string {
-  if (!p.job) return p.profession ? 'off duty, waiting for work' : 'strolling';
+  if (!p.job) {
+    const s = p.stroll;
+    if (s.y !== laneY(p.id)) return 'walking back to the street';
+    const why = !p.profession ? '' : !timeOfDay(world).daylight ? ', off for the night' : ', no work going';
+    return (s.idle > 0 ? 'standing about' : 'strolling') + why;
+  }
   const b = getBuilding(world, p.job.buildingId);
-  const place = b ? BUILDINGS[b.type].name.toLowerCase() : 'work';
+  if (!b) return 'between jobs';
+  const x = world.plots[b.plotIndex].x;
+  const place = `the ${nameOf(b)}${b.site ? ' site' : ''}`;
   const w = p.job.worker;
   const t = w.task;
-  const load = w.carrying?.resource;
+  const here = whereAt(world, x + w.dx);
+  const off = offDuty(w, timeOfDay(world), { dayLabour: !!b.site });
+  const warehouse = (id: number) => {
+    const wh = getBuilding(world, id);
+    return wh ? `the ${nameOf(wh)}` : 'a warehouse';
+  };
   switch (t.kind) {
-    case 'job':
-      if (t.job.action === 'sow') return 'sowing a field';
-      if (t.job.action === 'harvest') return 'harvesting';
-      if (t.job.action === 'build') return `building the ${place}`;
-      if (t.job.action === 'haul') return 'lifting a sheaf off the stack';
-      if (t.job.action.startsWith('take-')) return `picking up ${t.job.action.replace('take-', '')} from the pile`;
-      return `loading ${t.job.action.replace('fetch-', '')} at the warehouse`;
-    case 'walk':
+    case 'job': {
+      const a = t.job.action;
+      if (a === 'sow') return 'sowing a field';
+      if (a === 'harvest') return 'harvesting a field';
+      if (a === 'haul') return 'lifting a sheaf off the stack';
+      if (a === 'build') return `building ${place}`;
+      if (resource(a, 'take')) return `picking up ${resource(a, 'take')} from the pile`;
+      if (resource(a, 'fetch')) return `loading ${resource(a, 'fetch')} at ${warehouse(t.job.target)}`;
+      return a;
+    }
+    case 'walk': {
+      const a = t.job?.action ?? '';
       if (t.then === 'deliver') {
-        const to = t.job?.action === 'haul' ? 'warehouse' : t.job?.action.startsWith('take-') ? `${place} wall` : t.job?.action.startsWith('fetch-') ? `${place} pile` : `${place} store`;
-        return load ? `carrying ${load} to the ${to}` : `walking to the ${to}`;
+        const load = w.carrying ? `${w.carrying.amount} ${w.carrying.resource}` : 'nothing';
+        if (a === 'harvest') return `carrying a sheaf to the ${nameOf(b)} store`;
+        if (a === 'haul') return `carrying a sheaf to ${warehouse(t.job!.target)}`;
+        if (resource(a, 'take')) return `carrying ${load} to put in place at ${place}`;
+        if (resource(a, 'fetch')) return `carrying ${load} to the pile at ${place}`;
+        return `carrying ${load}`;
       }
-      if (t.then === 'home') return `heading home from the ${place}`;
-      if (t.job?.action === 'haul') return 'going for a sheaf to take to the warehouse';
-      if (t.job?.action.startsWith('take-')) return 'going to the pile';
-      return t.job?.action.startsWith('fetch-') ? 'walking to the warehouse' : `walking to work at the ${place}`;
+      if (t.then === 'home') {
+        const from = here === place ? '' : ` from ${here}`;
+        if (off === 'lunch') return `going in for lunch${from}`;
+        if (off === 'sleep') return `going in for the night${from}`;
+        return `heading back to ${place}${from}`;
+      }
+      if (a === 'sow') return 'walking to sow a field';
+      if (a === 'harvest') return 'walking to harvest a field';
+      if (a === 'haul') return 'going for a sheaf to take to the warehouse';
+      if (a === 'build') return `going to build at ${place}`;
+      if (resource(a, 'take')) return `going to the pile for ${resource(a, 'take')}`;
+      if (resource(a, 'fetch')) return `walking to ${warehouse(t.job!.target)} for ${resource(a, 'fetch')}`;
+      return `walking to work at ${place}`;
+    }
     case 'home':
-      return t.activity === 'sleep' ? 'sleeping' : 'having lunch';
+      return t.activity === 'sleep' ? `asleep in ${place}` : `having lunch in ${place}`;
     case 'enter':
-      return 'going indoors';
+      return off === 'lunch' ? 'going indoors for lunch' : off === 'sleep' ? 'going indoors for the night' : 'going indoors';
     case 'exit':
-      return 'heading out to work';
-    default:
-      return load ? `carrying ${load}` : 'waiting';
+      return `stepping out of ${place}`;
+    case 'idle':
+      return here === place ? `waiting at ${place}` : `pausing at ${here}`;
   }
 }
 

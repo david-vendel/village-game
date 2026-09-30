@@ -242,7 +242,9 @@ describe('construction by builders', () => {
 
   it('a new building must be covered by what the warehouses hold beyond other sites', () => {
     const w = createWorld();
-    expect(placeBuilding(w, 7, 'farm')).not.toBeNull(); // 50 wood, 20 stone: all the wood
+    // exactly what a farm costs, so the farm takes all the wood
+    w.buildings.find((b) => b.type === 'warehouse')!.stock = stockOf(BUILDINGS.farm.cost);
+    expect(placeBuilding(w, 7, 'farm')).not.toBeNull();
     expect(placeBuilding(w, 9, 'house')).toBeNull(); // the wood is promised to the farm
     expect(w.plots[9].buildingId).toBeNull();
   });
