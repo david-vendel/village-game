@@ -36,7 +36,9 @@ touch). Portrait phones start zoomed out, with the street lifted above the butto
 A **Crossroads** (10 wood) cuts a road across the street. Once it is built, ride up to it
 and press ↑ or ↓ to turn onto the new street, which runs off at right angles with its own
 plots and woods. A crossroads on that street opens another, so the village grows into a
-net of streets. The map in the top right corner shows the streets and every building.
+net of streets. A new street joins any street it runs into where that street's plot is
+free (a crossroads appears there, so four crossroads close a loop), and ends one plot
+short where a building stands in its way. The map in the top right corner shows the streets and every building.
 Villagers walk round the corners to reach work and goods on other streets.
 
 ## Farms

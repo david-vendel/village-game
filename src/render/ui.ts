@@ -14,8 +14,8 @@ import { isBorrowed } from '../game/farm';
 import { WOOD_REACH } from '../game/nature';
 import { employees, jobsOf } from '../game/people';
 import { RESOURCES, type Amounts } from '../game/resources';
-import { backOf, mapPoint, streetOf, streetStart } from '../game/streets';
-import { constructionStage, WORLD_WIDTH, type Building, type ConstructionStage, type World } from '../game/world';
+import { backOf, mapPoint, streetOf, streetRange } from '../game/streets';
+import { constructionStage, type Building, type ConstructionStage, type World } from '../game/world';
 import { BUILDING_ART, drawBuildingIcon } from './buildings';
 import type { Ctx } from './util';
 
@@ -262,7 +262,10 @@ function drawMiniMap(ctx: Ctx, world: World, r: Rect): void {
   roundRect(ctx, r.x + 1, r.y + 1, r.w - 2, r.h - 2, 6);
   ctx.clip();
 
-  const ends = world.streets.map((s) => [mapPoint(world, streetStart(s.index) + 120), mapPoint(world, streetStart(s.index) + WORLD_WIDTH - 120)] as const);
+  const ends = world.streets.map((s) => {
+    const { min, max } = streetRange(world, s.index);
+    return [mapPoint(world, min), mapPoint(world, max)] as const;
+  });
   const pts = ends.flat();
   const pad = 250;
   const box = {

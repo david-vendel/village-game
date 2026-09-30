@@ -21,7 +21,7 @@ import { clearRoad, createForest, onRoad, gatherWorkplace, isGatherHut, updateFo
 import { employees, laneY, nameFor, openings, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
 import { builderPositions, builders, createSite, siteWork, siteWorkplace, upgrading, type Site } from './site';
 import { RESOURCES, stockOf, type Stock } from './resources';
-import { branchStreet, CROSS_PLOT, mainStreet, route, streetOf, streetRange, streetStart, turnFacing, type Street } from './streets';
+import { CROSS_PLOT, mainStreet, newStreet, plotPoint, plotX, PLOTS_PER_STREET, route, streetOf, streetRange, streetsAt, turnFacing, type Junction, type Street } from './streets';
 import { eatAtTaverns } from './tavern';
 import { serfPositions, transportHub, transportWorkplace } from './transport';
 import { createWorker, currentJob, offDuty, updateWorker, type Nav, type Worker, type Workplace } from './worker';
@@ -72,6 +72,8 @@ export interface Plot {
   x: number;
   /** What stands on it; a crossroads stands on a plot of each of its two streets. */
   buildingId: number | null;
+  /** Past the end of its street (which ended short where it met another): no plot. */
+  off?: true;
 }
 
 export type BuildingStatus = 'constructing' | 'done';
@@ -91,6 +93,8 @@ export interface Building {
   site?: Site;
   /** Upgraded (BuildingDef.upgrade): it gives the upgrade's jobs. */
   upgraded?: true;
+  /** A crossroads made where a new street met an old one (not built from the menu). */
+  junction?: true;
   /** Fields — farms only, once finished. */
   farm?: FarmState;
 }
@@ -119,6 +123,8 @@ export interface World {
   time: number;
   /** The street network (streets.ts): the main street first, then each street in the order it was opened. */
   streets: Street[];
+  /** Where streets meet (streets.ts); rebuilt with the streets. */
+  junctions: Junction[];
   /** Every street's plots, street by street. */
   plots: Plot[];
   buildings: Building[];
@@ -172,20 +178,25 @@ export interface CreateWorldOptions {
   village?: boolean;
 }
 
-/** Plots along each street, every PLOT_SPACING from FIRST_PLOT_X. */
-export const PLOTS_PER_STREET = Math.ceil((WORLD_WIDTH - 200 - FIRST_PLOT_X) / PLOT_SPACING);
+export { PLOTS_PER_STREET };
 
-/** Mark out the plots of street i. */
-function layPlots(world: World, street: number): void {
+/** Mark out the plots of a street: plot k of street i is plots[i × PLOTS_PER_STREET + k]; those past its ends are `off`. */
+function layPlots(world: World, s: Street): void {
   for (let k = 0; k < PLOTS_PER_STREET; k++) {
-    world.plots.push({ index: world.plots.length, street, x: streetStart(street) + FIRST_PLOT_X + k * PLOT_SPACING, buildingId: null });
+    const plot: Plot = { index: world.plots.length, street: s.index, x: plotX(s.index, k), buildingId: null };
+    if (k < s.lo || k > s.hi) plot.off = true;
+    world.plots.push(plot);
   }
 }
+
+/** Plot k of street i. */
+const plotOf = (world: World, street: number, k: number) => world.plots[street * PLOTS_PER_STREET + k];
 
 export function createWorld(opts: CreateWorldOptions = {}): World {
   const world: World = {
     time: 0,
     streets: [mainStreet()],
+    junctions: [],
     plots: [],
     buildings: [],
     rider: { x: FIRST_PLOT_X + 5 * PLOT_SPACING + PLOT_SPACING / 2, vx: 0, facing: 1, gait: 0 },
@@ -201,7 +212,7 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
     dayClock: 0,
     events: [],
   };
-  layPlots(world, 0);
+  layPlots(world, world.streets[0]);
 
   if (opts.village ?? true) {
     for (const [plotIndex, type] of STARTING_VILLAGE) {
@@ -249,6 +260,7 @@ export function plotAt(world: World, x: number): Plot | null {
   let best: Plot | null = null;
   let bestD = INTERACT_RANGE;
   for (const p of world.plots) {
+    if (p.off) continue;
     const d = Math.abs(p.x - x);
     if (d <= bestD) {
       best = p;
@@ -269,7 +281,7 @@ export function placeBuilding(
   opts: { instant?: boolean; free?: boolean } = {},
 ): Building | null {
   const plot = world.plots[plotIndex];
-  if (!plot || plot.buildingId !== null) return null;
+  if (!plot || plot.off || plot.buildingId !== null) return null;
   // the warehouses must hold its materials, beyond what other sites are owed
   if (!opts.free && Object.keys(buildShortfall(world, type)).length) return null;
   const instant = opts.instant ?? !world.constructionEnabled;
@@ -369,38 +381,75 @@ function complete(world: World, b: Building): void {
 // --- Streets -------------------------------------------------------------------
 
 /**
- * Lay out the street a finished crossroads opens: the street itself, its
- * plots, and the crossroads standing on its middle plot too. (Loading a save
- * rebuilds the streets this way.)
+ * Lay out the street a finished crossroads opens (streets.ts): from its
+ * crossroads plot, plot by plot both ways, up to a street's length. Where it
+ * comes to a street crossing its way it joins it if that street's plot there
+ * is free (a crossroads is made there, and it runs on across) and ends one
+ * plot short of it otherwise; it ends one plot short of a street running along
+ * the same line. Loading a save lays the streets out again this way, in order
+ * (the crossroads made where streets met are saved, so they are found again).
  */
 export function layStreet(world: World, b: Building): Street {
-  const street = branchStreet(world, b.id, world.plots[b.plotIndex].x);
-  const first = world.plots.length;
-  layPlots(world, street.index);
-  world.plots[first + CROSS_PLOT].buildingId = b.id;
+  const at = world.plots[b.plotIndex].x;
+  const street = newStreet(world, b.id, at);
+  const joins: Array<{ k: number; plot: Plot }> = [];
+  for (const step of [-1, 1]) {
+    for (let k = CROSS_PLOT + step; k >= 0 && k < PLOTS_PER_STREET; k += step) {
+      const meet = streetsAt(world, street.dir, plotPoint(street, k));
+      if (meet.along) break;
+      if (meet.crossing) {
+        const plot = plotOf(world, meet.crossing.street, meet.crossing.k);
+        const there = getBuilding(world, plot.buildingId);
+        if (plot.buildingId !== null && !there?.junction) break;
+        joins.push({ k, plot });
+      }
+      if (step < 0) street.lo = k;
+      else street.hi = k;
+    }
+  }
+  world.streets.push(street);
+  layPlots(world, street);
+  plotOf(world, street.index, CROSS_PLOT).buildingId = b.id;
+  world.junctions.push({ buildingId: b.id, a: at, b: plotX(street.index, CROSS_PLOT) });
+  for (const { k, plot } of joins) {
+    const j = getBuilding(world, plot.buildingId) ?? makeJunction(world, plot);
+    plotOf(world, street.index, k).buildingId = j.id;
+    world.junctions.push({ buildingId: j.id, a: plot.x, b: plotX(street.index, k) });
+  }
   return street;
+}
+
+/** A crossroads where a new street met an old one at a free plot of it. */
+function makeJunction(world: World, plot: Plot): Building {
+  const b: Building = { id: world.nextId++, type: 'intersection', plotIndex: plot.index, progress: 1, status: 'done', completedAt: world.time, stock: stockOf(), junction: true };
+  world.buildings.push(b);
+  plot.buildingId = b.id;
+  return b;
 }
 
 /** A crossroads is finished: its road runs off into a new street, with woods of its own. */
 function openStreet(world: World, b: Building): void {
+  const known = world.junctions.length;
   const street = layStreet(world, b);
-  // the road is cut through the woods it runs into, and the new street's own woods grow either side of it
-  clearRoad(world, street.cross!.parentX);
-  const x0 = streetStart(street.index);
-  world.trees.push(...createForest(WORLD_WIDTH, () => rand(world), () => world.nextId++, x0).filter((t) => !onRoad(world, t.x)));
+  // roads are cut through the woods where the new street meets the others, and its own woods grow along it
+  for (const j of world.junctions.slice(known)) clearRoad(world, j.a);
+  const { min, max } = streetRange(world, street.index);
+  const x0 = plotX(street.index, 0) - FIRST_PLOT_X;
+  world.trees.push(...createForest(WORLD_WIDTH, () => rand(world), () => world.nextId++, x0).filter((t) => t.x > min && t.x < max && !onRoad(world, t.x)));
 }
 
 /**
- * The crossroads the rider is at, if it leads somewhere: the street it turns
- * onto, and the same spot's x on that street.
+ * The crossroads the rider is at: the street it turns onto, and the same
+ * spot's x on that street.
  */
 export function crossroadAt(world: World): { building: Building; street: number; x: number } | null {
   const plot = plotAt(world, world.rider.x);
   const b = getBuilding(world, plot?.buildingId ?? null);
   if (!plot || !b || b.type !== 'intersection' || b.status !== 'done') return null;
-  const s = world.streets.find((o) => o.from === b.id);
-  if (!s?.cross) return null;
-  return plot.street === s.index ? { building: b, street: s.parent, x: s.cross.parentX } : { building: b, street: s.index, x: s.cross.x };
+  const j = world.junctions.find((o) => o.buildingId === b.id);
+  if (!j) return null;
+  const to = j.a === plot.x ? j.b : j.a;
+  return { building: b, street: streetOf(to), x: to };
 }
 
 /**
@@ -551,10 +600,8 @@ function updateRider(world: World, dt: number, input: MoveInput): void {
   }
   // a street that isn't there (a broken save): back to the main street
   if (!world.streets[streetOf(r.x)]) r.x = world.plots[0].x;
-  const { min: start, max: end } = streetRange(streetOf(r.x));
+  const { min, max } = streetRange(world, streetOf(r.x));
   r.x += r.vx * dt;
-  const min = start + 120;
-  const max = end - 120;
   if (r.x < min || r.x > max) {
     r.x = Math.max(min, Math.min(max, r.x));
     r.vx = 0;

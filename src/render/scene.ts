@@ -7,9 +7,9 @@ import { chapelBell } from '../game/daynight';
 import { employees } from '../game/people';
 import type { Worker } from '../game/worker';
 import { laidOut, onSite, upgrading } from '../game/site';
-import { crossings, streetOf, streetStart } from '../game/streets';
-import { canUpgrade, crossroadAt, getBuilding, plotAt, WORLD_WIDTH, type Building, type World } from '../game/world';
-import { drawBackground, drawForeground, drawSideRoad, type View } from './background';
+import { crossings, streetOf, streetRange } from '../game/streets';
+import { canUpgrade, crossroadAt, getBuilding, plotAt, type Building, type World } from '../game/world';
+import { drawBackground, drawForeground, drawSideRoad, drawStreetEnds, type View } from './background';
 import { BUILDING_ART, type DrawArgs } from './buildings';
 import { drawConstruction, drawConstructionBehind, drawConstructionFront, drawUpgrade } from './construction';
 import { drawWorker } from './farm';
@@ -27,9 +27,11 @@ const BASE = GROUND_Y + 4;
 
 export function cameraX(world: World, viewW: number): number {
   const target = world.rider.x - viewW / 2 + world.rider.facing * viewW * 0.08;
-  // the camera stays on the rider's street
-  const start = streetStart(streetOf(world.rider.x));
-  return Math.max(start, Math.min(start + WORLD_WIDTH - viewW, target));
+  // the camera stays on the rider's street (and on a street shorter than the view, in its middle)
+  const { min, max } = streetRange(world, streetOf(world.rider.x));
+  const lo = min - 60;
+  const hi = max + 60 - viewW;
+  return lo > hi ? (lo + hi) / 2 : Math.max(lo, Math.min(hi, target));
 }
 
 export interface SceneView {
@@ -56,6 +58,9 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   const { camX, width: viewW, labelScale: k } = sv;
   const v: View = { camX, width: viewW, top: sv.top, bottom: sv.bottom, time: world.time };
   drawBackground(ctx, v);
+  // a street that ends short: the road stops and the grass runs on
+  const street = streetOf(world.rider.x);
+  if (street > 0) drawStreetEnds(ctx, v, streetRange(world, street));
   const onScreen = (x: number, margin = 280) => x - camX > -margin && x - camX < viewW + margin;
   // roads running off at crossroads, and those still being laid
   for (const c of crossings(world)) if (onScreen(c.x)) drawSideRoad(ctx, v, c.x);
@@ -113,7 +118,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
 
   // empty plot markers
   for (const p of world.plots) {
-    if (p.buildingId !== null || !onScreen(p.x)) continue;
+    if (p.off || p.buildingId !== null || !onScreen(p.x)) continue;
     plotMarker(ctx, p.x - camX, BASE, p.index);
     if (!world.menu && plotAt(world, world.rider.x) === p) drawPlotGlow(ctx, p.x - camX, BASE);
   }

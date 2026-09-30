@@ -321,6 +321,42 @@ export function drawSideRoad(ctx: Ctx, v: View, x: number, alpha = 1): void {
   ctx.restore();
 }
 
+/** Where a street ends (world x range `ends`): past each end the road gives way to grass. */
+export function drawStreetEnds(ctx: Ctx, v: View, ends: { min: number; max: number }): void {
+  const vp = v.width / 2;
+  const top = GROUND_Y + 5;
+  const bottom = 502;
+  const verge = ctx.createLinearGradient(0, top, 0, bottom);
+  verge.addColorStop(0, '#7a8e3e');
+  verge.addColorStop(1, '#6d8236');
+  for (const [x, side] of [[ends.min, -1], [ends.max, 1]] as const) {
+    const sx = x - v.camX;
+    if (side < 0 ? sx < -40 : sx > v.width + 40) continue;
+    // the road's end rounds off into the grass, in the ground perspective
+    const edge = (y: number) => groundX(sx, y, vp);
+    const far = side < 0 ? -40 : v.width + 40;
+    ctx.fillStyle = verge;
+    ctx.beginPath();
+    ctx.moveTo(far, top);
+    ctx.lineTo(edge(top), top);
+    ctx.bezierCurveTo(edge(top) - side * 26, top + 12, edge(bottom) - side * 26, bottom - 14, edge(bottom), bottom);
+    ctx.lineTo(far, bottom);
+    ctx.closePath();
+    ctx.fill();
+    // a few tufts along the edge
+    ctx.fillStyle = '#5d7030';
+    for (let i = 0; i < 6; i++) {
+      const y = top + 6 + i * 11;
+      const gx = edge(y) - side * (18 + Math.sin(i * 2.3) * 6);
+      ctx.beginPath();
+      ctx.moveTo(gx - 4, y);
+      ctx.lineTo(gx, y - 6);
+      ctx.lineTo(gx + 4, y);
+      ctx.fill();
+    }
+  }
+}
+
 /** Tall grass and flowers in front of everything, nearest of all in the ground perspective. */
 export function drawForeground(ctx: Ctx, v: View): void {
   const base = VIEW_H + 4;

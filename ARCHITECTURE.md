@@ -155,16 +155,19 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   sunset, `WORK_MARGIN`), day number, hour, and game hours per second.
 - `streets.ts`: the street network. A crossroads (the `intersection` building, 10 wood) opens a
   new street across its own at right angles, crossing it at the new street's middle plot
-  (`CROSS_PLOT`); streets form a tree. Each street is still a line with its own stretch of world x
-  (street i starts at i × `STREET_STRIDE`), so one x says where anything is. `route` is the way
-  between two x's (to the corner, then on from the same spot on the next street; `worker.ts` walks
-  it), `streetDist` the walking distance that every "nearest" (warehouses, errands, hiring,
-  quarries, trees) is measured by. Each street also has a map `origin` and `dir` (for the village
-  map); it is seen from its right-hand side, so its lots lie to its left (`backOf`) and a new street
-  runs off into what lay behind the old one. The rider turns at a finished crossroads
-  (`turnAtCrossroads` in `world.ts`): ↑ onto the road away from the viewer, ↓ towards them. A new
-  street gets its own plots and woods; trees are cut where the road runs off, and no field is sown
-  across it.
+  (`CROSS_PLOT`). Each street is still a line with its own stretch of world x (street i starts at
+  i × `STREET_STRIDE`, plot k of street i is `plots[i × PLOTS_PER_STREET + k]`), so one x says where
+  anything is. On the map all streets lie on one 250 px grid, so they meet at plots: a new street is
+  laid out plot by plot both ways (`layStreet` in `world.ts`); meeting a street that crosses its way
+  it joins it if that plot is free (a crossroads is made there, `Building.junction`, and it runs on
+  across) and ends one plot short otherwise, and it ends one plot short of a street along the same
+  line. Plots past a street's ends are `off`. So streets close into loops. `Junction`s are where
+  streets meet; `route` is the shortest way between two x's through them (to the corner, then on
+  from the same spot on the next street; `worker.ts` walks it) and `streetDist` the walking distance
+  every "nearest" is measured by. Each street is seen from its right-hand side, so its lots lie to
+  its left (`backOf`) and a new street runs off into what lay behind the old one. The rider turns at
+  a crossroads (`turnAtCrossroads`): ↑ onto the road away from the viewer, ↓ towards them. A new
+  street gets its own woods; trees are cut where roads run off, and no field is sown across one.
 - `land.ts`: the land grid, tested by `land.test.ts`. The street is cut into 25 px cells in two
   rows: `back` (behind the road, where buildings stand) and `front` (between the road and the
   viewer). A building claims its footprint cells (its `width` rounded up to whole cells, centred on

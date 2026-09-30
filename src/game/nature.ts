@@ -22,7 +22,7 @@ import { BUILDINGS } from './buildings';
 import { putAway, storeSpot } from './economy';
 import { CHOP_SPOT, PILE_UNIT, QUARRIES, QUARRY_SPOTS, QUARRY_W, QUARRY_Y, STONECUTTER_DOOR, STREET_LENGTH, WOODCUTTER_DOOR } from './layout';
 import { room, type Load } from './resources';
-import { crossings, SIDE_ROAD_HALF, streetDist, streetStart } from './streets';
+import { crossings, SIDE_ROAD_HALF, streetDist, streetRange } from './streets';
 import type { JobTicket, Workplace } from './worker';
 import type { Building, World } from './world';
 
@@ -106,7 +106,10 @@ export function updateForest(world: World, dt: number, rand: () => number): void
   world.trees = world.trees.filter((t) => t.state !== 'stump' || t.age < STUMP_TIME);
   const streets = world.streets.length;
   if (world.trees.length < MAX_TREES * streets && rand() < dt / SPROUT_EVERY) {
-    const x = 60 + rand() * (STREET_LENGTH - 120) + (streets > 1 ? streetStart(Math.floor(rand() * streets)) : 0);
+    const along = rand();
+    // (along the main street as far as the woods go; along another only where the street is)
+    const { min, max } = streets > 1 ? streetRange(world, Math.floor(rand() * streets)) : { min: 60, max: STREET_LENGTH - 60 };
+    const x = min + along * (max - min);
     if (roomFor(world.trees, x) && !onRoad(world, x)) world.trees.push({ id: world.nextId++, x, state: 'growing', age: 0 });
   }
 }

@@ -388,9 +388,17 @@ function build(saved: SavedWorld): World {
   const world = createWorld({ village: false });
   const { branches, ...state } = saved;
   Object.assign(world, state);
-  // the streets, in the order they were opened: each branches off at a finished crossroads on one before it
+  // the streets, in the order they were opened: each branches off at a finished crossroads on one before
+  // it, and joins the streets it meets where crossroads were made for it (so buildings go on their plots first)
+  const seat = () => {
+    for (const b of world.buildings) {
+      const plot = world.plots[b.plotIndex];
+      if (plot && plot.buildingId === null) plot.buildingId = b.id;
+    }
+  };
   const layBranch = (b: Building) => {
     if (!world.plots[b.plotIndex]) throw new SaveError(`building ${b.id}: no plot ${b.plotIndex}`);
+    seat();
     layStreet(world, b);
   };
   for (const id of branches) {
@@ -400,12 +408,23 @@ function build(saved: SavedWorld): World {
     layBranch(b);
   }
   // (a finished crossroads always leads somewhere)
-  for (const b of world.buildings) if (b.type === 'intersection' && b.status === 'done' && !world.streets.some((st) => st.from === b.id)) layBranch(b);
+  for (const b of world.buildings) {
+    if (b.type === 'intersection' && b.status === 'done' && !b.junction && !world.streets.some((st) => st.from === b.id)) layBranch(b);
+  }
+  // a crossroads made where streets met, that no street met after all, is just a plot again
+  world.buildings = world.buildings.filter((b) => !b.junction || world.junctions.some((j) => j.buildingId === b.id));
+  for (const p of world.plots) p.buildingId = null;
+  for (const j of world.junctions) {
+    for (const x of [j.a, j.b]) {
+      const plot = world.plots.find((p) => p.x === x);
+      if (plot) plot.buildingId = j.buildingId;
+    }
+  }
   const ids = new Set<number>();
   for (const b of world.buildings) {
     const plot = world.plots[b.plotIndex];
     if (!plot) throw new SaveError(`building ${b.id}: no plot ${b.plotIndex}`);
-    if (plot.buildingId !== null) throw new SaveError(`building ${b.id}: plot ${b.plotIndex} already taken`);
+    if (plot.buildingId !== null && plot.buildingId !== b.id) throw new SaveError(`building ${b.id}: plot ${b.plotIndex} already taken`);
     if (ids.has(b.id)) throw new SaveError(`duplicate building id ${b.id}`);
     ids.add(b.id);
     plot.buildingId = b.id;
@@ -515,6 +534,7 @@ function building(v: unknown, path: string): Building {
     stock: stock(b.stock, `${path}.stock`),
   };
   if (b.upgraded !== undefined && bool(b.upgraded, `${path}.upgraded`)) out.upgraded = true;
+  if (b.junction !== undefined && bool(b.junction, `${path}.junction`) && out.type === 'intersection') out.junction = true;
   if (b.site !== undefined) out.site = site(b.site, `${path}.site`, out.type);
   if (b.farm !== undefined) out.farm = farm(b.farm, `${path}.farm`);
   return out;

@@ -5,7 +5,7 @@
 
 import { BUILDINGS, ROLES, type Role } from './buildings';
 import { ROAD_Y } from './layout';
-import { streetDist, streetOf, streetStart } from './streets';
+import { streetDist, streetOf, streetRange } from './streets';
 import type { Worker } from './worker';
 import type { Building, World } from './world';
 
@@ -164,8 +164,6 @@ export function release(world: World, p: Person): void {
 
 /** Unemployed people and animals wander the street they are on, stopping now and then. */
 export function updateStrolls(world: World, dt: number, rand: () => number): void {
-  const street = world.plots.filter((p) => p.street === 0);
-  const span = { min: street[0].x - 150, max: street[street.length - 1].x - 50 };
   const walkers: Array<{ s: Stroll; chicken: boolean; lane: number }> = [
     ...world.people.filter((p) => !p.job).map((p) => ({ s: p.stroll, chicken: false, lane: laneY(p.id) })),
     ...world.animals.map((a) => ({ s: a.stroll, chicken: true, lane: laneY(a.id) })),
@@ -183,9 +181,7 @@ export function updateStrolls(world: World, dt: number, rand: () => number): voi
       s.y = Math.abs(d) <= step ? lane : s.y + Math.sign(d) * step;
       continue;
     }
-    const x0 = streetStart(streetOf(s.x));
-    const minX = x0 + span.min;
-    const maxX = x0 + span.max;
+    const { min: minX, max: maxX } = streetRange(world, streetOf(s.x));
     s.x += s.dir * s.speed * dt;
     if (s.x < minX || s.x > maxX) {
       s.x = Math.max(minX, Math.min(maxX, s.x));
