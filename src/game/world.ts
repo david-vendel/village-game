@@ -19,7 +19,7 @@ import { farmFieldSpots, syncFarmFields } from './land';
 import { FIRST_PLOT_X, PLOT_SPACING, STREET_LENGTH } from './layout';
 import { clearRoad, createForest, onRoad, gatherWorkplace, isGatherHut, updateForest, type Tree } from './nature';
 import { employees, laneY, nameFor, openings, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
-import { BUILDERS_PER_SITE, builders, createSite, siteWork, siteWorkplace, upgrading, type Site } from './site';
+import { builderPositions, builders, createSite, siteWork, siteWorkplace, upgrading, type Site } from './site';
 import { RESOURCES, stockOf, type Stock } from './resources';
 import { branchStreet, CROSS_PLOT, mainStreet, route, streetOf, streetRange, streetStart, turnFacing, type Street } from './streets';
 import { eatAtTaverns } from './tavern';
@@ -490,7 +490,7 @@ export function workplaceOf(world: World, b: Building, role: Role): Workplace | 
 function staff(world: World): void {
   const dayLabour = timeOfDay(world).daylight;
   const hub = transportHub(world);
-  const openingsOf = (b: Building) => (b === hub ? (dayLabour ? { serf: serfPositions(world) } : {}) : openings(b, BUILDERS_PER_SITE, dayLabour));
+  const openingsOf = (b: Building) => (b === hub ? (dayLabour ? { serf: serfPositions(world) } : {}) : openings(b, builderPositions(world, b), dayLabour));
   staffBuildings(world, (b, role, who) => newWorker(world, b, role, who), openingsOf);
 }
 

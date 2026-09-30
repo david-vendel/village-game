@@ -12,7 +12,11 @@
 //
 // A builder's next job, in order: build at a spot where materials lie; else
 // carry a load from the pile to a spot; else fetch a load of whatever is
-// still needed from the nearest warehouse that has it; else wait at the site.
+// still needed from the nearest place that has it (a warehouse, or the
+// woodcutter's or stonecutter's hut itself: economy.ts materialSource).
+// A site hires only as many builders as it has work for (builderPositions),
+// and a builder with nothing to do and nothing in hand is let go where they
+// stand, rather than walking over to the site to wait there.
 // Progress is the share of the cost built in, so it can never run ahead of
 // the materials.
 //
@@ -20,7 +24,7 @@
 // finished building: its builders work alongside the building's own workers.
 
 import { BUILDINGS } from './buildings';
-import { takeOut, warehouseSpot, warehouseWith } from './economy';
+import { materialSource, storeSpot, takeOut } from './economy';
 import { pileItems, siteSlot, SPOT_PILE_DX, STAND_Y, type Spot } from './layout';
 import { employees } from './people';
 import { RESOURCES, stockOf, total, type Amounts, type Load, type Resource, type Stock } from './resources';
@@ -33,7 +37,7 @@ export const BUILDERS_PER_SITE = 5;
 export const LOAD_SIZE = 10;
 /** Seconds of labour per build job; a building needs its buildTime of labour in all. */
 export const BUILD_CHUNK = 2;
-/** Seconds to load up at the warehouse. */
+/** Seconds to load up at a warehouse or hut. */
 const LOADING_TIME = 0.4;
 /** Seconds to lift a load off the site's pile. */
 const PICK_UP_TIME = 0.25;
@@ -128,7 +132,7 @@ function lacking(b: Building, r: Resource): number {
   return (siteWork(b).cost[r] ?? 0) - (b.site?.delivered[r] ?? 0);
 }
 
-/** Materials on their way from warehouses: carried by the site's builders, and builders heading out to fetch. */
+/** Materials on their way from warehouses and huts: carried by the site's builders, and builders heading out to fetch. */
 function underway(world: World, b: Building): { carried: Stock; fetching: Stock } {
   const carried = stockOf();
   const fetching = stockOf();
@@ -139,6 +143,26 @@ function underway(world: World, b: Building): { carried: Stock; fetching: Stock 
     if (r) fetching[r] += 1;
   }
   return { carried, fetching };
+}
+
+/**
+ * Builders the site has work for now (up to BUILDERS_PER_SITE): those busy
+ * there, and one for each job waiting: a spot with materials lying there to
+ * build with, a load on the pile, a load still to fetch from somewhere that has it.
+ */
+export function builderPositions(world: World, b: Building): number {
+  const site = b.site;
+  if (!site) return 0;
+  const busy = builders(world, b).map((p) => p.job!.worker).filter((w) => currentJob(w) || w.carrying);
+  const taken = busy.flatMap((w) => currentJob(w) ?? []);
+  const building = new Set(taken.filter((j) => j.action === 'build').map((j) => j.target));
+  const loads = (n: number) => Math.max(0, Math.ceil(n / LOAD_SIZE - 1e-9));
+  let waiting = site.laid.filter((s, k) => total(s) > 1e-9 && !building.has(k)).length;
+  for (const r of MATERIALS) waiting += loads(site.pile[r] - taken.filter((j) => j.action === takeAction(r)).length * LOAD_SIZE);
+  const need = stillNeeded(world, b);
+  const x = world.plots[b.plotIndex].x;
+  for (const r of RESOURCES) if (need[r] && materialSource(world, r, x)) waiting += loads(need[r]);
+  return Math.min(BUILDERS_PER_SITE, busy.length + waiting);
 }
 
 /** Materials lying on the site's pile, for display. */
@@ -164,10 +188,13 @@ export function siteWorkplace(world: World, b: Building, buildSpeed: number): Wo
   /** Materials one build job works in. */
   const perJob = (BUILD_CHUNK * buildSpeed * costTotal) / work.buildTime;
   const spots = workSpots(b.type);
-  const warehouse = (id: number) => world.buildings.find((o) => o.id === id && o.type === 'warehouse' && o.status === 'done');
+  /** Where a fetch job takes its load from: a warehouse or a hut's store. */
+  const source = (id: number) => world.buildings.find((o) => o.id === id && o.status === 'done');
   const laidAt = (k: number) => total(site.laid[k] ?? {});
   return {
     dayLabour: true,
+    // nothing to build with and nothing to fetch: let go, rather than wait at the site
+    temporary: true,
     door: FRONT,
     nextJob(w, taken: JobTicket[]) {
       // build where materials lie and nobody else is building: the nearest such spot
@@ -198,25 +225,25 @@ export function siteWorkplace(world: World, b: Building, buildSpeed: number): Wo
       const need = stillNeeded(world, b);
       for (const r of RESOURCES) {
         if (!need[r]) continue;
-        const wh = warehouseWith(world, r, x + w.dx);
-        if (wh) return { job: { action: fetchAction(r), target: wh.id, slot: target() }, ...warehouseSpot(world, wh, r, x, true) };
+        const from = materialSource(world, r, x + w.dx);
+        if (from) return { job: { action: fetchAction(r), target: from.id, slot: target() }, ...storeSpot(world, from, r, x, true) };
       }
-      return null; // nothing to build with, and nothing to fetch: wait
+      return null; // nothing to build with, and nothing to fetch
     },
     jobSpot(job) {
       const t = takenResource(job.action);
       if (t) return pileSpot(b, t, pileItems(site.pile[t]) - 1);
       const r = fetchedResource(job.action);
-      const wh = r && warehouse(job.target);
-      return r && wh ? warehouseSpot(world, wh, r, x, true) : null;
+      const from = r && source(job.target);
+      return r && from ? storeSpot(world, from, r, x, true) : null;
     },
     begin(job) {
       if (job.action === 'build') return laidAt(job.target) > 1e-9 ? BUILD_CHUNK : null;
       const t = takenResource(job.action);
       if (t) return site.pile[t] > 1e-9 ? PICK_UP_TIME : null;
       const r = fetchedResource(job.action);
-      const wh = warehouse(job.target);
-      return r && wh && wh.stock[r] > 0 ? LOADING_TIME : null;
+      const from = source(job.target);
+      return r && from && from.stock[r] > 0 ? LOADING_TIME : null;
     },
     finish(job): Load | null {
       if (job.action === 'build') {
@@ -239,12 +266,12 @@ export function siteWorkplace(world: World, b: Building, buildSpeed: number): Wo
         return amount > 0 ? { resource: t, amount } : null;
       }
       const r = fetchedResource(job.action);
-      const wh = warehouse(job.target);
-      if (!r || !wh) return null;
+      const from = source(job.target);
+      if (!r || !from) return null;
       // never take more than the site still lacks, after what the others are bringing
       const { carried, fetching } = underway(world, b);
       const lacks = lacking(b, r) - carried[r] - (fetching[r] - 1) * LOAD_SIZE;
-      const amount = takeOut(wh, r, Math.min(LOAD_SIZE, Math.max(0, lacks)));
+      const amount = takeOut(from, r, Math.min(LOAD_SIZE, Math.max(0, lacks)));
       return amount > 0 ? { resource: r, amount } : null;
     },
     dropSpot(job) {

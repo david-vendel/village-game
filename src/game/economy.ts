@@ -1,6 +1,7 @@
 // The village economy. The village's materials are whatever its warehouses
 // hold: builders fetch wood and stone from them for construction sites
-// (site.ts), and serfs carry goods between the warehouses and the buildings
+// (site.ts), or straight from a woodcutter's or stonecutter's hut when that is
+// nearer (materialSource), and serfs carry goods between the warehouses and the buildings
 // that make or use them (transport.ts). Every store keeps each item in its
 // own place (storeSlot), where it is picked up from and put down.
 
@@ -62,12 +63,17 @@ export function upgradeShortfall(world: World, b: Building): Amounts {
   return shortfall(available(world), BUILDINGS[b.type].upgrade?.cost ?? {});
 }
 
-/** The warehouse nearest x that has some of r, if any. */
-export function warehouseWith(world: World, r: Resource, x: number): Building | null {
+/**
+ * Where a builder at x fetches r from: the nearest warehouse or building that
+ * makes r (a woodcutter's hut for wood) with some in its store; at equal
+ * distance the warehouse.
+ */
+export function materialSource(world: World, r: Resource, x: number): Building | null {
   let best: Building | null = null;
-  for (const w of warehouses(world)) {
-    if (w.stock[r] <= 0) continue;
-    if (!best || away(world, w, x) < away(world, best, x)) best = w;
+  for (const b of world.buildings) {
+    if (b.status !== 'done' || b.stock[r] <= 0 || !(b.type === 'warehouse' || BUILDINGS[b.type].ships?.includes(r))) continue;
+    const d = away(world, b, x);
+    if (!best || d < away(world, best, x) || (d === away(world, best, x) && b.type === 'warehouse' && best.type !== 'warehouse')) best = b;
   }
   return best;
 }
@@ -137,9 +143,4 @@ export function storeSpot(world: World, b: Building, r: Resource, fromX: number,
   const items = (amount: number) => Math.ceil(amount / (s?.unit ?? PILE_UNIT) - 1e-9);
   const i = top ? items(b.stock[r]) - 1 : items(b.stock[r] + Math.max(adding, 1e-6)) - 1;
   return { dx: xOf(world, b) + (s?.slot(Math.max(0, i)).dx ?? 0) - fromX, y: STAND_Y };
-}
-
-/** Where someone stands at a warehouse's stack of r: the top item (to pick up), or where the next load goes. */
-export function warehouseSpot(world: World, wh: Building, r: Resource, fromX: number, top: boolean): Spot {
-  return storeSpot(world, wh, r, fromX, top, PILE_UNIT);
 }
