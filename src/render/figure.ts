@@ -133,7 +133,7 @@ const FOREARM = 5.6;
  * Knee or elbow of a two-segment limb from joint a to end b. side 1 bends it
  * down/back (elbows), -1 forward (knees); out of reach it straightens.
  */
-function joint(ax: number, ay: number, bx: number, by: number, l1: number, l2: number, side: 1 | -1): [number, number] {
+export function joint(ax: number, ay: number, bx: number, by: number, l1: number, l2: number, side: 1 | -1): [number, number] {
   const dx = bx - ax;
   const dy = by - ay;
   const d = Math.max(0.001, Math.hypot(dx, dy));
