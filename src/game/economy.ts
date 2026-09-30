@@ -12,7 +12,7 @@ import type { Depot } from './worker';
 import type { Building, World } from './world';
 
 /** What the starting village's warehouse holds. */
-export const WAREHOUSE_START: Stock = stockOf({ wood: 50, stone: 50 });
+export const WAREHOUSE_START: Stock = stockOf({ wood: 150, stone: 100 });
 
 const xOf = (world: World, b: Building) => world.plots[b.plotIndex].x;
 
