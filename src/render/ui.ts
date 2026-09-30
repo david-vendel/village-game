@@ -198,7 +198,7 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
   const hhmm = `${String(c.hours).padStart(2, '0')}:${String(c.minutes).padStart(2, '0')}`;
   text(ctx, `Day ${c.day} · ${hhmm}   Buildings: ${built}`, 16, y + 2, 12, '#cbbfa4');
   const working = world.people.filter((p) => p.job).length;
-  const stockLine = `Warehouse: ${amounts(villageStock(world))}   People ${world.people.length} (${working} at work)`;
+  const stockLine = `Stored: ${amounts(villageStock(world))}   People ${world.people.length} (${working} at work)`;
   text(ctx, stockLine, 16, y + 18, fitSize(ctx, stockLine, 12, maxW), '#e8d9a8');
 
   button(ctx, L.zoomOut, false);

@@ -117,27 +117,32 @@ function pyramid(i: number, rows: readonly number[]): { row: number; col: number
   return { row: 0, col: 0 };
 }
 
-/** Most items a warehouse shows outside, per resource (the rest is indoors). */
-export const WAREHOUSE_SHOWN = { wood: 12, stone: 10, grain: 4, flour: 4, bread: 3 } as const;
+/**
+ * Items the storage yard (the `warehouse` building) holds, per resource. Everything
+ * it stores lies out in the open where it can be seen, so this is also its
+ * capacity: YARD_ITEMS × PILE_UNIT (buildings.ts).
+ */
+export const YARD_ITEMS = { wood: 30, stone: 30, grain: 10, flour: 10, bread: 10 } as const;
 
 /**
- * The warehouse's stacks: logs piled against the right-hand wall, a stone heap
- * on the left, sacks of grain along the front left of the doors, sacks of
- * flour to their right and baskets of bread beside them. Item i (0 = bottom of the stack).
+ * The storage yard's piles: a stone heap on the left, a log pile on the right,
+ * and between them an open-fronted shed with sacks of grain (left) and flour
+ * (right) stacked on the ground and baskets of bread on two shelves at the
+ * back. Item i (0 = bottom of the stack).
  */
 export function warehouseSlot(r: 'wood' | 'stone' | 'grain' | 'flour' | 'bread', i: number): Slot {
-  const n = Math.max(0, Math.min(i, WAREHOUSE_SHOWN[r] - 1));
+  const n = Math.max(0, Math.min(i, YARD_ITEMS[r] - 1));
   if (r === 'wood') {
-    const { row, col } = pyramid(n, [5, 4, 2, 1]);
-    return { dx: 48 + col * 7 + row * 3.5, lift: 3 + row * 6 };
+    const { row, col } = pyramid(n, [7, 6, 5, 4, 3, 3, 2]);
+    return { dx: 41 + col * 7 + row * 3.5, lift: 3.4 + row * 6 };
   }
   if (r === 'stone') {
-    const { row, col } = pyramid(n, [4, 3, 2, 1]);
-    return { dx: -110.75 + col * 7 + row * 3.5, lift: 2.5 + row * 5 };
+    const { row, col } = pyramid(n, [7, 6, 5, 4, 3, 2, 2, 1]);
+    return { dx: -80 + col * 7 + row * 3.5, lift: 2.5 + row * 5 };
   }
-  if (r === 'flour') return { dx: -10 + n * 8, lift: 0 };
-  if (r === 'bread') return { dx: 24 + n * 7, lift: 0 };
-  return { dx: -72 + n * 8, lift: 0 };
+  if (r === 'bread') return { dx: -20 + (n % 5) * 10, lift: n < 5 ? 50 : 62 };
+  const { row, col } = pyramid(n, [4, 3, 2, 1]);
+  return { dx: (r === 'grain' ? -27 : 5) + col * 8 + row * 4, lift: row * 9 };
 }
 
 /** Most items a construction site's pile shows, per resource. */

@@ -87,7 +87,9 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   workers. Tested by `world.test.ts`.
 - `resources.ts`: resources (wood, stone, grain, flour, bread), `Stock` (an amount of each) and `Amounts` (some
   of them, e.g. a cost), with affordability and payment helpers.
-- `economy.ts`: the village's materials are what its warehouses hold (the starting warehouse
+- `economy.ts`: the village's materials are what its warehouses hold (the `warehouse` building is
+  shown as an open storage yard: all it holds lies in its piles, `YARD_ITEMS` in `layout.ts`, which
+  also set its capacity) (the starting warehouse
   has `WAREHOUSE_START`). A new building can start only if the warehouses hold its cost beyond
   what other sites are still owed. `storeSlots`/`storeSpot` say where each item lies in any
   building's store (warehouse stacks, a farm's sheaves, the mill's sacks) and how much one

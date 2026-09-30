@@ -48,7 +48,7 @@ function activity(world: World, p: Person): string {
   const off = offDuty(w, timeOfDay(world), { dayLabour: !!b.site || p.job.role === 'serf' });
   const warehouse = (id: number) => {
     const wh = getBuilding(world, id);
-    return wh ? `the ${nameOf(wh)}` : 'a warehouse';
+    return wh ? `the ${nameOf(wh)}` : 'a storage yard';
   };
   const named = (id: number | undefined) => {
     const o = id === undefined ? undefined : getBuilding(world, id);

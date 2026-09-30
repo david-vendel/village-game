@@ -5,7 +5,7 @@
 import type { BuildingType } from '../game/buildings';
 import { demoFarm, type FarmState } from '../game/farm';
 import { BASKET } from '../game/bakery';
-import { BAKERY_SLOTS, MILL_SLOTS, pileItems, TAVERN_SLOTS, WAREHOUSE_SHOWN, warehouseSlot, type Slot } from '../game/layout';
+import { BAKERY_SLOTS, MILL_SLOTS, PILE_UNIT, pileItems, TAVERN_SLOTS, warehouseSlot, YARD_ITEMS, type Slot } from '../game/layout';
 import { SACK } from '../game/mill';
 import { stockOf, type Amounts, type Stock } from '../game/resources';
 import type { Worker } from '../game/worker';
@@ -352,39 +352,62 @@ function drawSnore(ctx: Ctx, x: number, y: number, time: number): void {
 }
 
 function drawWarehouse(ctx: Ctx, a: DrawArgs): void {
-  // a long timber storehouse on a stone base, with wide double doors
-  const w = 104;
-  const d = 40;
-  const x0 = a.x - 84;
-  stonePlinth(ctx, x0, a.base, w, 12, d, '#a89c88');
-  block(ctx, x0, a.base - 12, w, 46, d, '#9a7650');
-  for (let px = x0 + 4; px < x0 + w; px += 7) line(ctx, px, a.base - 12, px, a.base - 58, '#7d5d3d', 1); // boards
-  rect(ctx, x0 - 2, a.base - 60, w + 4, 4, '#5e452e'); // top beam
-  door(ctx, x0 + 36, a.base, 32, 44, '#6b4a2c');
-  line(ctx, x0 + 52, a.base - 44, x0 + 52, a.base, '#4a3322', 1.5); // between the two leaves
-  line(ctx, x0 + 36, a.base - 30, x0 + 68, a.base - 8, '#4a3322', 1.5); // bracing
-  gableRoof(ctx, x0 - 4, a.base - 58, w + 8, d, 40, '#8e4a33', '#9a7650', 'tile', a.seed);
-
-  // what's inside shows in the stacks outside: a log pile and a stone heap, and
-  // sacks of grain; each item in its own place (game/layout.ts), where builders
-  // take it from and carriers put it down
+  // an open storage yard: everything it holds lies out in plain sight, each
+  // item in its own place (game/layout.ts warehouseSlot), where builders take
+  // it from and carriers put it down
   const stock = a.stock;
-  const shown = (r: keyof typeof WAREHOUSE_SHOWN) => Math.min(WAREHOUSE_SHOWN[r], pileItems(stock?.[r] ?? 0));
-  for (let i = 0; i < shown('wood'); i++) {
-    const s = warehouseSlot('wood', i);
-    ellipse(ctx, a.x + s.dx, a.base - s.lift, 3.4, 3.2, '#8b6440');
-    ellipse(ctx, a.x + s.dx, a.base - s.lift, 2.2, 2, '#c9a577');
+  const items = (r: keyof typeof YARD_ITEMS) => Math.min(YARD_ITEMS[r], pileItems(stock?.[r] ?? 0));
+  // trodden earth and a wattle fence round the back of the yard
+  ctx.globalAlpha = 0.35;
+  ellipse(ctx, a.x, a.base + 1, 90, 5, '#7a6446');
+  ctx.globalAlpha = 1;
+  for (let px = a.x - 84; px <= a.x + 84; px += 14) rect(ctx, px - 1.5, a.base - 26, 3, 26, '#6b4f33');
+  for (const y of [a.base - 22, a.base - 14, a.base - 7]) line(ctx, a.x - 86, y, a.x + 86, y, '#8a6a44', 2);
+
+  // the open-fronted shed for what must stay dry
+  const xl = a.x - 32;
+  const xr = a.x + 34;
+  rect(ctx, xl, a.base - 72, xr - xl, 72, '#6b4f33');
+  for (let px = xl + 5; px < xr; px += 6) line(ctx, px, a.base - 72, px, a.base, '#5a412a', 1);
+  for (const lift of [50, 62]) {
+    rect(ctx, xl + 2, a.base - lift, xr - xl - 4, 2.5, '#9a7650'); // shelf
+    rect(ctx, xl + 4, a.base - lift + 2.5, 2, 4, '#5e452e');
+    rect(ctx, xr - 6, a.base - lift + 2.5, 2, 4, '#5e452e');
   }
-  for (let i = 0; i < shown('stone'); i++) {
+  gableRoof(ctx, xl - 4, a.base - 72, xr - xl + 8, 30, 16, '#b8955a', '#6b4f33', 'thatch', a.seed);
+  // bread in baskets on the shelves, the last basket part-full
+  const bread = stock?.bread ?? 0;
+  for (let i = 0; i < items('bread'); i++) {
+    const s = warehouseSlot('bread', i);
+    breadBasket(ctx, a.x + s.dx, a.base - s.lift, 0.75, Math.ceil((Math.min(PILE_UNIT, bread - i * PILE_UNIT) / PILE_UNIT) * 5));
+  }
+  // sacks of grain and of flour stacked on the ground
+  for (const [r, body, tie] of [
+    ['grain', '#d8c79a', '#9a8656'],
+    ['flour', '#efe9da', '#b8ad94'],
+  ] as const) {
+    for (let i = 0; i < items(r); i++) {
+      const s = warehouseSlot(r, i);
+      ellipse(ctx, a.x + s.dx, a.base - 5 - s.lift, 4, 5.5, body);
+      line(ctx, a.x + s.dx - 2, a.base - 9.5 - s.lift, a.x + s.dx + 2, a.base - 9.5 - s.lift, tie, 1);
+    }
+  }
+  rect(ctx, xl - 2, a.base - 74, 4, 74, '#5e452e'); // front posts
+  rect(ctx, xr - 2, a.base - 74, 4, 74, '#5e452e');
+
+  // the stone heap and the log pile out in the open
+  for (let i = 0; i < items('stone'); i++) {
     const s = warehouseSlot('stone', i);
     const bx = a.x + s.dx - 3.25;
     const by = a.base - s.lift - 2.5;
     rect(ctx, bx, by, 6.5, 5, shade('#aaa398', -hash(a.seed, i) * 0.15));
     rect(ctx, bx, by, 6.5, 1.5, '#c4beb3');
   }
-  for (let i = 0; i < shown('grain'); i++) ellipse(ctx, a.x + warehouseSlot('grain', i).dx, a.base - 5, 4, 5.5, '#d8c79a');
-  for (let i = 0; i < shown('flour'); i++) ellipse(ctx, a.x + warehouseSlot('flour', i).dx, a.base - 5, 4, 5.5, '#efe9da');
-  for (let i = 0; i < shown('bread'); i++) breadBasket(ctx, a.x + warehouseSlot('bread', i).dx, a.base, 0.75);
+  for (let i = 0; i < items('wood'); i++) {
+    const s = warehouseSlot('wood', i);
+    ellipse(ctx, a.x + s.dx, a.base - s.lift, 3.4, 3.2, '#8b6440');
+    ellipse(ctx, a.x + s.dx, a.base - s.lift, 2.2, 2, '#c9a577');
+  }
 }
 
 /** Baskets of loaves in a store's places: a full basket per BASKET loaves, the last one part-full. */
@@ -859,7 +882,7 @@ function drawWell(ctx: Ctx, a: DrawArgs): void {
 }
 
 export const BUILDING_ART: Record<BuildingType, BuildingArt> = {
-  warehouse: { height: 120, draw: drawWarehouse },
+  warehouse: { height: 100, draw: drawWarehouse },
   house: { height: 140, draw: drawHouse },
   farm: { height: 120, behind: drawFarmField, draw: drawFarm, front: drawFarmFrontField },
   mill: { height: 250, draw: drawMill },

@@ -5,6 +5,7 @@
 // its own module (farm.ts).
 // To add a building: add an entry here and an entry in BUILDING_ART.
 
+import { PILE_UNIT, YARD_ITEMS } from './layout';
 import type { Amounts, Resource } from './resources';
 
 export type BuildingType =
@@ -53,12 +54,13 @@ export interface BuildingDef {
 export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   warehouse: {
     type: 'warehouse',
-    name: 'Warehouse',
-    purpose: "Holds the village's wood, stone, grain, flour and bread. Builders fetch from here.",
+    name: 'Storage yard',
+    purpose: "Open yard with the village's wood, stone, grain, flour and bread in piles. Builders fetch from here.",
     width: 170,
     buildTime: 14,
     cost: { wood: 60, stone: 40 },
-    storage: { wood: 300, stone: 300, grain: 100, flour: 100, bread: 100 },
+    // everything lies out in the open, in its place in a pile (layout.ts warehouseSlot)
+    storage: Object.fromEntries(Object.entries(YARD_ITEMS).map(([r, n]) => [r, n * PILE_UNIT])),
     jobs: {},
   },
   house: {
