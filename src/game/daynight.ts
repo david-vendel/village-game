@@ -62,6 +62,23 @@ export function clock(world: World): { day: number; hours: number; minutes: numb
   return { day: Math.floor(days) + 1, hours: Math.floor(minutesOfDay / 60), minutes: minutesOfDay % 60 };
 }
 
+/** The chapel bell's swing rate (rad/s) and how many times it rings at noon. */
+const BELL_RATE = 1.3;
+export const BELL_STROKES = 3;
+
+/**
+ * The chapel bell, rung at noon: its swing angle (0 at rest) and how many
+ * strokes it has rung so far (it rings at each end of its swing, BELL_STROKES
+ * times, then hangs still until the next noon).
+ */
+export function chapelBell(world: World): { angle: number; strokes: number } {
+  // real seconds since noon (the ringing runs at the speed of everything else, not of the day)
+  const t = (((dayPhase(world) - 0.5 + 1) % 1) * DAY_LENGTH) / world.params.timeSpeed;
+  const swing = BELL_RATE * t;
+  if (swing >= BELL_STROKES * Math.PI) return { angle: 0, strokes: 0 };
+  return { angle: Math.sin(swing) * 0.25, strokes: Math.max(0, Math.floor((swing - Math.PI / 2) / Math.PI) + 1) };
+}
+
 /** The time of day as villagers see it: enough to plan their day by. */
 export interface TimeOfDay {
   /** Light enough for outdoor work. */

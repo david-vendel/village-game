@@ -3,6 +3,7 @@
 // world-anchored labels. Screen UI (HUD, menu,
 // touch buttons) is drawn separately by main.ts in its own coordinate space.
 
+import { chapelBell } from '../game/daynight';
 import { employees } from '../game/people';
 import type { Worker } from '../game/worker';
 import { laidOut, onSite, upgrading } from '../game/site';
@@ -68,6 +69,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
 
   /** Screen x of something standing on the ground at world x and depth y (ground.ts). */
   const onGround = (x: number, y: number) => groundX(x - camX, y, viewW / 2);
+  const bell = chapelBell(world).angle;
   const args = (b: Building): DrawArgs => ({
     x: world.plots[b.plotIndex].x - camX,
     base: BASE,
@@ -81,6 +83,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     onSite: onSite(b),
     laid: laidOut(b),
     vpX: viewW / 2,
+    bell: b.type === 'chapel' ? bell : undefined,
   });
   // people at work, with their workplace's position
   const atWork = world.people.flatMap((p) => {

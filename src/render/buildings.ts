@@ -33,6 +33,8 @@ export interface DrawArgs {
   onSite?: Amounts;
   /** Under construction: materials laid down at each work spot (dx from the centre), not yet built in. */
   laid?: Array<{ dx: number; amounts: Amounts }>;
+  /** The chapel bell's swing angle (daynight.ts chapelBell); at rest without it. */
+  bell?: number;
   /** Ground-perspective vanishing point x (see ground.ts); defaults to `x`. */
   vpX?: number;
 }
@@ -781,7 +783,7 @@ function drawChapel(ctx: Ctx, a: DrawArgs): void {
   ctx.arc(tx + 20, a.base - th + 20, 9, Math.PI, 0);
   ctx.lineTo(tx + 29, a.base - th + 42);
   ctx.fill();
-  const swing = Math.sin(a.time * 1.3) * 0.25;
+  const swing = a.bell ?? 0;
   ctx.save();
   ctx.translate(tx + 20, a.base - th + 16);
   ctx.rotate(swing);

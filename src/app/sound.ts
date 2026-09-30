@@ -17,6 +17,7 @@
 
 import type { BuildingType } from '../game/buildings';
 import type { Resource } from '../game/resources';
+import { chapelBell } from '../game/daynight';
 import { employees } from '../game/people';
 import { RIDER_MAX_SPEED, getBuilding, type World } from '../game/world';
 import { HORSE_STRIDE } from '../render';
@@ -234,6 +235,8 @@ export function createSound(initialVolume = 0.6): Sound {
   const next = new Map<number, number>();
   /** World time at the previous frame, for `beat`. */
   let prevTime: number | null = null;
+  /** Strokes the noon bell had rung last frame. */
+  let lastBellStrokes = 0;
   /** What each person carried at the previous frame. */
   const carried = new Map<number, Resource | null>();
 
@@ -286,6 +289,9 @@ export function createSound(initialVolume = 0.6): Sound {
       }
 
       const PI = Math.PI;
+      const strokes = chapelBell(world).strokes;
+      const bellStruck = strokes > lastBellStrokes;
+      lastBellStrokes = strokes;
       for (const b of world.buildings) {
         const x = world.plots[b.plotIndex].x;
         const near = Math.abs(x - listenerX) < EARSHOT + 300;
@@ -310,7 +316,7 @@ export function createSound(initialVolume = 0.6): Sound {
         if (b.type === 'blacksmith' && beat(world, 5, PI)) sfx.anvil(x + 34); // sparks fly as the hammer lands
         else if (b.type === 'well' && beat(world, 0.6, 2 * PI, PI / 2)) sfx.splash(x); // the bucket at the bottom
         else if (b.type === 'mill' && beat(world, 0.9, PI / 2, 0, seed)) sfx.creak(x); // each quarter turn of the sails
-        else if (b.type === 'chapel' && beat(world, 1.3, PI, PI / 2)) sfx.bell(x); // the bell at each end of its swing
+        else if (b.type === 'chapel' && bellStruck) sfx.bell(x); // rung at noon, at each end of its swing (daynight.ts chapelBell)
         const amb = AMBIENT[b.type];
         if (amb) {
           if (!next.has(b.id)) next.set(b.id, clock + rnd(0, amb.every[1]));
