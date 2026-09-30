@@ -4,7 +4,7 @@
 
 import type { BuildingType } from '../game/buildings';
 import { demoFarm, type FarmState } from '../game/farm';
-import { BAKERY_OVEN_MOUTH_DX, BAKERY_SLOTS, BASKET, MILL_SLOTS, PILE_UNIT, SACK, pileItems, TAVERN_SLOTS, warehouseSlot, YARD_ITEMS, type Slot } from '../game/layout';
+import { BAKERY_OVEN_MOUTH_DX, BAKERY_SLOTS, BASKET, MILL_SLOTS, PILE_UNIT, SACK, pileItems, STONECUTTER_DOOR, STONECUTTER_SLOTS, TAVERN_SLOTS, warehouseSlot, WOODCUTTER_DOOR, WOODCUTTER_SLOTS, YARD_ITEMS, type Slot } from '../game/layout';
 import { stockOf, type Amounts, type Stock } from '../game/resources';
 import type { Worker } from '../game/worker';
 import { breadBasket, doorProgress, drawBackFences, drawBackField, drawFrontField, drawStore } from './farm';
@@ -945,6 +945,97 @@ function drawWell(ctx: Ctx, a: DrawArgs): void {
   poly(ctx, [cx + r + 6, a.base, cx + r + 18, a.base, cx + r + 20, a.base - 11, cx + r + 4, a.base - 11], '#7b5634');
 }
 
+/** Whether someone is stepping through the door now (it stands open), and whether anyone is asleep inside. */
+function atHome(a: DrawArgs): { doorOpen: boolean; asleep: boolean } {
+  const ws = a.workers ?? [];
+  return {
+    doorOpen: ws.some((w) => doorProgress(w) > 0 && doorProgress(w) < 1),
+    asleep: ws.some((w) => w.task.kind === 'home' && w.task.activity === 'sleep'),
+  };
+}
+
+/** A door at dx from the centre, open while someone steps through it. */
+function hutDoor(ctx: Ctx, a: DrawArgs, dx: number, open: boolean, wood: string): void {
+  const x = a.x + dx - 8;
+  door(ctx, x, a.base, 16, 30, open ? '#1c140d' : wood);
+  if (open) rect(ctx, x - 4, a.base - 27, 4, 27, wood); // the door leaf, swung open
+}
+
+function drawWoodcutter(ctx: Ctx, a: DrawArgs): void {
+  // a log cabin at the edge of the woods, a chopping block by the door
+  const w = 66;
+  const d = 30;
+  const x0 = a.x - 50;
+  const h = 34;
+  block(ctx, x0, a.base, w, h, d, '#8b6440');
+  // the logs it is built of, their ends showing at the corner
+  for (let y = a.base - 4; y > a.base - h; y -= 6) {
+    line(ctx, x0, y, x0 + w, y, '#6b4a2e', 1.2);
+    circle(ctx, x0 + 1, y - 3, 2.6, '#c9a577');
+  }
+  const { doorOpen, asleep } = atHome(a);
+  hutDoor(ctx, a, WOODCUTTER_DOOR.dx, doorOpen, '#5a3d24');
+  window_(ctx, x0 + 46, a.base - 26, 12, 11, hash(a.seed, 5) < 0.7, a.time, a.seed);
+  const r = gableRoof(ctx, x0, a.base - h, w, d, 30, '#7a5a3a', '#8b6440', 'tile', a.seed);
+  chimney(ctx, r.ridgeX1 + w * 0.25, r.ridgeY + 6, 14, a, 0.6);
+  // chopping block with the axe in it, and chips about
+  const bx = x0 - 14;
+  rect(ctx, bx - 7, a.base - 10, 14, 10, '#7b5634');
+  ellipse(ctx, bx, a.base - 10, 7, 2.2, '#c9a577');
+  line(ctx, bx + 1, a.base - 11, bx + 9, a.base - 24, '#6b4a2c', 2);
+  poly(ctx, [bx - 2, a.base - 10, bx + 4, a.base - 10, bx + 3, a.base - 15, bx - 1, a.base - 14], '#9a9a9a');
+  for (let i = 0; i < 5; i++) rect(ctx, bx - 16 + hash(a.seed, 60 + i) * 30, a.base + 1 + hash(a.seed, 70 + i) * 3, 3, 1.5, '#d8b98a');
+  // the store: logs stacked by the wall, one per load
+  const logs = Math.min(WOODCUTTER_SLOTS.length, pileItems(a.stock?.wood ?? 0));
+  for (let i = 0; i < logs; i++) {
+    const sl = WOODCUTTER_SLOTS[i];
+    const cx = a.x + sl.dx;
+    const cy = a.base - sl.lift;
+    rect(ctx, cx - 13, cy - 5, 26, 5, '#7b5634');
+    circle(ctx, cx + 13, cy - 2.5, 2.6, '#c9a06a');
+    circle(ctx, cx + 13, cy - 2.5, 1, '#8a6440');
+  }
+  if (asleep) drawSnore(ctx, x0 + 52, a.base - 58, a.time);
+}
+
+function drawStonecutter(ctx: Ctx, a: DrawArgs): void {
+  // a squat stone hut with a slate roof, a mason's bench out front
+  const w = 64;
+  const d = 30;
+  const x0 = a.x - 50;
+  const h = 34;
+  block(ctx, x0, a.base, w, h, d, '#b8ab94');
+  // stone courses
+  ctx.globalAlpha = 0.4;
+  for (let y = a.base - 6, k = 0; y > a.base - h; y -= 7, k++) {
+    line(ctx, x0, y, x0 + w, y, '#6e6456', 1);
+    for (let x = x0 + (k % 2) * 6; x < x0 + w; x += 12) line(ctx, x, y, x, y - 7, '#6e6456', 1);
+  }
+  ctx.globalAlpha = 1;
+  const { doorOpen, asleep } = atHome(a);
+  hutDoor(ctx, a, STONECUTTER_DOOR.dx, doorOpen, '#6b4a2c');
+  window_(ctx, x0 + 45, a.base - 26, 12, 11, hash(a.seed, 5) < 0.7, a.time, a.seed);
+  gableRoof(ctx, x0, a.base - h, w, d, 28, '#5f646e', '#b8ab94', 'slate', a.seed);
+  // the mason's bench with a block on it, mallet and chisel beside
+  const bx = x0 - 16;
+  rect(ctx, bx - 10, a.base - 12, 20, 3, '#7b5634');
+  rect(ctx, bx - 9, a.base - 9, 2, 9, '#6b4a2c');
+  rect(ctx, bx + 7, a.base - 9, 2, 9, '#6b4a2c');
+  rect(ctx, bx - 5, a.base - 19, 10, 7, '#aaa398');
+  rect(ctx, bx - 5, a.base - 19, 10, 2, '#c4beb3');
+  // the store: dressed blocks set down by the wall, one per load
+  const blocks = Math.min(STONECUTTER_SLOTS.length, pileItems(a.stock?.stone ?? 0));
+  for (let i = 0; i < blocks; i++) {
+    const sl = STONECUTTER_SLOTS[i];
+    const cx = a.x + sl.dx;
+    const cy = a.base - sl.lift;
+    rect(ctx, cx - 5.5, cy - 8, 11, 8, '#aaa398');
+    rect(ctx, cx - 5.5, cy - 8, 11, 2, '#c4beb3');
+    rect(ctx, cx + 3.5, cy - 8, 2, 8, '#8f887c');
+  }
+  if (asleep) drawSnore(ctx, x0 + 51, a.base - 58, a.time);
+}
+
 export const BUILDING_ART: Record<BuildingType, BuildingArt> = {
   warehouse: { height: 100, draw: drawWarehouse },
   house: { height: 140, draw: drawHouse },
@@ -957,6 +1048,8 @@ export const BUILDING_ART: Record<BuildingType, BuildingArt> = {
   tavern: { height: 170, draw: drawTavern },
   watchtower: { height: 260, draw: drawWatchtower },
   well: { height: 90, draw: drawWell },
+  woodcutter: { height: 100, draw: drawWoodcutter },
+  stonecutter: { height: 100, draw: drawStonecutter },
 };
 
 const DEMO_FARM = demoFarm();

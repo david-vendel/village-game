@@ -204,7 +204,19 @@ export function drawWorker(ctx: Ctx, f: Worker, fig: Figure, x: number, y: numbe
   const job = task.kind === 'job' ? task : null;
   const action = job?.job.action;
   const atOven = !!job?.carried && !job.indoors;
-  const bend = !job ? 0 : atOven ? 0.12 : action === 'sow' ? 0.12 : action === 'build' ? 0.08 : action === 'harvest' ? 0.25 + Math.sin(time * 4) * 0.08 : 0.4;
+  const bend = !job
+    ? 0
+    : atOven
+      ? 0.12
+      : action === 'sow'
+        ? 0.12
+        : action === 'build' || action === 'chop'
+          ? 0.08
+          : action === 'cut'
+            ? 0.18
+            : action === 'harvest'
+              ? 0.25 + Math.sin(time * 4) * 0.08
+              : 0.4;
 
   const hipY = drawLegs(ctx, o, phase, walking);
   ctx.save();
@@ -265,6 +277,23 @@ export function drawWorker(ctx: Ctx, f: Worker, fig: Figure, x: number, y: numbe
     rect(ctx, -3, -10, 7, 3, '#8a8a8a');
     ctx.restore();
     drawArm(ctx, o, sx, sy, hx, hy);
+    ctx.restore();
+    drawProgressPips(ctx, job.t / job.duration);
+  } else if (job && (action === 'chop' || action === 'cut')) {
+    // an axe swung into the trunk, or a pick into the rock face: both hands on
+    // the haft, raised over the shoulder and brought down hard
+    const beat = (time * (action === 'chop' ? 1.4 : 1.1)) % 1;
+    const a = beat < 0.7 ? -2.2 + (beat / 0.7) * 0.6 : -1.6 + ((beat - 0.7) / 0.3) * 2.1;
+    const grip = (t: number): [number, number] => [2 + Math.cos(a) * t, -9 + Math.sin(a) * t];
+    body(grip(4));
+    ctx.save();
+    ctx.translate(2, -9);
+    ctx.rotate(a);
+    line(ctx, 0, 0, 17, 0, '#6b4a2c', 1.8);
+    if (action === 'chop') poly(ctx, [14, -1, 19, -4.5, 20, 3.5, 15, 1.5], '#9a9a9a');
+    else line(ctx, 17, -5, 17, 5, '#8a8a8a', 2);
+    ctx.restore();
+    drawArm(ctx, o, sx, sy, ...grip(9));
     ctx.restore();
     drawProgressPips(ctx, job.t / job.duration);
   } else if (job && atOven) {

@@ -45,7 +45,7 @@ function activity(world: World, p: Person): string {
   const w = p.job.worker;
   const t = w.task;
   const here = whereAt(world, x + w.dx);
-  const off = offDuty(w, timeOfDay(world), { dayLabour: !!b.site || p.job.role === 'serf' });
+  const off = offDuty(w, timeOfDay(world), { dayLabour: p.job.role === 'builder' || p.job.role === 'serf' });
   const warehouse = (id: number) => {
     const wh = getBuilding(world, id);
     return wh ? `the ${nameOf(wh)}` : 'a storage yard';
@@ -59,6 +59,8 @@ function activity(world: World, p: Person): string {
       const a = t.job.action;
       if (a === 'sow') return 'sowing a field';
       if (a === 'harvest') return 'harvesting a field';
+      if (a === 'chop') return 'felling a tree';
+      if (a === 'cut') return 'cutting stone at the quarry';
       const recipe = BUILDINGS[b.type].makes;
       if (recipe && a === recipe.verb) {
         const doing = `${recipe.verb === 'grind' ? 'grinding' : 'baking'} ${recipe.from} into ${recipe.to}`;
@@ -76,6 +78,8 @@ function activity(world: World, p: Person): string {
       if (t.then === 'deliver') {
         const load = w.carrying ? `${w.carrying.amount} ${w.carrying.resource}` : 'nothing';
         if (a === 'harvest') return `carrying a sheaf to the ${nameOf(b)} store`;
+        if (a === 'chop') return `carrying a log back to ${place}`;
+        if (a === 'cut') return `carrying a block of stone back to ${place}`;
         const recipe = BUILDINGS[b.type].makes;
         if (recipe && a === recipe.verb) return w.carrying?.resource === recipe.from ? `carrying ${load} ${recipe.at ? 'to the oven' : `in to ${place}`}` : `putting ${load} out in its place`;
         if (resource(a, 'ship') || resource(a, 'supply')) return `carrying ${load} from ${named(t.job!.target)} to ${named(t.job!.to)}`;
@@ -91,6 +95,8 @@ function activity(world: World, p: Person): string {
       }
       if (a === 'sow') return 'walking to sow a field';
       if (a === 'harvest') return 'walking to harvest a field';
+      if (a === 'chop') return 'walking out to fell a tree';
+      if (a === 'cut') return 'walking to the quarry';
       if (resource(a, 'ship') || resource(a, 'supply')) return `going to ${named(t.job!.target)} for ${resource(a, 'ship') ?? resource(a, 'supply')} to take to ${named(t.job!.to)}`;
       if (a === 'build') return `going to build at ${place}`;
       if (resource(a, 'take')) return `going to the pile for ${resource(a, 'take')}`;

@@ -25,9 +25,10 @@ import { transportHub } from './transport';
 import { employees, laneY, nameFor, openings, type Animal, type Job, type Look, type Person, type Stroll } from './people';
 import { RESOURCES, type Load, type Resource, type Stock } from './resources';
 import type { Worker, WorkerTask } from './worker';
-import { createWorld, type Building, type Rider, type World } from './world';
+import { createForest, type Tree } from './nature';
+import { createWorld, WORLD_WIDTH, type Building, type Rider, type World } from './world';
 
-export const SAVE_VERSION = 11;
+export const SAVE_VERSION = 12;
 
 /** How often (s) the village used to collect goods from stores (until v9); old migrations need it. */
 const OLD_COLLECT_EVERY = 30;
@@ -41,6 +42,7 @@ export type SavedWorld = Pick<
   | 'rider'
   | 'people'
   | 'animals'
+  | 'trees'
   | 'constructionEnabled'
   | 'lastSelection'
   | 'nextId'
@@ -315,6 +317,22 @@ const MIGRATIONS: Record<number, (world: unknown) => unknown> = {
     if (typeof w.lastSelection === 'number' && w.lastSelection >= bakery) w.lastSelection += 1;
     return world;
   },
+  // v12: the woods behind the street are real trees, to be felled (nature.ts);
+  // (the woodcutter's and stonecutter's huts come last in the menu, so nothing moves)
+  11: (world) => {
+    const rec = (v: unknown) => (typeof v === 'object' && v !== null ? (v as Raw) : undefined);
+    const w = rec(world);
+    if (!w) return world;
+    let seed = typeof w.rngState === 'number' ? w.rngState : 1;
+    const rand = () => {
+      seed = (seed * 1103515245 + 12345) % 2147483648;
+      return seed / 2147483648;
+    };
+    let id = typeof w.nextId === 'number' ? w.nextId : 1;
+    w.trees = createForest(WORLD_WIDTH, rand, () => id++);
+    w.nextId = id;
+    return world;
+  },
 };
 
 /** Snapshot the world. The result shares nothing with the live world. */
@@ -326,6 +344,7 @@ export function saveWorld(world: World): SaveData {
     rider: world.rider,
     people: world.people,
     animals: world.animals,
+    trees: world.trees,
     constructionEnabled: world.constructionEnabled,
     lastSelection: world.lastSelection,
     nextId: world.nextId,
@@ -366,7 +385,7 @@ function build(saved: SavedWorld): World {
     ids.add(b.id);
     plot.buildingId = b.id;
   }
-  const maxId = Math.max(0, ...[...world.buildings, ...world.people, ...world.animals].map((x) => x.id));
+  const maxId = Math.max(0, ...[...world.buildings, ...world.people, ...world.animals, ...world.trees].map((x) => x.id));
   world.nextId = Math.max(world.nextId, maxId + 1);
   // a construction site record belongs to buildings under construction, or
   // being upgraded, only; an upgrade only to buildings that have one
@@ -450,6 +469,7 @@ function savedWorld(v: unknown): SavedWorld {
     rider: rider(w.rider, 'rider'),
     people: arr(w.people, 'people').map((x, i) => person(x, `people[${i}]`)),
     animals: arr(w.animals, 'animals').map((x, i) => animal(x, `animals[${i}]`)),
+    trees: arr(w.trees, 'trees').map((x, i) => tree(x, `trees[${i}]`)),
     constructionEnabled: bool(w.constructionEnabled, 'constructionEnabled'),
     lastSelection: oneOf(w.lastSelection, BUILDING_TYPES.map((_, i) => i), 'lastSelection'),
     nextId: int(w.nextId, 'nextId'),
@@ -523,6 +543,11 @@ function person(v: unknown, path: string): Person {
     ...professionOf(p, path),
     stroll: stroll(p.stroll, `${path}.stroll`),
   };
+}
+
+function tree(v: unknown, path: string): Tree {
+  const t = obj(v, path);
+  return { id: int(t.id, `${path}.id`), x: num(t.x, `${path}.x`), state: oneOf(t.state, ['growing', 'grown', 'stump'] as const, `${path}.state`), age: num(t.age, `${path}.age`) };
 }
 
 function animal(v: unknown, path: string): Animal {

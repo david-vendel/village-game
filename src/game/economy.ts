@@ -5,7 +5,7 @@
 // own place (storeSlot), where it is picked up from and put down.
 
 import { BUILDINGS, type BuildingType } from './buildings';
-import { BAKERY_SLOTS, BASKET, MILL_SLOTS, PILE_UNIT, SACK, TAVERN_SLOTS, SHEAF_SLOTS, STAND_Y, warehouseSlot, type Slot, type Spot } from './layout';
+import { BAKERY_SLOTS, BASKET, MILL_SLOTS, PILE_UNIT, SACK, STONECUTTER_SLOTS, TAVERN_SLOTS, SHEAF_SLOTS, STAND_Y, warehouseSlot, WOODCUTTER_SLOTS, type Slot, type Spot } from './layout';
 import { room, RESOURCES, shortfall, stockOf, type Amounts, type Load, type Resource, type Stock } from './resources';
 import { owed } from './site';
 import type { Building, World } from './world';
@@ -114,6 +114,8 @@ export function storeSlots(b: Building, r: Resource): { unit: number; perTrip: n
   if (b.type === 'bakery' && r === 'flour') return { unit: SACK, perTrip: 1, slot: pick(BAKERY_SLOTS.flour) };
   if (b.type === 'bakery' && r === 'bread') return { unit: BASKET, perTrip: 1, slot: pick(BAKERY_SLOTS.bread) };
   if (b.type === 'tavern' && r === 'bread') return { unit: BASKET, perTrip: 1, slot: pick(TAVERN_SLOTS) };
+  if (b.type === 'woodcutter' && r === 'wood') return { unit: PILE_UNIT, perTrip: 1, slot: pick(WOODCUTTER_SLOTS) };
+  if (b.type === 'stonecutter' && r === 'stone') return { unit: PILE_UNIT, perTrip: 1, slot: pick(STONECUTTER_SLOTS) };
   return null;
 }
 

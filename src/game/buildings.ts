@@ -19,7 +19,9 @@ export type BuildingType =
   | 'chapel'
   | 'tavern'
   | 'watchtower'
-  | 'well';
+  | 'well'
+  | 'woodcutter'
+  | 'stonecutter';
 
 /**
  * Jobs a building can offer (see people.ts); builders work on construction
@@ -28,8 +30,8 @@ export type BuildingType =
  * work takes it for as long as there is carrying to do. Serf comes last:
  * hiring fills the other jobs first.
  */
-export type Role = 'farmer' | 'builder' | 'miller' | 'baker' | 'serf';
-export const ROLES: readonly Role[] = ['farmer', 'builder', 'miller', 'baker', 'serf'];
+export type Role = 'farmer' | 'builder' | 'miller' | 'baker' | 'woodcutter' | 'stonecutter' | 'serf';
+export const ROLES: readonly Role[] = ['farmer', 'builder', 'miller', 'baker', 'woodcutter', 'stonecutter', 'serf'];
 
 /**
  * What a workshop makes (workshop.ts): its worker takes `batch` of `from` out
@@ -210,6 +212,30 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     cost: { wood: 5, stone: 30 },
     storage: {},
     jobs: {},
+  },
+  woodcutter: {
+    type: 'woodcutter',
+    name: "Woodcutter's hut",
+    purpose: 'Fells grown trees in the woods behind the street for wood.',
+    width: 130,
+    buildTime: 9,
+    cost: { wood: 30, stone: 10 },
+    // logs stacked by the wall (layout.ts WOODCUTTER_SLOTS); the woods: nature.ts
+    storage: { wood: 30 },
+    jobs: { woodcutter: 1 },
+    ships: ['wood'],
+  },
+  stonecutter: {
+    type: 'stonecutter',
+    name: "Stonecutter's hut",
+    purpose: 'Cuts blocks of stone out of the nearest quarry in the hills.',
+    width: 130,
+    buildTime: 10,
+    cost: { wood: 40, stone: 10 },
+    // blocks set down by the wall (layout.ts STONECUTTER_SLOTS)
+    storage: { stone: 30 },
+    jobs: { stonecutter: 1 },
+    ships: ['stone'],
   },
 };
 

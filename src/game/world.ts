@@ -4,7 +4,7 @@
 // What is specific to one kind of thing lives in its own module: farm.ts
 // (fields), people.ts (villagers, hiring), worker.ts (the working day),
 // economy.ts (warehouses, costs), workshop.ts (the mill's and bakery's work), transport.ts (errands), tavern.ts (guests eating), site.ts (construction by builders),
-// land.ts (who uses which land).
+// land.ts (who uses which land), nature.ts (the woods and quarries, and the huts that work them).
 //
 // Nobody and nothing ever jumps: people walk everywhere from where they
 // stand (hired, let go, or done for the day), and goods only move in
@@ -16,6 +16,7 @@ import { buildShortfall, putAway, takeFromWarehouses, upgradeShortfall, WAREHOUS
 import { createFarm, DEFAULT_WORK, farmWorkplace, updateCrops, type FarmState } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
 import { PLOT_SPACING } from './layout';
+import { createForest, gatherWorkplace, isGatherHut, updateForest, type Tree } from './nature';
 import { employees, laneY, nameFor, openings, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
 import { BUILDERS_PER_SITE, builders, createSite, siteWork, siteWorkplace, upgrading, type Site } from './site';
 import { RESOURCES, stockOf, type Stock } from './resources';
@@ -115,6 +116,8 @@ export interface World {
   /** Every villager, employed or not (people.ts). */
   people: Person[];
   animals: Animal[];
+  /** The woods behind the street (nature.ts). */
+  trees: Tree[];
   constructionEnabled: boolean;
   params: WorldParams;
   menu: BuildMenu | null;
@@ -171,6 +174,7 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
     rider: { x: FIRST_PLOT_X + 5 * PLOT_SPACING + PLOT_SPACING / 2, vx: 0, facing: 1, gait: 0 },
     people: [],
     animals: [],
+    trees: [],
     constructionEnabled: true,
     params: { ...DEFAULT_PARAMS },
     menu: null,
@@ -212,6 +216,7 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
       }
     }
     staff(world);
+    world.trees = createForest(WORLD_WIDTH, () => rand(world), () => world.nextId++);
   }
   return world;
 }
@@ -382,6 +387,7 @@ export function update(world: World, dt: number, input: MoveInput): void {
   updateRider(world, dt, world.menu ? { left: false, right: false } : input);
   staff(world);
   for (const b of world.buildings) if (b.farm) updateCrops(b.farm, dt);
+  updateForest(world, WORLD_WIDTH, dt, () => rand(world));
   updateWorkers(world, dt);
   // a site whose builders have done all the work is finished
   for (const b of world.buildings) if (b.site && b.progress >= 1) complete(world, b);
@@ -398,6 +404,7 @@ export function workplaceOf(world: World, b: Building, role: Role): Workplace | 
   if (b.farm) return farmWorkplace(b.farm, b.stock, world.params);
   const recipe = BUILDINGS[b.type].makes;
   if (recipe && b.status === 'done') return workshopWorkplace(world, b, recipe);
+  if (isGatherHut(b.type) && b.status === 'done') return gatherWorkplace(world, b as Building & { type: typeof b.type });
   if (b === transportHub(world)) return transportWorkplace(world, b);
   return null;
 }

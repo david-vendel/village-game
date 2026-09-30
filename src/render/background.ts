@@ -1,6 +1,7 @@
 // Parallax backdrop in the spirit of the Age of Empires II intro: hazy blue
 // mountains, a castle on a hill, patchwork
-// fields, a distant village and a tree line behind the street.
+// fields, a distant village and a meadow behind the street (its trees and
+// the quarries are in the world: render/nature.ts).
 
 import { depthScale, groundTiles, groundX } from './ground';
 import { circle, type Ctx, ellipse, GROUND_Y, hash, mix, poly, rect, shade, smoke, VIEW_H } from './util';
@@ -195,34 +196,12 @@ function tinyChurch(ctx: Ctx, x: number, y: number): void {
 
 function drawTreeLine(ctx: Ctx, v: View): void {
   const factor = 0.66;
-  const off = v.camX * factor;
-  const T = 70;
-  const i0 = Math.floor(off / T) - 2;
   // meadow behind the street
   const g = ctx.createLinearGradient(0, 395, 0, 440);
   g.addColorStop(0, '#7f9148');
   g.addColorStop(1, '#8a9a4c');
   fillRidge(ctx, v, factor, 416, 3.3, 5, g);
-  for (let i = i0; i < i0 + v.width / T + 4; i++) {
-    if (hash(i, 90) < 0.3) continue;
-    const lx = i * T + hash(i, 91) * 40;
-    const sx = lx - off;
-    const y = 416 - ridge(lx, 3.3, 5) + 4;
-    const s = 0.7 + hash(i, 92) * 0.6;
-    if (hash(i, 93) < 0.3) {
-      // tall poplar / cypress
-      rect(ctx, sx - 1.5, y - 10 * s, 3, 10 * s, '#4f3b2a');
-      ellipse(ctx, sx, y - 42 * s, 9 * s, 34 * s, '#4d6634');
-      ellipse(ctx, sx - 3 * s, y - 48 * s, 4 * s, 22 * s, '#6c8543');
-    } else {
-      rect(ctx, sx - 2.5 * s, y - 18 * s, 5 * s, 18 * s, '#4f3b2a');
-      ellipse(ctx, sx, y - 32 * s, 26 * s, 20 * s, '#4e6533');
-      ellipse(ctx, sx - 10 * s, y - 26 * s, 16 * s, 13 * s, '#58703a');
-      // sunlit left crown
-      ellipse(ctx, sx - 8 * s, y - 38 * s, 13 * s, 10 * s, '#7b9148');
-      ellipse(ctx, sx - 12 * s, y - 42 * s, 6 * s, 5 * s, '#9aab5a');
-    }
-  }
+  // the trees along it stand in the world, to be felled (render/nature.ts)
 }
 
 function drawStreetGround(ctx: Ctx, v: View): void {

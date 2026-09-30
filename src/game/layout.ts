@@ -210,3 +210,35 @@ export const TAVERN_SLOTS: readonly Slot[] = [
   { dx: -62, lift: 10 },
   { dx: -48, lift: 10 },
 ];
+
+// --- Woods and quarries (world x, world y) ------------------------------------------
+
+/** Depth trees stand at: just behind the back fields, where the tree line runs. */
+export const TREE_Y = BACK_FIELD.back - 2;
+/** Where a woodcutter stands to fell a tree: beside its trunk, in front of it. */
+export const CHOP_SPOT = { dx: -11, y: TREE_Y + 4 };
+
+/** Where the rocky hills behind the street come down to the tree line, and a stonecutter can cut stone. */
+export const QUARRIES: readonly { x: number }[] = [{ x: 1640 }, { x: 4390 }];
+/** A quarry's width along the street (no trees grow in it). */
+export const QUARRY_W = 280;
+/** Depth of the quarry face, where stonecutters stand to cut. */
+export const QUARRY_Y = TREE_Y + 1;
+/** Places along a quarry's face where a stonecutter works (dx from its centre). */
+export const QUARRY_SPOTS: readonly number[] = [-46, 0, 46];
+
+/** The woodcutter's hut door, and its store: logs stacked by the wall on the right (bottom row first). */
+export const WOODCUTTER_DOOR: Spot = { dx: -14, y: STAND_Y };
+export const WOODCUTTER_SLOTS: readonly Slot[] = [
+  { dx: 36, lift: 0 },
+  { dx: 36, lift: 5 },
+  { dx: 36, lift: 10 },
+];
+
+/** The stonecutter's hut door, and its store: dressed blocks set down on the right. */
+export const STONECUTTER_DOOR: Spot = { dx: -14, y: STAND_Y };
+export const STONECUTTER_SLOTS: readonly Slot[] = [
+  { dx: 32, lift: 0 },
+  { dx: 44, lift: 0 },
+  { dx: 38, lift: 8 },
+];

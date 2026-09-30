@@ -13,6 +13,7 @@ import { drawConstruction, drawConstructionBehind, drawConstructionFront, drawUp
 import { drawWorker } from './farm';
 import { type Figure, figureOf } from './figure';
 import { drawLandGrid } from './grid';
+import { drawQuarries, drawTrees } from './nature';
 import { groundX } from './ground';
 import { drawSkyBehind, lightAt, tintLand } from './sky';
 import { drawRider } from './horse';
@@ -49,6 +50,9 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   const { camX, width: viewW, labelScale: k } = sv;
   const v: View = { camX, width: viewW, top: sv.top, bottom: sv.bottom, time: world.time };
   drawBackground(ctx, v);
+  // the woods and the quarries along the tree line, behind everything on the street
+  drawQuarries(ctx, camX, viewW);
+  drawTrees(ctx, world, camX, viewW);
 
   const onScreen = (x: number, margin = 280) => x - camX > -margin && x - camX < viewW + margin;
   /** Screen x of something standing on the ground at world x and depth y (ground.ts). */

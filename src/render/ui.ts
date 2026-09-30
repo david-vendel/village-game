@@ -11,6 +11,7 @@ import { clock } from '../game/daynight';
 import { buildShortfall, upgradeShortfall, villageStock } from '../game/economy';
 import { materialsAllow, siteWork, upgrading } from '../game/site';
 import { isBorrowed } from '../game/farm';
+import { WOOD_REACH } from '../game/nature';
 import { employees, jobsOf } from '../game/people';
 import { RESOURCES, type Amounts } from '../game/resources';
 import { constructionStage, type Building, type ConstructionStage, type World } from '../game/world';
@@ -31,7 +32,7 @@ const STAGE_LABEL: Record<ConstructionStage, string> = {
 };
 
 /** On-screen names of the jobs. */
-const ROLE_NAME: Record<Role, string> = { farmer: 'Farmer', builder: 'Builders', miller: 'Miller', baker: 'Baker', serf: 'Serfs' };
+const ROLE_NAME: Record<Role, string> = { farmer: 'Farmer', builder: 'Builders', miller: 'Miller', baker: 'Baker', woodcutter: 'Woodcutter', stonecutter: 'Stonecutter', serf: 'Serfs' };
 
 /** "50 wood · 20 stone" (only the resources present). */
 function amounts(a: Amounts): string {
@@ -381,6 +382,12 @@ export function drawBuildingLabel(ctx: Ctx, world: World, b: Building, sx: numbe
     // idle borrowed land isn't waiting to be sown, it's spare
     const n = (st: string) => b.farm!.plots.filter((p) => p.state === st && (st !== 'fallow' || !isBorrowed(p))).length;
     lines.push(`Fields: ${n('ripe')} ripe · ${n('growing')} growing · ${n('fallow')} to sow`);
+  }
+  if (b.type === 'woodcutter') {
+    const x = world.plots[b.plotIndex].x;
+    const near = world.trees.filter((t) => Math.abs(t.x - x) <= WOOD_REACH);
+    const n = (st: string) => near.filter((t) => t.state === st).length;
+    lines.push(`Woods in reach: ${n('grown')} trees to fell · ${n('growing')} growing`);
   }
   if (upgradeHint && def.upgrade) {
     const cost = RESOURCES.filter((r) => def.upgrade!.cost[r]).map((r) => `${def.upgrade!.cost[r]} ${r}`).join(' · ');
