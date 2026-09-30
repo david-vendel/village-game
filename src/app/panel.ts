@@ -1,14 +1,14 @@
 // Collapsible side panels (the workers list on the left, tuning on the right).
-// Collapsed, a panel is just a small green expand button at its edge of the
-// screen (like a Mac window's green button);
+// Collapsed, a panel is just a small round expand button at its edge of the
+// screen (shaped like a Mac window's full-screen button);
 // whether each is open is remembered in this browser.
 
-/** The green button: arrows out to the corners to expand, in to the middle to collapse. */
+/** The round button: arrows out to the corners to expand, in to the middle to collapse. */
 const ARROWS = { expand: '4,4 8.3,4 4,8.3 M10,10 5.7,10 10,5.7', collapse: '6.6,6.6 2.9,6.6 6.6,2.9 M7.4,7.4 11.1,7.4 7.4,11.1' };
 const icon = (arrows: string) =>
   '<svg width="14" height="14" viewBox="0 0 14 14" style="display:block">' +
-  '<circle cx="7" cy="7" r="6.5" fill="#28c840" stroke="#1aab29" stroke-width="1"/>' +
-  `<path d="M${arrows.replace(' M', 'Z M')}Z" fill="#0b5a16"/></svg>`;
+  '<circle cx="7" cy="7" r="6.5" fill="#e8c872" stroke="#b8963e" stroke-width="1"/>' +
+  `<path d="M${arrows.replace(' M', 'Z M')}Z" fill="#3a2a1c"/></svg>`;
 
 const remembered = (key: string): boolean | null => {
   try {
