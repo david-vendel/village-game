@@ -61,7 +61,9 @@ function activity(world: World, p: Person): string {
       if (a === 'harvest') return 'harvesting a field';
       const recipe = BUILDINGS[b.type].makes;
       if (recipe && a === recipe.verb) {
-        return t.indoors ? `${recipe.verb === 'grind' ? 'grinding' : 'baking'} ${recipe.from} into ${recipe.to} inside` : `taking a sack of ${recipe.from} off the store`;
+        const doing = `${recipe.verb === 'grind' ? 'grinding' : 'baking'} ${recipe.from} into ${recipe.to}`;
+        if (t.carried) return t.indoors ? `${doing} inside` : `${doing} at the oven`;
+        return `taking a sack of ${recipe.from} off the store`;
       }
       if (a === 'build') return `building ${place}`;
       if (resource(a, 'ship') || resource(a, 'supply')) return `picking up ${resource(a, 'ship') ?? resource(a, 'supply')} at ${named(t.job.target)}`;
@@ -75,7 +77,7 @@ function activity(world: World, p: Person): string {
         const load = w.carrying ? `${w.carrying.amount} ${w.carrying.resource}` : 'nothing';
         if (a === 'harvest') return `carrying a sheaf to the ${nameOf(b)} store`;
         const recipe = BUILDINGS[b.type].makes;
-        if (recipe && a === recipe.verb) return w.carrying?.resource === recipe.from ? `carrying ${load} in to ${place}` : `putting ${load} out in its place`;
+        if (recipe && a === recipe.verb) return w.carrying?.resource === recipe.from ? `carrying ${load} ${recipe.at ? 'to the oven' : `in to ${place}`}` : `putting ${load} out in its place`;
         if (resource(a, 'ship') || resource(a, 'supply')) return `carrying ${load} from ${named(t.job!.target)} to ${named(t.job!.to)}`;
         if (resource(a, 'take')) return `carrying ${load} from the pile to its place at ${place}`;
         if (resource(a, 'fetch')) return `carrying ${load} to its place at ${place}`;

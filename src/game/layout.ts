@@ -184,8 +184,11 @@ export const MILL_SLOTS: Record<'grain' | 'flour', readonly Slot[]> = {
   ],
 };
 
-/** The bakery's door, where the baker carries the flour in to bake it. */
+/** The bakery's door, where the baker goes in and out. */
 export const BAKERY_DOOR: Spot = { dx: -9, y: STAND_Y };
+/** The bakery's bread oven, built on at the right; its mouth at BAKERY_OVEN_MOUTH_DX, the baker working it from its left. */
+export const BAKERY_OVEN_MOUTH_DX = 65;
+export const BAKERY_OVEN: Spot = { dx: BAKERY_OVEN_MOUTH_DX - 17, y: STAND_Y };
 
 /** The bakery's store: sacks of flour waiting left of the door, baskets of loaves right of it (bottom row first). */
 export const BAKERY_SLOTS: Record<'flour' | 'bread', readonly Slot[]> = {

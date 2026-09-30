@@ -203,7 +203,8 @@ export function drawWorker(ctx: Ctx, f: Worker, fig: Figure, x: number, y: numbe
   // bending over while working
   const job = task.kind === 'job' ? task : null;
   const action = job?.job.action;
-  const bend = !job ? 0 : action === 'sow' ? 0.12 : action === 'build' ? 0.08 : action === 'harvest' ? 0.25 + Math.sin(time * 4) * 0.08 : 0.4;
+  const atOven = !!job?.carried && !job.indoors;
+  const bend = !job ? 0 : atOven ? 0.12 : action === 'sow' ? 0.12 : action === 'build' ? 0.08 : action === 'harvest' ? 0.25 + Math.sin(time * 4) * 0.08 : 0.4;
 
   const hipY = drawLegs(ctx, o, phase, walking);
   ctx.save();
@@ -266,6 +267,20 @@ export function drawWorker(ctx: Ctx, f: Worker, fig: Figure, x: number, y: numbe
     drawArm(ctx, o, sx, sy, hx, hy);
     ctx.restore();
     drawProgressPips(ctx, job.t / job.duration);
+  } else if (job && atOven) {
+    // working the oven with a long peel: sliding the loaves in, turning them,
+    // and drawing them out baked
+    const p = clamp01(job.t / job.duration);
+    const reach = 0.5 + 0.5 * Math.sin(time * 1.6);
+    const hand: [number, number] = [4 + reach * 3, -5];
+    body([hand[0] - 3, hand[1] + 0.5]);
+    const tip = [hand[0] + 13 + reach * 5, 4] as const;
+    line(ctx, hand[0] - 5, hand[1] - 0.5, tip[0], tip[1], '#8a6a44', 1.3);
+    ellipse(ctx, tip[0] + 2, tip[1] + 0.3, 3.2, 1.1, '#a88a5a', 0.2);
+    // a loaf on the blade going in (dough) and coming out (baked)
+    if (p < 0.2 || p > 0.8) ellipse(ctx, tip[0] + 2, tip[1] - 1, 2.4, 1.4, p < 0.2 ? '#e8d6b0' : '#a8642e');
+    drawArm(ctx, o, sx, sy, ...hand);
+    ctx.restore();
   } else if (job) {
     // loading up at the warehouse, both hands down
     body([5, -1]);

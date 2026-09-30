@@ -599,6 +599,8 @@ function task(v: unknown, path: string): WorkerTask {
         job: ticket(t.job, `${path}.job`),
         t: num(t.t, `${path}.t`),
         duration: num(t.duration, `${path}.duration`),
+        // (saves from before `carried` only worked on carried loads indoors)
+        ...((t.carried === undefined ? t.indoors !== undefined && bool(t.indoors, `${path}.indoors`) : bool(t.carried, `${path}.carried`)) ? { carried: true as const } : {}),
         ...(t.indoors === undefined ? {} : bool(t.indoors, `${path}.indoors`) ? { indoors: true as const } : {}),
       };
     case 'enter':

@@ -26,8 +26,11 @@ export type WorkerTask =
   | { kind: 'idle'; wait: number }
   /** Walking somewhere; `job` is the job to do there, or (for a delivery) the job the load came from. */
   | { kind: 'walk'; toDx: number; toY: number; then: 'job' | 'deliver' | 'home'; job: JobTicket | null }
-  /** Doing a job: t seconds done out of duration; `indoors` for work done inside the building (Workplace.inside). */
-  | { kind: 'job'; job: JobTicket; t: number; duration: number; indoors?: true }
+  /**
+   * Doing a job: t seconds done out of duration. `carried`: working on the load
+   * they brought (Workplace.workOn), where they stand or, `indoors`, inside.
+   */
+  | { kind: 'job'; job: JobTicket; t: number; duration: number; carried?: true; indoors?: true }
   /**
    * Stepping in through the door (t: seconds so far, up to DOOR_TIME); with a
    * `job`, carrying its load in to work on it inside for `duration` seconds.
@@ -80,12 +83,13 @@ export interface Workplace {
    */
   finish(job: JobTicket, carried?: Load | null): Load | null;
   /**
-   * Work done indoors: a worker bringing `load` from `job` to its drop spot
-   * (the door) takes it inside instead of putting it down, and works on it
-   * there for the seconds returned (null: just put it down). Then they come
-   * out with what `finish` makes of it and carry that to its drop spot.
+   * Work on a carried load: a worker bringing `load` from `job` to its drop
+   * spot works on it there instead of putting it down (null: just put it
+   * down), for `seconds`; `indoors`, the drop spot is the door and they take
+   * it inside to work on (and come back out). Then they carry what `finish`
+   * makes of it to its drop spot.
    */
-  inside?(job: JobTicket, load: Load): number | null;
+  workOn?(job: JobTicket, load: Load): { seconds: number; indoors: boolean } | null;
   /** The exact spot where the load from `job` will lie once put down (asked again on the way, as piles change). */
   dropSpot(job: JobTicket, load: Load): Spot;
   /** The worker has carried the load from `job` to its drop spot and puts it down. */
@@ -166,7 +170,7 @@ export function updateWorker(w: Worker, place: Workplace, dt: number, now: TimeO
   if (task.kind === 'enter' || task.kind === 'exit') {
     task.t += dt;
     if (task.t < DOOR_TIME) return;
-    if (task.kind === 'enter' && task.job) w.task = { kind: 'job', job: task.job, t: 0, duration: task.duration ?? 0, indoors: true };
+    if (task.kind === 'enter' && task.job) w.task = { kind: 'job', job: task.job, t: 0, duration: task.duration ?? 0, carried: true, indoors: true };
     else if (task.kind === 'exit' && task.job && w.carrying) {
       const to = place.dropSpot(task.job, w.carrying);
       walkTo(w, to.dx, to.y, 'deliver', task.job);
@@ -241,10 +245,12 @@ export function updateWorker(w: Worker, place: Workplace, dt: number, now: TimeO
       // the job changed on the way (someone else did it, the land was built on): pick another
       w.task = duration === null ? { kind: 'idle', wait: 0.3 } : { kind: 'job', job: task.job, t: 0, duration };
     } else if (task.then === 'deliver') {
-      // work done inside: in through the door with the load
-      const indoors = w.carrying && task.job ? (place.inside?.(task.job, w.carrying) ?? null) : null;
-      if (indoors !== null) {
-        w.task = { kind: 'enter', t: 0, job: task.job!, duration: indoors };
+      // work on the load here, or in through the door with it
+      const work = w.carrying && task.job ? (place.workOn?.(task.job, w.carrying) ?? null) : null;
+      if (work) {
+        w.task = work.indoors
+          ? { kind: 'enter', t: 0, job: task.job!, duration: work.seconds }
+          : { kind: 'job', job: task.job!, t: 0, duration: work.seconds, carried: true };
         return;
       }
       if (w.carrying && task.job) place.deliver(w.carrying, task.job);
@@ -261,11 +267,15 @@ export function updateWorker(w: Worker, place: Workplace, dt: number, now: TimeO
   // doing a job
   task.t += dt;
   if (task.t < task.duration) return;
-  if (task.indoors) {
-    // done inside: back out with what was made
+  if (task.carried) {
+    // the load worked on becomes what was made (inside: they bring it back out)
     const made = place.finish(task.job, w.carrying);
     w.carrying = made;
-    w.task = made ? { kind: 'exit', t: 0, job: task.job } : { kind: 'exit', t: 0 };
+    if (task.indoors) w.task = made ? { kind: 'exit', t: 0, job: task.job } : { kind: 'exit', t: 0 };
+    else if (made) {
+      const to = place.dropSpot(task.job, made);
+      walkTo(w, to.dx, to.y, 'deliver', task.job);
+    } else w.task = { kind: 'idle', wait: 0.4 };
     return;
   }
   const goods = place.finish(task.job);

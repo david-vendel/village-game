@@ -5,7 +5,7 @@
 // its own module (farm.ts).
 // To add a building: add an entry here and an entry in BUILDING_ART.
 
-import { BAKERY_DOOR, MILL_DOOR, PILE_UNIT, YARD_ITEMS, type Spot } from './layout';
+import { BAKERY_DOOR, BAKERY_OVEN, MILL_DOOR, PILE_UNIT, YARD_ITEMS, type Spot } from './layout';
 import type { Amounts, Resource } from './resources';
 
 export type BuildingType =
@@ -33,8 +33,9 @@ export const ROLES: readonly Role[] = ['farmer', 'builder', 'miller', 'baker', '
 
 /**
  * What a workshop makes (workshop.ts): its worker takes `batch` of `from` out
- * of the store, carries it in through `door`, works it inside for `seconds`
- * and brings out `per` of `to` for each one, to its place in the store.
+ * of the store, carries it to `at` (outside, e.g. the bakery's oven) or else
+ * in through `door`, works it there for `seconds` and carries `per` of `to`
+ * for each one to its place in the store.
  */
 export interface Recipe {
   from: Resource;
@@ -45,6 +46,8 @@ export interface Recipe {
   /** The job's name (the worker's action), e.g. 'grind'. */
   verb: string;
   door: Spot;
+  /** Where the work is done outdoors; without it, inside. */
+  at?: Spot;
 }
 
 export interface BuildingDef {
@@ -129,7 +132,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     jobs: { baker: 1 },
     ships: ['bread'],
     needs: ['flour'],
-    makes: { from: 'flour', to: 'bread', batch: 10, per: 2, seconds: 8, verb: 'bake', door: BAKERY_DOOR },
+    makes: { from: 'flour', to: 'bread', batch: 10, per: 2, seconds: 8, verb: 'bake', door: BAKERY_DOOR, at: BAKERY_OVEN },
   },
   blacksmith: {
     type: 'blacksmith',

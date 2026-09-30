@@ -4,9 +4,9 @@
 // what it makes on the other (economy.ts storeSlots).
 //
 // The work, one batch at a time: take the top sack of what it needs from the
-// store, carry it in through the door, work it inside (the miller upstairs,
-// seen at work from the street), come back out with what was made and put it
-// down in its place.
+// store, carry it to where it is worked (the bakery's oven; else in through
+// the door, like the miller, who works upstairs, seen from the street), and
+// carry what was made to its place in the store.
 // With nothing to make and none of what it needs, the worker fetches some
 // themselves from the nearest place that has it (transport.ts), unless
 // someone is already bringing it. Serfs bring the rest and take what is made
@@ -25,7 +25,7 @@ const PICK_UP_TIME = 0.4;
 export function workshopWorkplace(world: World, b: Building, recipe: Recipe): Workplace {
   const x = world.plots[b.plotIndex].x;
   const capacity = BUILDINGS[b.type].storage;
-  const { from, to, batch, per, seconds, verb, door } = recipe;
+  const { from, to, batch, per, seconds, verb, door, at } = recipe;
   const errand = errandWork(world, x);
   const isErrand = (job: JobTicket) => errandResource(job.action) !== null;
   /** How much of `from` the next batch takes: as much as is there, up to a batch, that what it makes has room for. */
@@ -56,12 +56,12 @@ export function workshopWorkplace(world: World, b: Building, recipe: Recipe): Wo
       b.stock[from] -= n;
       return { resource: from, amount: n };
     },
-    inside(job, load) {
-      return !isErrand(job) && load.resource === from ? seconds : null;
+    workOn(job, load) {
+      return !isErrand(job) && load.resource === from ? { seconds, indoors: !at } : null;
     },
     dropSpot(job, load) {
       if (isErrand(job)) return errand.dropSpot(job, load);
-      return load.resource === from ? door : storeSpot(world, b, to, x, false, load.amount);
+      return load.resource === from ? (at ?? door) : storeSpot(world, b, to, x, false, load.amount);
     },
     deliver(load, job) {
       if (isErrand(job)) return errand.deliver(load, job);

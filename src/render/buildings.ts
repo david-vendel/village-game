@@ -4,12 +4,12 @@
 
 import type { BuildingType } from '../game/buildings';
 import { demoFarm, type FarmState } from '../game/farm';
-import { BAKERY_SLOTS, BASKET, MILL_SLOTS, PILE_UNIT, SACK, pileItems, TAVERN_SLOTS, warehouseSlot, YARD_ITEMS, type Slot } from '../game/layout';
+import { BAKERY_OVEN_MOUTH_DX, BAKERY_SLOTS, BASKET, MILL_SLOTS, PILE_UNIT, SACK, pileItems, TAVERN_SLOTS, warehouseSlot, YARD_ITEMS, type Slot } from '../game/layout';
 import { stockOf, type Amounts, type Stock } from '../game/resources';
 import type { Worker } from '../game/worker';
 import { breadBasket, doorProgress, drawBackFences, drawBackField, drawFrontField, drawStore } from './farm';
 import { drawArm, drawHead, drawLegs, drawTorso, type Figure, HEAD, outfitOf, SHOULDER } from './figure';
-import { circle, type Ctx, ellipse, hash, line, poly, rect, shade, smoke } from './util';
+import { circle, clamp01, type Ctx, ellipse, hash, line, mix, poly, rect, shade, smoke } from './util';
 
 export interface DrawArgs {
   /** Centre x on screen. */
@@ -464,10 +464,12 @@ function drawBakery(ctx: Ctx, a: DrawArgs): void {
   // a low stone bakehouse with a domed bread oven built on at the side
   const w = 90;
   const d = 40;
-  const ox = d * OX;
   const x0 = a.x - 55;
-  // the oven: a brick dome glowing at the mouth, its flue smoking
-  const ovx = x0 + w + ox + 8;
+  // the oven (its mouth where the baker works it, game/layout.ts): a brick dome glowing at the mouth, its flue smoking; while the
+  // baker bakes, loaves sit in the mouth, browning, and the fire burns brighter
+  const ovx = a.x + BAKERY_OVEN_MOUTH_DX;
+  const bake = (a.crew ?? []).map((c) => c.worker.task).find((t) => t.kind === 'job' && t.carried && !t.indoors);
+  const baked = bake?.kind === 'job' ? clamp01(bake.t / Math.max(bake.duration, 1e-6)) : null;
   ctx.globalAlpha = 0.25;
   ellipse(ctx, ovx, a.base + 1, 30, 4, '#2c2416');
   ctx.globalAlpha = 1;
@@ -484,31 +486,39 @@ function drawBakery(ctx: Ctx, a: DrawArgs): void {
   ctx.globalAlpha = 0.3;
   for (let y = a.base - 18; y > a.base - 42; y -= 6) line(ctx, ovx - 20 + (a.base - 12 - y) * 0.35, y, ovx + 20 - (a.base - 12 - y) * 0.35, y, '#4a2a1a', 1);
   ctx.globalAlpha = 1;
-  const flick = 0.8 + Math.sin(a.time * 7) * 0.1 + Math.sin(a.time * 17) * 0.08;
+  const flick = (baked === null ? 0.8 : 1) + Math.sin(a.time * 7) * 0.1 + Math.sin(a.time * 17) * 0.08;
   ctx.fillStyle = '#2a1a12';
   ctx.beginPath();
   ctx.moveTo(ovx - 9, a.base - 12);
   ctx.arc(ovx, a.base - 12, 9, Math.PI, 0);
   ctx.fill();
-  ctx.globalAlpha = flick;
-  ctx.fillStyle = '#f0a040';
+  ctx.globalAlpha = Math.min(1, flick);
+  ctx.fillStyle = baked === null ? '#f0a040' : '#ffb850';
   ctx.beginPath();
   ctx.moveTo(ovx - 6, a.base - 12);
   ctx.arc(ovx, a.base - 12, 6, Math.PI, 0);
   ctx.fill();
   ctx.globalAlpha = 1;
+  if (baked !== null) {
+    // loaves on the oven floor, from pale dough to a golden crust
+    const crust = mix('#e8d6b0', '#a8642e', baked);
+    for (const dx of [-3.5, 0.5, 4]) ellipse(ctx, ovx + dx, a.base - 13.2, 2.4, 1.5, crust);
+    // warm light spilling out on the ground
+    const g2 = ctx.createRadialGradient(ovx, a.base - 10, 0, ovx, a.base - 10, 26);
+    g2.addColorStop(0, `rgba(255,190,90,${0.28 * flick})`);
+    g2.addColorStop(1, 'rgba(255,190,90,0)');
+    ctx.fillStyle = g2;
+    ctx.fillRect(ovx - 26, a.base - 36, 52, 40);
+  }
   rect(ctx, ovx + 8, a.base - 58, 8, 16, '#8a5a40');
-  smoke(ctx, ovx + 12, a.base - 60, a.time, a.seed, 0.8);
+  smoke(ctx, ovx + 12, a.base - 60, a.time, a.seed, baked === null ? 0.8 : 1.3);
   // the bakehouse
   stonePlinth(ctx, x0, a.base, w, 12, d);
   block(ctx, x0, a.base - 12, w, 40, d, '#e9d6b0');
   timberFrame(ctx, x0, a.base - 12, w, 40, a.seed + 5);
   const doorOpen = (a.workers ?? []).some((w) => doorProgress(w) > 0 && doorProgress(w) < 1);
   door(ctx, x0 + 36, a.base, 20, 34, doorOpen ? '#1c140d' : '#6b4a2c');
-  // the baker at work inside, seen at the window
-  const baker = atWindow(a);
-  if (baker) occupiedWindow(ctx, x0 + 10, a.base - 42, 14, 14, baker, a.time, a.seed);
-  else window_(ctx, x0 + 10, a.base - 42, 14, 14, true, a.time, a.seed);
+  window_(ctx, x0 + 10, a.base - 42, 14, 14, true, a.time, a.seed);
   window_(ctx, x0 + 66, a.base - 42, 14, 14, true, a.time, a.seed + 2);
   const r = gableRoof(ctx, x0, a.base - 52, w, d, 42, '#a4553a', '#e9d6b0', 'tile', a.seed);
   chimney(ctx, r.ridgeX1 + 14, r.ridgeY + 10, 16, a, 0.5);

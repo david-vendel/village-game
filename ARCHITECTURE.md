@@ -103,8 +103,9 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   and let go where they stand when there are none.
 - `workshop.ts`: any building with a `makes` recipe (`buildings.ts`: from, to, batch, per, seconds,
   verb, door) as a workplace: the mill (grain → flour) and the bakery (flour → twice as much
-  bread). The worker takes a sack off the store, carries it in through the door, works it inside
-  (seen at an upstairs window), comes out and puts what was made in its place in the store. With
+  bread). The worker takes a sack off the store and carries it to where it is worked: the recipe's
+  `at` spot outdoors (the baker at the oven, with a peel) or else in through the door (the miller,
+  seen at the upstairs window), then puts what was made in its place in the store. With
   nothing to make and none of the input, they fetch it themselves from the nearest source,
   unless someone is already bringing it. A new production building needs only a recipe, store
   places (`storeSlots`) and its art.
