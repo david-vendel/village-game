@@ -4,7 +4,8 @@
 //
 // Two kinds of errand (BuildingDef.ships / needs):
 // - ship: what a building makes (a farm's sheaves, the mill's flour) goes from
-//   its store to the nearest warehouse with room;
+//   its store straight to the nearest building that needs it and has room (the
+//   bakery), and only otherwise to the nearest warehouse with room;
 // - supply: what a building needs (the mill's grain) comes from the nearest
 //   place that has it: a building that makes it (a farm's store) or a
 //   warehouse; at equal distance, straight from the maker.
@@ -81,9 +82,9 @@ const sum = (list: Underway[]) => list.reduce((n, u) => n + u.amount, 0);
 /** What of r in b's store is still free once those on their way have picked theirs up. */
 const unclaimed = (runs: Underway[], b: Building, r: Resource) =>
   b.stock[r] - sum(runs.filter((u) => !u.carrying && u.job.target === b.id && errandResource(u.job.action) === r));
-/** Room left in b's store for r once what is on its way has arrived. */
+/** Room left in b's store for r once what is on its way (shipped or supplied) has arrived. */
 const roomLeft = (runs: Underway[], b: Building, r: Resource) =>
-  room(b.stock, BUILDINGS[b.type].storage, r) - sum(runs.filter((u) => u.job.action === supplyAction(r) && u.job.to === b.id));
+  room(b.stock, BUILDINGS[b.type].storage, r) - sum(runs.filter((u) => u.job.to === b.id && errandResource(u.job.action) === r));
 
 /** The nearest place to x with some of r free to take: a building that makes it or a warehouse; at equal distance the maker. */
 function nearestSource(world: World, runs: Underway[], r: Resource, x: number, not: Building): Building | null {
@@ -106,23 +107,37 @@ export function fetchFor(world: World, b: Building, r: Resource): Errand | null 
   return supplyErrand(world, underway(world), b, r);
 }
 
+/** Where what b makes goes: the nearest building that needs it and has room, else the nearest warehouse with room. */
+function shipTo(world: World, runs: Underway[], b: Building, r: Resource): Building | null {
+  const d = (o: Building) => Math.abs(xOf(world, o) - xOf(world, b));
+  const byDistance = (list: Building[]) => list.sort((a, c) => d(a) - d(c))[0] ?? null;
+  const users = world.buildings.filter((o) => o !== b && o.status === 'done' && BUILDINGS[o.type].needs?.includes(r) && roomLeft(runs, o, r) > 1e-9);
+  return byDistance(users) ?? byDistance(warehouses(world).filter((w) => roomLeft(runs, w, r) > 1e-9));
+}
+
 /** Errands waiting for someone to run them, nearest first to x. */
 export function errands(world: World, x = 0): Errand[] {
   const runs = underway(world);
   const out: Errand[] = [];
-  for (const b of world.buildings) {
-    if (b.status !== 'done') continue;
-    const def = BUILDINGS[b.type];
-    for (const r of def.ships ?? []) {
+  // each errand planned claims its load and the room it fills, like one being run
+  const plan = (e: Errand) => {
+    out.push(e);
+    runs.push({ job: e.job, amount: Math.min(tripLoad(e.from, e.r), unclaimed(runs, e.from, e.r)), carrying: false });
+  };
+  const finished = world.buildings.filter((b) => b.status === 'done');
+  // what makers have goes out first, so it is matched with who needs it
+  for (const b of finished) {
+    for (const r of BUILDINGS[b.type].ships ?? []) {
       if (unclaimed(runs, b, r) <= 1e-9) continue;
-      const to = warehouses(world)
-        .filter((w) => room(w.stock, BUILDINGS.warehouse.storage, r) > 0)
-        .sort((a, c) => Math.abs(xOf(world, a) - xOf(world, b)) - Math.abs(xOf(world, c) - xOf(world, b)))[0];
-      if (to) out.push({ job: { action: shipAction(r), target: b.id, to: to.id }, from: b, r });
+      const to = shipTo(world, runs, b, r);
+      if (to) plan({ job: { action: shipAction(r), target: b.id, to: to.id }, from: b, r });
     }
-    for (const r of def.needs ?? []) {
+  }
+  // then what is still needed is fetched from wherever it can be had
+  for (const b of finished) {
+    for (const r of BUILDINGS[b.type].needs ?? []) {
       const e = supplyErrand(world, runs, b, r);
-      if (e) out.push(e);
+      if (e) plan(e);
     }
   }
   return out.sort((a, b) => Math.abs(xOf(world, a.from) - x) - Math.abs(xOf(world, b.from) - x));
