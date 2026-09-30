@@ -4,13 +4,11 @@
 
 import type { BuildingType } from '../game/buildings';
 import { demoFarm, type FarmState } from '../game/farm';
-import { BASKET } from '../game/bakery';
-import { BAKERY_SLOTS, MILL_SLOTS, PILE_UNIT, pileItems, TAVERN_SLOTS, warehouseSlot, YARD_ITEMS, type Slot } from '../game/layout';
-import { SACK } from '../game/mill';
+import { BAKERY_SLOTS, BASKET, MILL_SLOTS, PILE_UNIT, SACK, pileItems, TAVERN_SLOTS, warehouseSlot, YARD_ITEMS, type Slot } from '../game/layout';
 import { stockOf, type Amounts, type Stock } from '../game/resources';
 import type { Worker } from '../game/worker';
 import { breadBasket, doorProgress, drawBackFences, drawBackField, drawFrontField, drawStore } from './farm';
-import { drawArm, drawHead, drawLegs, drawTorso, HEAD, outfitOf, SHOULDER } from './figure';
+import { drawArm, drawHead, drawLegs, drawTorso, type Figure, HEAD, outfitOf, SHOULDER } from './figure';
 import { circle, type Ctx, ellipse, hash, line, poly, rect, shade, smoke } from './util';
 
 export interface DrawArgs {
@@ -27,6 +25,8 @@ export interface DrawArgs {
   stock?: Stock;
   /** The people working here (for doors, sleepers…). */
   workers?: Worker[];
+  /** The same people with how they look (for someone seen at a window). */
+  crew?: Array<{ worker: Worker; figure: Figure }>;
   /** Under construction: materials lying on the site's pile. */
   onSite?: Amounts;
   /** Under construction: materials laid down at each work spot (dx from the centre), not yet built in. */
@@ -150,6 +150,46 @@ function window_(ctx: Ctx, x: number, y: number, w: number, h: number, lit: bool
   line(ctx, x + w / 2, y, x + w / 2, y + h, '#5a4331', 1.5);
   line(ctx, x, y + h / 2, x + w, y + h / 2, '#5a4331', 1.5);
   rect(ctx, x - 3, y + h + 2, w + 6, 2.5, '#6e5640');
+}
+
+/**
+ * Someone working inside, seen at a window: the worker whose indoor job is
+ * under way, while they are at it (not on the stairs at either end).
+ */
+function atWindow(a: DrawArgs): Figure | null {
+  for (const { worker, figure } of a.crew ?? []) {
+    const t = worker.task;
+    if (t.kind !== 'job' || !t.indoors) continue;
+    const p = t.t / Math.max(t.duration, 1e-6);
+    if (p > 0.12 && p < 0.88) return figure;
+  }
+  return null;
+}
+
+/** A lit window with someone at work behind it, moving about (head and shoulders). */
+function occupiedWindow(ctx: Ctx, x: number, y: number, w: number, h: number, who: Figure, time: number, seed: number): void {
+  window_(ctx, x, y, w, h, true, time, seed);
+  const o = outfitOf(who);
+  const s = 0.62;
+  const sway = Math.sin(time * 1.4) * w * 0.18;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+  ctx.translate(x + w / 2 + sway, y + h * 0.42 + (HEAD[1] * -1) * s);
+  ctx.scale(s * (Math.cos(time * 0.7) > 0 ? 1 : -1), s);
+  const [sx, sy] = SHOULDER;
+  // working at the millstone / the dough: the hands go round in front
+  const hx = 6 + Math.cos(time * 3) * 2;
+  const hy = -6 + Math.sin(time * 3) * 1.5;
+  drawArm(ctx, o, sx - 1.2, sy, hx - 1, hy, true);
+  drawTorso(ctx, o, 0, who.seed);
+  drawHead(ctx, o, HEAD[0], HEAD[1]);
+  drawArm(ctx, o, sx, sy, hx, hy);
+  ctx.restore();
+  // the frame's cross bars in front of them
+  line(ctx, x + w / 2, y, x + w / 2, y + h, '#5a4331', 1.5);
+  line(ctx, x, y + h / 2, x + w, y + h / 2, '#5a4331', 1.5);
 }
 
 function door(ctx: Ctx, x: number, base: number, w: number, h: number, wood = '#6b4a2c'): void {
@@ -463,8 +503,12 @@ function drawBakery(ctx: Ctx, a: DrawArgs): void {
   stonePlinth(ctx, x0, a.base, w, 12, d);
   block(ctx, x0, a.base - 12, w, 40, d, '#e9d6b0');
   timberFrame(ctx, x0, a.base - 12, w, 40, a.seed + 5);
-  door(ctx, x0 + 36, a.base, 20, 34, '#6b4a2c');
-  window_(ctx, x0 + 10, a.base - 42, 14, 14, true, a.time, a.seed);
+  const doorOpen = (a.workers ?? []).some((w) => doorProgress(w) > 0 && doorProgress(w) < 1);
+  door(ctx, x0 + 36, a.base, 20, 34, doorOpen ? '#1c140d' : '#6b4a2c');
+  // the baker at work inside, seen at the window
+  const baker = atWindow(a);
+  if (baker) occupiedWindow(ctx, x0 + 10, a.base - 42, 14, 14, baker, a.time, a.seed);
+  else window_(ctx, x0 + 10, a.base - 42, 14, 14, true, a.time, a.seed);
   window_(ctx, x0 + 66, a.base - 42, 14, 14, true, a.time, a.seed + 2);
   const r = gableRoof(ctx, x0, a.base - 52, w, d, 42, '#a4553a', '#e9d6b0', 'tile', a.seed);
   chimney(ctx, r.ridgeX1 + 14, r.ridgeY + 10, 16, a, 0.5);
@@ -515,8 +559,12 @@ function drawMill(ctx: Ctx, a: DrawArgs): void {
   ctx.globalAlpha = 0.25;
   ellipse(ctx, cx + 10, a.base + 1, 52, 5, '#2c2416');
   ctx.globalAlpha = 1;
-  door(ctx, cx - 10, a.base, 20, 34);
-  window_(ctx, cx - 6, a.base - 80, 11, 14, false, a.time, a.seed);
+  const doorOpen = (a.workers ?? []).some((w) => doorProgress(w) > 0 && doorProgress(w) < 1);
+  door(ctx, cx - 10, a.base, 20, 34, doorOpen ? '#1c140d' : undefined);
+  // the miller upstairs at the millstones, seen at the window
+  const miller = atWindow(a);
+  if (miller) occupiedWindow(ctx, cx - 8, a.base - 82, 14, 16, miller, a.time, a.seed);
+  else window_(ctx, cx - 8, a.base - 82, 14, 16, false, a.time, a.seed);
   window_(ctx, cx - 4, top + 22, 9, 11, false, a.time, a.seed);
   // gallery ring
   rect(ctx, cx - bw / 2 - 6, a.base - 56, bw + 12, 4, '#5e4630');

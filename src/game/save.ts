@@ -570,7 +570,12 @@ function load(v: unknown, path: string): Load {
 /** A job ticket; whether its target still exists is checked by the workplace on load (repairFarm). */
 function ticket(v: unknown, path: string) {
   const j = obj(v, path);
-  return { action: str(j.action, `${path}.action`), target: int(j.target, `${path}.target`), ...(j.slot === undefined ? {} : { slot: int(j.slot, `${path}.slot`) }) };
+  return {
+    action: str(j.action, `${path}.action`),
+    target: int(j.target, `${path}.target`),
+    ...(j.slot === undefined ? {} : { slot: int(j.slot, `${path}.slot`) }),
+    ...(j.to === undefined ? {} : { to: int(j.to, `${path}.to`) }),
+  };
 }
 
 function task(v: unknown, path: string): WorkerTask {
@@ -589,10 +594,21 @@ function task(v: unknown, path: string): WorkerTask {
       };
     }
     case 'job':
-      return { kind: 'job', job: ticket(t.job, `${path}.job`), t: num(t.t, `${path}.t`), duration: num(t.duration, `${path}.duration`) };
+      return {
+        kind: 'job',
+        job: ticket(t.job, `${path}.job`),
+        t: num(t.t, `${path}.t`),
+        duration: num(t.duration, `${path}.duration`),
+        ...(t.indoors === undefined ? {} : bool(t.indoors, `${path}.indoors`) ? { indoors: true as const } : {}),
+      };
     case 'enter':
+      return {
+        kind: 'enter',
+        t: num(t.t, `${path}.t`),
+        ...(t.job === undefined ? {} : { job: ticket(t.job, `${path}.job`), duration: num(t.duration, `${path}.duration`) }),
+      };
     case 'exit':
-      return { kind: t.kind as 'enter' | 'exit', t: num(t.t, `${path}.t`) };
+      return { kind: 'exit', t: num(t.t, `${path}.t`), ...(t.job === undefined ? {} : { job: ticket(t.job, `${path}.job`) }) };
     case 'home':
       return { kind: 'home', activity: oneOf(t.activity, ['lunch', 'sleep'] as const, `${path}.activity`), left: num(t.left, `${path}.left`) };
   }

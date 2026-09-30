@@ -94,16 +94,20 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   what other sites are still owed. `storeSlots`/`storeSpot` say where each item lies in any
   building's store (warehouse stacks, a farm's sheaves, the mill's sacks) and how much one
   person carries off at a time.
-- `transport.ts`: serfs carry goods between buildings, one errand per trip: what a building
-  `ships` from its store to a warehouse (a farm's sheaves, the mill's flour) and what it `needs`
-  brought from one (the mill's grain). Serfs are the people looking for work, hired by the
+- `transport.ts`: errands, one trip each: what a building `ships` goes from its store to the
+  nearest warehouse with room; what it `needs` comes from the nearest place that has it, a
+  building that makes it (a farm's store, the mill's flour) or a warehouse, and at equal distance
+  straight from the maker. Everyone on an errand is counted, so no two people go for the same
+  load. `errandWork` is how anyone runs one. Serfs are the people looking for work, hired by the
   transport hub (the oldest warehouse) while there are errands (up to `SERFS_MAX`, daylight only)
   and let go where they stand when there are none.
-- `mill.ts`: the mill as a workplace: its miller grinds a sack of grain (`SACK`) into flour in
-  `GRIND_TIME`, in the mill's store (grain left of the door, flour right, `MILL_SLOTS`).
-- `bakery.ts`: the bakery as a workplace: its baker bakes a sack of flour into twice as many
-  loaves (`LOAVES_PER_FLOUR`) in `BAKE_TIME`, in the bakery's store (flour left of the door, baskets
-  of `BASKET` loaves right, `BAKERY_SLOTS`). Serfs bring flour and take the bread to a warehouse.
+- `workshop.ts`: any building with a `makes` recipe (`buildings.ts`: from, to, batch, per, seconds,
+  verb, door) as a workplace: the mill (grain → flour) and the bakery (flour → twice as much
+  bread). The worker takes a sack off the store, carries it in through the door, works it inside
+  (seen at an upstairs window), comes out and puts what was made in its place in the store. With
+  nothing to make and none of the input, they fetch it themselves from the nearest source,
+  unless someone is already bringing it. A new production building needs only a recipe, store
+  places (`storeSlots`) and its art.
 - `tavern.ts`: the tavern `needs` bread (serfs bring it from a warehouse to the baskets on its
   bench, `TAVERN_SLOTS`); its guests eat a loaf every `LOAF_HOURS` game hours, worked out from the
   day clock.
@@ -131,7 +135,8 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   in and out of the door (`DOOR_TIME`); carry loads (walking faster with empty hands,
   `WALK_SPEED_EMPTY`) to the exact spot they go down. What the work *is* comes from the
   building as a `Workplace`: its door, the next job and where it is done, how long a job takes,
-  what it yields and where that goes down (`dropSpot`, asked again on the way as piles change).
+  what it yields and where that goes down (`dropSpot`, asked again on the way as piles change),
+  and whether a load is taken indoors to be worked on there (`inside`).
 - `farm.ts`: the farm's fields, and the farm as a `Workplace`. Tested by `farm.test.ts`. Plots lie
   on the free land-grid cells around it (see `land.ts`) in rows (`FIELD_ROWS` in `layout.ts`): one
   behind the road, two in front of it. A new farm is just the farmstead: a plot stays grass until

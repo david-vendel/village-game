@@ -59,8 +59,10 @@ function activity(world: World, p: Person): string {
       const a = t.job.action;
       if (a === 'sow') return 'sowing a field';
       if (a === 'harvest') return 'harvesting a field';
-      if (a === 'grind') return 'grinding grain into flour';
-      if (a === 'bake') return 'baking flour into bread';
+      const recipe = BUILDINGS[b.type].makes;
+      if (recipe && a === recipe.verb) {
+        return t.indoors ? `${recipe.verb === 'grind' ? 'grinding' : 'baking'} ${recipe.from} into ${recipe.to} inside` : `taking a sack of ${recipe.from} off the store`;
+      }
       if (a === 'build') return `building ${place}`;
       if (resource(a, 'ship') || resource(a, 'supply')) return `picking up ${resource(a, 'ship') ?? resource(a, 'supply')} at ${named(t.job.target)}`;
       if (resource(a, 'take')) return `picking up ${resource(a, 'take')} from the pile`;
@@ -72,6 +74,8 @@ function activity(world: World, p: Person): string {
       if (t.then === 'deliver') {
         const load = w.carrying ? `${w.carrying.amount} ${w.carrying.resource}` : 'nothing';
         if (a === 'harvest') return `carrying a sheaf to the ${nameOf(b)} store`;
+        const recipe = BUILDINGS[b.type].makes;
+        if (recipe && a === recipe.verb) return w.carrying?.resource === recipe.from ? `carrying ${load} in to ${place}` : `putting ${load} out in its place`;
         if (resource(a, 'ship') || resource(a, 'supply')) return `carrying ${load} from ${named(t.job!.target)} to ${named(t.job!.to)}`;
         if (resource(a, 'take')) return `carrying ${load} from the pile to its place at ${place}`;
         if (resource(a, 'fetch')) return `carrying ${load} to its place at ${place}`;
@@ -94,9 +98,10 @@ function activity(world: World, p: Person): string {
     case 'home':
       return t.activity === 'sleep' ? `asleep in ${place}` : `having lunch in ${place}`;
     case 'enter':
+      if (t.job) return `going into ${place} with ${w.carrying?.resource ?? 'a load'}`;
       return off === 'lunch' ? 'going indoors for lunch' : off === 'sleep' ? 'going indoors for the night' : 'going indoors';
     case 'exit':
-      return `stepping out of ${place}`;
+      return t.job && w.carrying ? `coming out of ${place} with ${w.carrying.amount} ${w.carrying.resource}` : `stepping out of ${place}`;
     case 'idle':
       return here === place ? `waiting at ${place}` : `pausing at ${here}`;
   }

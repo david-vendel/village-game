@@ -327,7 +327,9 @@ export function createSound(initialVolume = 0.6): Sound {
         const now = p.job?.worker.carrying?.resource ?? null;
         const before = carried.get(p.id);
         carried.set(p.id, now);
-        if (!b || before === undefined || before === now) continue;
+        // what was carried in comes out made into something else: nothing was put down
+        const madeInside = p.job?.worker.task.kind === 'exit';
+        if (!b || before === undefined || before === now || madeInside) continue;
         const wx = world.plots[b.plotIndex].x + p.job!.worker.dx;
         if (before) sfx.setDown(wx, before);
         if (now) sfx.setDown(wx, now, 0.5);

@@ -59,6 +59,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     farm: b.farm,
     stock: b.stock,
     workers: employees(world, b).map((p) => p.job!.worker),
+    crew: employees(world, b).map((p) => ({ worker: p.job!.worker, figure: figureOf(p) })),
     onSite: onSite(b),
     laid: laidOut(b),
     vpX: viewW / 2,

@@ -5,7 +5,7 @@
 // its own module (farm.ts).
 // To add a building: add an entry here and an entry in BUILDING_ART.
 
-import { PILE_UNIT, YARD_ITEMS } from './layout';
+import { BAKERY_DOOR, MILL_DOOR, PILE_UNIT, YARD_ITEMS, type Spot } from './layout';
 import type { Amounts, Resource } from './resources';
 
 export type BuildingType =
@@ -31,6 +31,22 @@ export type BuildingType =
 export type Role = 'farmer' | 'builder' | 'miller' | 'baker' | 'serf';
 export const ROLES: readonly Role[] = ['farmer', 'builder', 'miller', 'baker', 'serf'];
 
+/**
+ * What a workshop makes (workshop.ts): its worker takes `batch` of `from` out
+ * of the store, carries it in through `door`, works it inside for `seconds`
+ * and brings out `per` of `to` for each one, to its place in the store.
+ */
+export interface Recipe {
+  from: Resource;
+  to: Resource;
+  batch: number;
+  per: number;
+  seconds: number;
+  /** The job's name (the worker's action), e.g. 'grind'. */
+  verb: string;
+  door: Spot;
+}
+
 export interface BuildingDef {
   type: BuildingType;
   name: string;
@@ -47,8 +63,10 @@ export interface BuildingDef {
   jobs: Partial<Record<Role, number>>;
   /** Goods it makes, which serfs carry from its store to a warehouse. */
   ships?: Resource[];
-  /** Goods it uses, which serfs bring to its store from a warehouse. */
+  /** Goods it uses, which serfs bring to its store from the nearest place that has them (transport.ts). */
   needs?: Resource[];
+  /** A workshop: what its worker makes of what it needs (workshop.ts). */
+  makes?: Recipe;
 }
 
 export const BUILDINGS: Record<BuildingType, BuildingDef> = {
@@ -97,6 +115,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     jobs: { miller: 1 },
     ships: ['flour'],
     needs: ['grain'],
+    makes: { from: 'grain', to: 'flour', batch: 10, per: 1, seconds: 6, verb: 'grind', door: MILL_DOOR },
   },
   bakery: {
     type: 'bakery',
@@ -110,6 +129,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     jobs: { baker: 1 },
     ships: ['bread'],
     needs: ['flour'],
+    makes: { from: 'flour', to: 'bread', batch: 10, per: 2, seconds: 8, verb: 'bake', door: BAKERY_DOOR },
   },
   blacksmith: {
     type: 'blacksmith',

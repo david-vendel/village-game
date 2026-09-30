@@ -4,11 +4,10 @@
 // Fields lie on the ground, so their x goes through the ground perspective
 // (ground.ts), the same projection the land-grid overlay uses.
 
-import { BASKET } from '../game/bakery';
 import { type FarmState, type FieldPlot, growth } from '../game/farm';
 import { drawArm, drawHead, drawLegs, drawTorso, type Figure, HEAD, outfitOf, SHOULDER, swingHand } from './figure';
 import { DOOR_TIME, WALK_SPEED, type Worker } from '../game/worker';
-import { BACK_FIELD, BASE_Y, FIELD_ROWS, FRONT_FIELD, SHEAF_SLOTS, STORE, VIEW_H } from '../game/layout';
+import { BACK_FIELD, BASE_Y, BASKET, FIELD_ROWS, FRONT_FIELD, SHEAF_SLOTS, STORE, VIEW_H } from '../game/layout';
 import { groundX } from './ground';
 import { circle, clamp01, type Ctx, ellipse, hash, lerp, line, mix, poly, rect } from './util';
 
@@ -172,7 +171,7 @@ export function doorProgress(f: Worker): number {
   const t = f.task;
   if (t.kind === 'enter') return clamp01(t.t / DOOR_TIME);
   if (t.kind === 'exit') return 1 - clamp01(t.t / DOOR_TIME);
-  return t.kind === 'home' ? 1 : 0;
+  return t.kind === 'home' || (t.kind === 'job' && t.indoors) ? 1 : 0;
 }
 
 /**

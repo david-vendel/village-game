@@ -1,8 +1,16 @@
-// Transport: serfs carry goods between buildings. A farm's sheaves and the
-// mill's flour go from their stores to a warehouse; grain goes from a
-// warehouse to the mill (BuildingDef.ships / needs). Each errand is one trip:
-// pick up the top item(s) where they lie in one store, carry them, and put
-// them down in their place in the other (storeSpot).
+// Transport: goods carried between buildings, one errand per trip: pick up the
+// top item(s) where they lie in one store, carry them, and put them down in
+// their place in the other (storeSpot).
+//
+// Two kinds of errand (BuildingDef.ships / needs):
+// - ship: what a building makes (a farm's sheaves, the mill's flour) goes from
+//   its store to the nearest warehouse with room;
+// - supply: what a building needs (the mill's grain) comes from the nearest
+//   place that has it: a building that makes it (a farm's store) or a
+//   warehouse; at equal distance, straight from the maker.
+// Errands are run by serfs, and by a workshop's own worker when they have
+// nothing else to do and none of what they need (workshop.ts). Everyone
+// running errands is counted, so no two people go for the same load.
 //
 // Serfs are the village's out-of-work people (Person.seeker), hired by the
 // transport hub (the oldest warehouse) for as long as there are errands:
@@ -25,101 +33,137 @@ export const SERFS_MAX = 5;
 const PICK_UP_TIME = 0.25;
 
 /** An errand: its ticket (target: the building picked up from, to: the one delivered to). */
-interface Errand {
+export interface Errand {
   job: JobTicket;
   from: Building;
   r: Resource;
 }
 
 const shipAction = (r: Resource) => `ship-${r}`;
-const supplyAction = (r: Resource) => `supply-${r}`;
+export const supplyAction = (r: Resource) => `supply-${r}`;
 /** The resource an errand moves, if the action is an errand. */
 export function errandResource(action: string): Resource | null {
   return RESOURCES.find((r) => action === shipAction(r) || action === supplyAction(r)) ?? null;
 }
 
 const xOf = (world: World, b: Building) => world.plots[b.plotIndex].x;
+const done = (world: World, id: number | undefined) => world.buildings.find((b) => b.id === id && b.status === 'done');
 
 /** The warehouse that employs the village's serfs: the oldest finished one. */
 export function transportHub(world: World): Building | null {
   return warehouses(world)[0] ?? null;
 }
 
-/** Errands already being run: pickups on the way (`pending`) and loads being carried (`carrying`). */
-function underway(world: World): { pending: JobTicket[]; carrying: JobTicket[] } {
-  const hub = transportHub(world);
-  const serfs = hub ? employees(world, hub).map((p) => p.job!.worker) : [];
-  return { pending: serfs.flatMap((w) => currentJob(w) ?? []), carrying: serfs.flatMap((w) => delivering(w) ?? []) };
+/** An errand someone is on: on the way to pick up (amount: what they'll likely take), or carrying it (what they hold). */
+interface Underway {
+  job: JobTicket;
+  amount: number;
+  carrying: boolean;
 }
 
-/** Errands waiting for a serf, nearest first to x. */
+/** Errands being run by anyone (serfs, workshop workers). */
+function underway(world: World): Underway[] {
+  const out: Underway[] = [];
+  for (const p of world.people) {
+    const w = p.job?.worker;
+    if (!w) continue;
+    const pending = currentJob(w);
+    const r = pending && errandResource(pending.action);
+    const from = pending && done(world, pending.target);
+    if (pending && r && from) out.push({ job: pending, amount: tripLoad(from, r), carrying: false });
+    const carried = delivering(w);
+    if (carried && w.carrying && errandResource(carried.action)) out.push({ job: carried, amount: w.carrying.amount, carrying: true });
+  }
+  return out;
+}
+
+const sum = (list: Underway[]) => list.reduce((n, u) => n + u.amount, 0);
+/** What of r in b's store is still free once those on their way have picked theirs up. */
+const unclaimed = (runs: Underway[], b: Building, r: Resource) =>
+  b.stock[r] - sum(runs.filter((u) => !u.carrying && u.job.target === b.id && errandResource(u.job.action) === r));
+/** Room left in b's store for r once what is on its way has arrived. */
+const roomLeft = (runs: Underway[], b: Building, r: Resource) =>
+  room(b.stock, BUILDINGS[b.type].storage, r) - sum(runs.filter((u) => u.job.action === supplyAction(r) && u.job.to === b.id));
+
+/** The nearest place to x with some of r free to take: a building that makes it or a warehouse; at equal distance the maker. */
+function nearestSource(world: World, runs: Underway[], r: Resource, x: number, not: Building): Building | null {
+  const places = world.buildings.filter(
+    (b) => b !== not && b.status === 'done' && (b.type === 'warehouse' || BUILDINGS[b.type].ships?.includes(r)) && unclaimed(runs, b, r) > 1e-9,
+  );
+  const d = (b: Building) => Math.abs(xOf(world, b) - x);
+  return places.sort((a, b) => d(a) - d(b) || Number(a.type === 'warehouse') - Number(b.type === 'warehouse'))[0] ?? null;
+}
+
+/** The errand bringing b some of r, if it has room for it and it can be had somewhere. */
+function supplyErrand(world: World, runs: Underway[], b: Building, r: Resource): Errand | null {
+  if (roomLeft(runs, b, r) <= 1e-9) return null;
+  const from = nearestSource(world, runs, r, xOf(world, b), b);
+  return from ? { job: { action: supplyAction(r), target: from.id, to: b.id }, from, r } : null;
+}
+
+/** An errand to fetch something b needs, for b's own worker. */
+export function fetchFor(world: World, b: Building, r: Resource): Errand | null {
+  return supplyErrand(world, underway(world), b, r);
+}
+
+/** Errands waiting for someone to run them, nearest first to x. */
 export function errands(world: World, x = 0): Errand[] {
-  const { pending, carrying } = underway(world);
-  const count = (list: JobTicket[], action: string, key: 'target' | 'to', id: number) => list.filter((j) => j.action === action && j[key] === id).length;
-  const nearestWarehouse = (near: number, ok: (w: Building) => boolean) =>
-    warehouses(world)
-      .filter(ok)
-      .sort((a, b) => Math.abs(xOf(world, a) - near) - Math.abs(xOf(world, b) - near))[0] ?? null;
+  const runs = underway(world);
   const out: Errand[] = [];
   for (const b of world.buildings) {
     if (b.status !== 'done') continue;
     const def = BUILDINGS[b.type];
     for (const r of def.ships ?? []) {
-      // what is left in the store once the serfs on their way have picked theirs up
-      const left = b.stock[r] - count(pending, shipAction(r), 'target', b.id) * tripLoad(b, r);
-      const to = left > 1e-9 ? nearestWarehouse(xOf(world, b), (w) => room(w.stock, BUILDINGS.warehouse.storage, r) > 0) : null;
+      if (unclaimed(runs, b, r) <= 1e-9) continue;
+      const to = warehouses(world)
+        .filter((w) => room(w.stock, BUILDINGS.warehouse.storage, r) > 0)
+        .sort((a, c) => Math.abs(xOf(world, a) - xOf(world, b)) - Math.abs(xOf(world, c) - xOf(world, b)))[0];
       if (to) out.push({ job: { action: shipAction(r), target: b.id, to: to.id }, from: b, r });
     }
     for (const r of def.needs ?? []) {
-      // room left once what is on its way has arrived
-      const coming = (count(pending, supplyAction(r), 'to', b.id) + count(carrying, supplyAction(r), 'to', b.id)) * tripLoad(b, r);
-      if (room(b.stock, BUILDINGS[b.type].storage, r) - coming <= 1e-9) continue;
-      const from = nearestWarehouse(xOf(world, b), (w) => w.stock[r] - count(pending, supplyAction(r), 'target', w.id) * tripLoad(w, r) > 1e-9);
-      if (from) out.push({ job: { action: supplyAction(r), target: from.id, to: b.id }, from, r });
+      const e = supplyErrand(world, runs, b, r);
+      if (e) out.push(e);
     }
   }
   return out.sort((a, b) => Math.abs(xOf(world, a.from) - x) - Math.abs(xOf(world, b.from) - x));
 }
 
-/** Serf jobs the hub offers now: one per errand being run or waiting, up to SERFS_MAX. */
+/** Serf jobs the hub offers now: one per errand serfs are running or that is waiting, up to SERFS_MAX. */
 export function serfPositions(world: World): number {
-  const { pending, carrying } = underway(world);
-  return Math.min(SERFS_MAX, pending.length + carrying.length + errands(world).length);
+  const hub = transportHub(world);
+  const serfs = hub ? employees(world, hub).map((p) => p.job!.worker) : [];
+  const running = serfs.filter((w) => currentJob(w) || delivering(w)).length;
+  return Math.min(SERFS_MAX, running + errands(world).length);
 }
 
-/** The transport hub as a workplace for its serfs. */
-export function transportWorkplace(world: World, hub: Building): Workplace {
-  const x = xOf(world, hub);
-  const building = (id: number | undefined) => world.buildings.find((b) => b.id === id && b.status === 'done');
+/**
+ * How anyone runs an errand, for a workplace centred on x: where to pick the
+ * load up, picking it up, and where it goes down. Workplaces that run errands
+ * pass their errand tickets on to these.
+ */
+export function errandWork(world: World, x: number): Pick<Workplace, 'jobSpot' | 'begin' | 'finish' | 'dropSpot' | 'deliver'> {
   /** Where a load from this errand goes: its destination, else any warehouse with room, else back where it came from. */
   const destination = (job: JobTicket, r: Resource): Building | null => {
-    const to = building(job.to);
+    const to = done(world, job.to);
     if (to && room(to.stock, BUILDINGS[to.type].storage, r) > 0) return to;
-    return warehouses(world).find((w) => room(w.stock, BUILDINGS.warehouse.storage, r) > 0) ?? building(job.target) ?? null;
+    return warehouses(world).find((w) => room(w.stock, BUILDINGS.warehouse.storage, r) > 0) ?? done(world, job.target) ?? null;
   };
   return {
-    dayLabour: true,
-    temporary: true,
-    door: { dx: 0, y: STAND_Y },
-    nextJob(w) {
-      const next = errands(world, x + w.dx)[0];
-      return next ? { job: next.job, ...storeSpot(world, next.from, next.r, x, true) } : null;
-    },
     jobSpot(job): Spot | null {
       const r = errandResource(job.action);
-      const from = building(job.target);
+      const from = done(world, job.target);
       return r && from && from.stock[r] > 0 ? storeSpot(world, from, r, x, true) : null;
     },
     begin(job) {
       const r = errandResource(job.action);
-      const from = building(job.target);
+      const from = done(world, job.target);
       return r && from && from.stock[r] > 1e-9 ? PICK_UP_TIME : null;
     },
     finish(job): Load | null {
       const r = errandResource(job.action);
-      const from = building(job.target);
+      const from = done(world, job.target);
       if (!r || !from) return null;
-      const to = building(job.to);
+      const to = done(world, job.to);
       // a supply takes only what the store it goes to has room for
       const fits = job.action === supplyAction(r) && to ? room(to.stock, BUILDINGS[to.type].storage, r) : Infinity;
       const n = Math.min(tripLoad(from, r), from.stock[r], fits);
@@ -138,5 +182,20 @@ export function transportWorkplace(world: World, hub: Building): Workplace {
       // it filled up at the last moment: the rest goes to a warehouse with room
       if (n < load.amount) putAway(world, { resource: load.resource, amount: load.amount - n }, x);
     },
+  };
+}
+
+/** The transport hub as a workplace for its serfs. */
+export function transportWorkplace(world: World, hub: Building): Workplace {
+  const x = xOf(world, hub);
+  return {
+    dayLabour: true,
+    temporary: true,
+    door: { dx: 0, y: STAND_Y },
+    nextJob(w) {
+      const next = errands(world, x + w.dx)[0];
+      return next ? { job: next.job, ...storeSpot(world, next.from, next.r, x, true) } : null;
+    },
+    ...errandWork(world, x),
   };
 }

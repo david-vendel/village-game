@@ -95,6 +95,11 @@ export const STAND_Y = BASE_Y + 3;
 /** How much of a resource one item in a pile stands for: a log, a block of stone, a sack. */
 export const PILE_UNIT = 10;
 
+/** What a sack holds (grain or flour) in a workshop's store; one sack per place. */
+export const SACK = 10;
+/** Loaves in a basket; one basket per place in a store. */
+export const BASKET = 10;
+
 /** Items in a pile holding `amount` (a part-filled item counts). */
 export const pileItems = (amount: number) => Math.ceil(amount / PILE_UNIT - 1e-9);
 
@@ -162,7 +167,7 @@ export function siteSlot(width: number, r: 'wood' | 'stone', i: number): Slot {
 /** How far to the right of a work spot the materials laid down there lie (beside the builder). */
 export const SPOT_PILE_DX = 12;
 
-/** The mill's door, where the miller goes in and out and grinds. */
+/** The mill's door, where the miller carries the grain in to grind it upstairs. */
 export const MILL_DOOR: Spot = { dx: -6, y: STAND_Y };
 
 /** The mill's store: sacks of grain waiting left of the door, sacks of flour right of it (bottom row first). */
@@ -179,7 +184,7 @@ export const MILL_SLOTS: Record<'grain' | 'flour', readonly Slot[]> = {
   ],
 };
 
-/** The bakery's door, where the baker goes in and out and bakes. */
+/** The bakery's door, where the baker carries the flour in to bake it. */
 export const BAKERY_DOOR: Spot = { dx: -9, y: STAND_Y };
 
 /** The bakery's store: sacks of flour waiting left of the door, baskets of loaves right of it (bottom row first). */
