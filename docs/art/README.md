@@ -12,7 +12,8 @@ look: the *Age of Empires II* main-menu village), made with AI-assisted pipeline
 
 ## Status and hand-off (2026-10-01)
 
-**WP2 is done** (game side, see below); WP3 is next. Work runs on the user's own PC. Specs: Windows 10
+**WP2 and WP3 are done** (see below); WP4, the farm itself, is next. Art work happens on
+the `art-pilot` branch. Work runs on the user's own PC. Specs: Windows 10
 Pro x64; Intel Core 6th gen (Skylake, ~3.5 GHz, 4 cores); 16 GB RAM; **NVIDIA GTX 1070 8 GB**.
 Consequences:
 - Use **Blender 4.5 LTS** (supports Pascal GPUs until 2027) and render **Cycles on the GPU**
@@ -54,7 +55,14 @@ Decisions so far:
    their own work packages (WP5–WP8). `npm run assets:export` writes today's farm as
    placeholder assets: the game looks the same on them. They are unapproved, so production
    builds leave them out, and they aren't committed.
-2. **WP3:** Blender render harness, camera and light per ASSET_SPEC §3–4, all passes.
+2. ~~**WP3:** Blender render harness, camera and light per ASSET_SPEC §3–4, all passes.~~
+   Done: `tools/art-pipeline/` (see its README): `npm run art:render -- <scene> <job>` renders,
+   packs and validates; the test cube house comes out valid, with all looks, stages, roadside
+   views, the open-door part and every pass, and shows in the game by day and night. Decided
+   on the way: the **street view is oblique** (ASSET_SPEC §3), and colour uses Blender's
+   **Standard** view transform at exposure −0.37 (calibrated: plaster in full sun at sRGB 230).
+   The test mannequin (sprite sheets, facings, recolour masks) moves to WP5, where people are
+   made and the game learns to draw them.
 3. **WP4 pilot:** `tools/building-gen/` core (pure Python, tested) and Blender layer. Outputs:
    the farm street view, the Large-farm variant, 5 construction stages and the roadside views.
 4. Show it in the game next to the procedural art, by day and night, at zoom 1 and 0.45, for

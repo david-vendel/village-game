@@ -1,0 +1,7 @@
+{
+  "id": "building.farm",
+  "out": "",
+  "views": ["street", "roadsideL", "roadsideR"],
+  "samples": 64,
+  "emissive_samples": 16
+}

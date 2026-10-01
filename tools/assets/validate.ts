@@ -158,10 +158,11 @@ function badNormalShare(normal: Pixels, color: Pixels): number {
 
 /**
  * How well the colour pass's brightness follows the key light: Pearson
- * correlation of luminance with N·L over opaque pixels (§4). Near zero or
+ * correlation of luminance (of colour / albedo, when there is an albedo
+ * layer) with N·L over opaque pixels (§4). Near zero or
  * negative means the image is lit from elsewhere, or mirrored.
  */
-function lightCorrelation(normal: Pixels, color: Pixels): number {
+function lightCorrelation(normal: Pixels, color: Pixels, albedo?: Pixels): number {
   const xs: number[] = [];
   const ys: number[] = [];
   for (let i = 0; i < color.width * color.height; i++) {
@@ -170,7 +171,16 @@ function lightCorrelation(normal: Pixels, color: Pixels): number {
     const ny = (normal.data[i * 4 + 1] / 255) * 2 - 1;
     const nz = (normal.data[i * 4 + 2] / 255) * 2 - 1;
     xs.push(Math.max(0, nx * SUN[0] + ny * SUN[1] + nz * SUN[2]));
-    ys.push(0.2126 * color.data[i * 4] + 0.7152 * color.data[i * 4 + 1] + 0.0722 * color.data[i * 4 + 2]);
+    const lum = (p: Pixels) => 0.2126 * p.data[i * 4] + 0.7152 * p.data[i * 4 + 1] + 0.0722 * p.data[i * 4 + 2];
+    // with an albedo layer, compare the shading alone (colour / albedo), so dark materials don't count as shade
+    if (albedo) {
+      const a = lum(albedo);
+      if (a < 8) {
+        xs.pop();
+        continue;
+      }
+      ys.push(lum(color) / a);
+    } else ys.push(lum(color));
   }
   if (xs.length < 50) return 1;
   const mean = (a: number[]) => a.reduce((s, v) => s + v, 0) / a.length;
@@ -307,7 +317,8 @@ export async function validateAssets(dir: string): Promise<Report> {
           const big = Math.max(...m);
           if (big > 8 + tier) warn(at, `transparent margin up to ${big} px (left, top, right, bottom = ${m.join(', ')}); keep it ≤ 8 px`);
         }
-        if (opts.kind === 'building' && !opts.sheet && where.includes(' street')) {
+        // finished looks only: scaffolding in a stage image may stand in front of the building
+        if (opts.kind === 'building' && !opts.sheet && where.includes(' street') && !where.includes('{')) {
           const low = lowestVisibleRow(color);
           const anchorRow = ay * tier;
           if (low >= 0 && Math.abs(low - anchorRow) > 3 * tier) warn(at, `lowest visible row is ${(low / tier).toFixed(1)} u from the top but the anchor (ground contact) is at ${ay} u`);
@@ -318,7 +329,8 @@ export async function validateAssets(dir: string): Promise<Report> {
         const bad = badNormalShare(normal, color);
         if (bad > 0.02) err(`${where} normal@${tier}x`, `${Math.round(bad * 100)}% of visible normals aren't unit length (±5%)`);
         else if (tier === Math.max(...img.tiers)) {
-          const r = lightCorrelation(normal, color);
+          const albedo = loaded.albedo && loaded.albedo.width === color.width ? loaded.albedo : undefined;
+          const r = lightCorrelation(normal, color, albedo);
           if (r < 0.1) warn(at, `colour shading doesn't follow the key light from the left (correlation ${r.toFixed(2)} with N·L): relit or mirrored?`);
         }
       }

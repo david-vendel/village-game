@@ -9,14 +9,14 @@
 // `procedural-export` and unapproved, so production builds leave it out.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { join } from 'node:path';
 import { createCanvas } from '@napi-rs/canvas';
-import sharp from 'sharp';
 import { BUILDINGS, type BuildingType } from '../../src/game/buildings';
 import { demoFarm } from '../../src/game/farm';
 import { BUILDING_ART, type DrawArgs } from '../../src/render/buildings';
 import { type BuildingAsset, EMPTY_MANIFEST, type ImageSet, type Manifest, type Tier, type Vec2 } from '../../src/render/manifest';
 import type { Ctx } from '../../src/render/util';
+import { bleed, writeWebp } from './images';
 
 const TIERS: Tier[] = [2, 4];
 /** Transparent margin round the art, in u (≤ 8 px at @4x). */
@@ -64,57 +64,6 @@ function bounds(draws: Array<{ draw: Draw; a: DrawArgs }>): [number, number, num
   }
   if (l === Infinity) throw new Error('nothing drawn');
   return [l / R - S, t / R - S, r / R - S, b / R - S];
-}
-
-/**
- * Dilate colour into fully transparent pixels (§6), `steps` px: each
- * transparent pixel next to a coloured one takes their mean colour, alpha
- * staying 0, so filtering a scaled sprite never pulls in black.
- */
-function bleed(px: Uint8ClampedArray, w: number, h: number, steps: number): void {
-  const filled = new Uint8Array(w * h);
-  for (let i = 0; i < w * h; i++) filled[i] = px[i * 4 + 3] > 0 ? 1 : 0;
-  for (let s = 0; s < steps; s++) {
-    const next: Array<[number, number, number, number]> = [];
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const i = y * w + x;
-        if (filled[i]) continue;
-        let r = 0;
-        let g = 0;
-        let b = 0;
-        let n = 0;
-        for (let dy = -1; dy <= 1; dy++) {
-          for (let dx = -1; dx <= 1; dx++) {
-            const xx = x + dx;
-            const yy = y + dy;
-            if (xx < 0 || yy < 0 || xx >= w || yy >= h || !filled[yy * w + xx]) continue;
-            const j = (yy * w + xx) * 4;
-            r += px[j];
-            g += px[j + 1];
-            b += px[j + 2];
-            n++;
-          }
-        }
-        if (n) next.push([i, r / n, g / n, b / n]);
-      }
-    }
-    if (!next.length) break;
-    for (const [i, r, g, b] of next) {
-      px[i * 4] = r;
-      px[i * 4 + 1] = g;
-      px[i * 4 + 2] = b;
-      filled[i] = 1;
-    }
-  }
-}
-
-async function writeWebp(file: string, px: Uint8ClampedArray, w: number, h: number): Promise<void> {
-  mkdirSync(dirname(file), { recursive: true });
-  // `exact` keeps the colour under transparent pixels (the bleed) instead of letting the encoder drop it
-  await sharp(Buffer.from(px.buffer, px.byteOffset, px.byteLength), { raw: { width: w, height: h, channels: 4 } })
-    .webp({ quality: 90, alphaQuality: 100, exact: true, effort: 6 })
-    .toFile(file);
 }
 
 /** Export one building type: street view, its upgraded variant if it has one, reveal construction. */

@@ -12,6 +12,7 @@ npm run typecheck  # whole project, plus src/game alone without browser APIs
 npm run build      # typecheck + static build into dist/ (only approved art assets)
 npm run assets:check   # validate public/assets against docs/art/ASSET_SPEC.md
 npm run assets:export  # export today's procedural farm as placeholder assets (format test)
+npm run art:render -- <scene> <job.json>  # render a 3D scene into assets with Blender (tools/art-pipeline)
 ```
 
 Art: `?art=preview` shows every sprite asset beside the procedural art it replaces;

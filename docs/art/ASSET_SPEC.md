@@ -50,10 +50,18 @@ convergence. Angles are given in model space: up is +Z, and the object's **front
 
 | View id | Used for | Yaw (camera orbit about Z, from front) | Pitch (looking down) | Notes |
 | --- | --- | --- | --- | --- |
-| `street` | Buildings, props, nature, items on the street | **+25°** (camera to the front-**right**: the building's right side wall is visible, as in today's art) | **15°** | Required for all buildings |
+| `street` | Buildings, props, nature, items on the street | **0°, oblique**: the model is sheared **x += 0.55 × depth** before the camera sees it, so the right side wall shows receding up-right, as in today's art | **15°** | Required for all buildings. See below |
 | `roadsideL` / `roadsideR` | Buildings seen up a side road at a crossroads (`render/scene.ts`, receding) | **−75° / +75°**. L stands left of the receding road with its front facing right, R the mirror case | 15° | Optional. Without it the game squashes the `street` view, as it does today |
 | `side` | People, rider, animals walking along the street | **+15°** (slightly in front of the walker, so faces read) | **10°** | Required. Facing rules in §5 |
 | `backdrop` | Parallax layers | 0° | **5°** | Very long lens feel. No visible vertical convergence |
+
+**Why the street view is oblique** (changed 2026-10-01, WP3): a camera turned 25° to the
+front-right foreshortens the front by cos 25° (a 200 u farm draws 181 u wide) and tilts its
+ground line by about 7°, so buildings look skewed against the straight street and no longer
+match their plots. The oblique view keeps the front at **true width on a level ground line**,
+like the game's plane and today's procedural art (`OX = 0.55`; the 15° pitch lifts depth by
+0.26 per unit, close to today's `OY = 0.3`). Light (§4) and shadows are computed in the sheared
+scene. The other views keep their turned cameras.
 
 **Ground contact in the `street` view:** the model origin is the **centre of the
 building's front wall at ground level**. Its projection is the anchor, and the game puts
