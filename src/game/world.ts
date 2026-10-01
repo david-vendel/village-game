@@ -171,7 +171,6 @@ const STARTING_VILLAGE: Array<[number, BuildingType]> = [
   [6, 'house'],
   [8, 'farm'],
   [11, 'chapel'],
-  [13, 'blacksmith'],
   [16, 'house'],
 ];
 
