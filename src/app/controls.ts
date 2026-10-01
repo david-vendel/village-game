@@ -42,7 +42,7 @@ const store = (key: string, value: string) => {
   }
 };
 
-export function installControls(world: World, screen: Screen, actions: Actions): Controls {
+export function installControls(world: World, screen: Screen, actions: Actions, newVillage: () => void): Controls {
   const canvas = screen.canvas;
   const keys = new Set<string>();
   const pointers = new Map<number, { role: Role; x: number; y: number }>();
@@ -168,6 +168,7 @@ export function installControls(world: World, screen: Screen, actions: Actions):
       const L = hudLayout(uiW, uiH);
       const dir = screen.touch ? dirAt(ux, uy) : null;
       if (hit(L.zoomOut, ux, uy)) zoomBy(1 / ZOOM_STEP);
+      else if (hit(L.newVillage, ux, uy)) newVillage();
       else if (hit(L.map, ux, uy)) setTopView(!topView);
       else if (hit(L.zoomIn, ux, uy)) zoomBy(ZOOM_STEP);
       else if (dir) role = dir;

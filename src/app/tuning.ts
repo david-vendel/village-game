@@ -55,7 +55,7 @@ export interface DisplayOptions {
   grid: boolean;
 }
 
-export function installTuning(world: World, sound: Sound, opts: { onNewVillage: () => void }): DisplayOptions {
+export function installTuning(world: World, sound: Sound): DisplayOptions {
   const knobs: Knob[] = [
     ...WORLD_KNOBS.map(({ key, ...k }) => ({
       ...k,
@@ -132,18 +132,6 @@ export function installTuning(world: World, sound: Sound, opts: { onNewVillage: 
   });
   toggle.append('land grid (G)', box);
   content.append(toggle);
-
-  // the game autosaves; this is the way back to a fresh start
-  const reset = document.createElement('button');
-  reset.textContent = 'new village';
-  reset.style.cssText =
-    'margin-top:8px;font:inherit;color:#f3ead8;background:rgba(232,200,114,0.12);' +
-    'border:1px solid rgba(232,200,114,0.45);border-radius:6px;padding:2px 10px;cursor:pointer';
-  reset.addEventListener('click', () => {
-    reset.blur();
-    if (window.confirm('Start a new village? Your saved village will be lost.')) opts.onNewVillage();
-  });
-  content.append(reset);
 
   makeCollapsible(root, content, 'right', 'village-game:tuning-open');
   document.body.appendChild(root);

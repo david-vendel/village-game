@@ -157,6 +157,8 @@ function plusMinusIcon(ctx: Ctx, r: Rect, plus: boolean): void {
 export interface HudLayout {
   zoomOut: Rect;
   zoomIn: Rect;
+  /** Start a new village: left of the zoom keys. */
+  newVillage: Rect;
   left: Rect;
   right: Rect;
   build: Rect;
@@ -178,6 +180,7 @@ export function hudLayout(uiW: number, uiH: number): HudLayout {
   return {
     zoomOut: { x: uiW - 12 - z * 2 - 4, y: 12, w: z, h: z },
     zoomIn: { x: uiW - 12 - z, y: 12, w: z, h: z },
+    newVillage: { x: uiW - 12 - z * 2 - 4 - 6 - 64, y: 12, w: 64, h: z },
     left: { x: 16, y: uiH - 16 - b, w: b, h: b },
     right: { x: 16 + b + 14, y: uiH - 16 - b, w: b, h: b },
     build,
@@ -230,6 +233,8 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
   plusMinusIcon(ctx, L.zoomOut, false);
   button(ctx, L.zoomIn, false);
   plusMinusIcon(ctx, L.zoomIn, true);
+  button(ctx, L.newVillage, false);
+  text(ctx, 'New village', L.newVillage.x + L.newVillage.w / 2, L.newVillage.y + L.newVillage.h - 3.5, 9, GOLD, 'center', true);
 
   if (st.touch && !world.menu) {
     button(ctx, L.left, st.leftHeld);
