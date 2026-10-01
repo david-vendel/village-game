@@ -8,8 +8,10 @@
 import { BUILDINGS, type BuildingType } from './buildings';
 import { BAKERY_SLOTS, BASKET, MILL_SLOTS, PILE_UNIT, SACK, STONECUTTER_SLOTS, TAVERN_SLOTS, SHEAF_SLOTS, STAND_Y, warehouseSlot, WOODCUTTER_SLOTS, type Slot, type Spot } from './layout';
 import { room, RESOURCES, shortfall, stockOf, type Amounts, type Load, type Resource, type Stock } from './resources';
+import { takeFromPile, type Pile } from './piles';
 import { owed } from './site';
 import { streetDist } from './streets';
+import { delivering } from './worker';
 import type { Building, World } from './world';
 
 /** What the starting village's warehouse holds. */
@@ -49,12 +51,18 @@ export function committed(world: World): Stock {
 const holdsFor = (b: Building, r: Resource) => b.status === 'done' && (b.type === 'warehouse' || !!BUILDINGS[b.type].ships?.includes(r));
 
 /**
- * What the village can still spend on a new building: in the warehouses and
- * the huts' stores (builders fetch from both), and not yet promised.
+ * What the village can still spend on a new building: in the warehouses, the
+ * huts' stores and the piles on the ground (builders fetch from all three),
+ * plus what serfs are carrying off the ground, and not yet promised.
  */
 export function available(world: World): Stock {
   const have = stockOf();
   for (const b of world.buildings) for (const r of RESOURCES) if (holdsFor(b, r)) have[r] += b.stock[r];
+  for (const p of world.piles) have[p.resource] += p.amount;
+  for (const p of world.people) {
+    const w = p.job?.worker;
+    if (w?.carrying && delivering(w)?.action.startsWith('collect-')) have[w.carrying.resource] += w.carrying.amount;
+  }
   const promised = committed(world);
   for (const r of RESOURCES) have[r] = Math.max(0, have[r] - promised[r]);
   return have;
@@ -85,6 +93,16 @@ export function materialSource(world: World, r: Resource, x: number): Building |
   return best;
 }
 
+/** The nearest pile of r on the ground to x, if any. */
+export function nearestPile(world: World, r: Resource, x: number): Pile | null {
+  let best: Pile | null = null;
+  for (const p of world.piles) {
+    if (p.resource !== r || p.amount <= 1e-9) continue;
+    if (!best || streetDist(world, x, p.x) < streetDist(world, x, best.x)) best = p;
+  }
+  return best;
+}
+
 /** Take up to `amount` of r out of a warehouse; returns how much was taken. */
 export function takeOut(warehouse: Building, r: Resource, amount: number): number {
   const n = Math.max(0, Math.min(amount, warehouse.stock[r]));
@@ -92,12 +110,17 @@ export function takeOut(warehouse: Building, r: Resource, amount: number): numbe
   return n;
 }
 
-/** Take whatever there is of `amounts` out of the warehouses, nearest to x first; returns what was taken. */
+/**
+ * Take whatever there is of `amounts` out of the warehouses, nearest to x
+ * first, then off the huts' stores and the piles on the ground; returns what was taken.
+ */
 export function takeFromWarehouses(world: World, amounts: Amounts, x: number): Stock {
   const got = stockOf();
   const near = [...warehouses(world)].sort((a, b) => away(world, a, x) - away(world, b, x));
   for (const r of RESOURCES) {
     for (const w of near) got[r] += takeOut(w, r, (amounts[r] ?? 0) - got[r]);
+    for (const b of world.buildings) if (b.type !== 'warehouse' && holdsFor(b, r)) got[r] += takeOut(b, r, (amounts[r] ?? 0) - got[r]);
+    for (const p of [...world.piles]) if (p.resource === r) got[r] += takeFromPile(world, p, (amounts[r] ?? 0) - got[r]);
   }
   return got;
 }
