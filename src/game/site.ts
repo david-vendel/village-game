@@ -195,6 +195,7 @@ export function siteWorkplace(world: World, b: Building, buildSpeed: number): Wo
     dayLabour: true,
     // nothing to build with and nothing to fetch: let go, rather than wait at the site
     temporary: true,
+    walkSpeed: world.params.builderWalk,
     door: FRONT,
     nextJob(w, taken: JobTicket[]) {
       // build where materials lie and nobody else is building: the nearest such spot

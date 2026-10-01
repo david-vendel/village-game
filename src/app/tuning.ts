@@ -27,6 +27,7 @@ const WORLD_KNOBS: WorldKnob[] = [
   { key: 'riderAccel', param: 'haccel', min: 100, max: 2000, step: 20, render: (v) => `horse accel ${v} px/s²` },
   { key: 'riderDecel', param: 'hbrake', min: 100, max: 2000, step: 20, render: (v) => `horse braking ${v} px/s²` },
   { key: 'buildSpeed', param: 'build', min: 0.25, max: 10, step: 0.25, render: (v) => `build speed ${v}×` },
+  { key: 'builderWalk', param: 'bwalk', min: 0.25, max: 6, step: 0.25, render: (v) => `builder walk ${v}×` },
   {
     key: 'timeSpeed',
     param: 'tspeed',
