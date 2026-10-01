@@ -65,7 +65,7 @@ async function play(): Promise<void> {
     sizePanelButtons((HUD_BUTTON * vp.uiScale) / screen.dpr);
 
     const held = controls.touchHeld();
-    renderFrame(ctx, world, { ...vp, camX, touch: screen.touch, leftHeld: held.left, rightHeld: held.right, toasts, showGrid: display.grid, topView: controls.topView(), topZoom: controls.topZoom() });
+    renderFrame(ctx, world, { ...vp, camX, touch: screen.touch, leftHeld: held.left, rightHeld: held.right, toasts, showGrid: display.grid, topView: controls.topView(), topZoom: controls.topZoom(), hover: controls.hover() });
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);

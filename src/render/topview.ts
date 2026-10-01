@@ -5,7 +5,7 @@
 
 import { BUILDINGS, type BuildingType } from '../game/buildings';
 import { CELL_W, FIELD_ROWS, QUARRIES, quarryLand, ROAD_HALF, rowFar, rowNear, type FieldZone } from '../game/layout';
-import { cellName, footprintOf, landUse, rowName, type LandUse } from '../game/grid';
+import { cellName, footprintOf, landUse, type LandUse } from '../game/grid';
 import { treeGrowth } from '../game/nature';
 import { GROUND_PILE_Y } from '../game/piles';
 import type { Load } from '../game/resources';
@@ -37,7 +37,7 @@ const ROOF: Record<BuildingType, string> = {
 
 const RESOURCE_COLOUR: Record<Load['resource'], string> = { wood: '#7b5634', stone: '#a89c88', grain: '#d8b850', flour: '#f1ece0', bread: '#c58a46' };
 
-export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zoom: number, showGrid: boolean): void {
+export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zoom: number, showGrid: boolean, hover: { x: number; y: number } | null = null): void {
   const time = world.time;
   // map px per screen unit: about 1400 map px across the shorter side at zoom 1
   const S = (Math.min(uiW, uiH) / 1400) * zoom * 1.6;
@@ -274,7 +274,7 @@ export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zo
   circle(ctx, X, Y, 2.8 * k, '#e3b893');
   circle(ctx, X, Y, 1.6 * k, '#e8c14a');
 
-  if (showGrid) drawGrid(ctx, world, sx, sy, S, uiW, uiH);
+  if (showGrid) drawGrid(ctx, world, sx, sy, S, uiW, uiH, hover);
 
   ctx.font = `bold 13px ${SERIF}`;
   ctx.textAlign = 'center';
@@ -291,11 +291,12 @@ const GRID_FILL: Record<LandUse['kind'], string> = {
 };
 
 /**
- * The land grid from above (G): the whole plane in cells, north up, every cell
- * taken by something tinted by what takes it; columns numbered along the top
- * and rows lettered down the left, and each cell named once there is room.
+ * The land grid from above (G): the whole plane in cells, north up, in light
+ * lines (every tenth a little stronger, and fewer of them as it zooms out),
+ * every cell taken by something tinted by what takes it, and the name of the
+ * cell under the mouse.
  */
-function drawGrid(ctx: Ctx, world: World, sx: (p: Vec) => number, sy: (p: Vec) => number, S: number, uiW: number, uiH: number): void {
+function drawGrid(ctx: Ctx, world: World, sx: (p: Vec) => number, sy: (p: Vec) => number, S: number, uiW: number, uiH: number, hover: { x: number; y: number } | null): void {
   const px = CELL_W * S;
   // the cells on screen
   const at = (X: number, Y: number) => ({ x: (X - sx({ x: 0, y: 0 })) / S, y: -(Y - sy({ x: 0, y: 0 })) / S });
@@ -312,38 +313,33 @@ function drawGrid(ctx: Ctx, world: World, sx: (p: Vec) => number, sy: (p: Vec) =
     ctx.fillStyle = GRID_FILL[use.kind];
     ctx.fillRect(sx({ x: c * CELL_W, y: 0 }), sy({ x: 0, y: (r + 1) * CELL_W }), px, px);
   }
-  if (px < 4) return;
-  // the lines between the cells, every tenth a little stronger
+  // the lines between the cells: thinned out as they crowd together
+  const step = 2 ** Math.max(0, Math.ceil(Math.log2(7 / px)));
   ctx.save();
-  for (let c = c0; c <= c1 + 1; c++) {
+  for (let c = Math.floor(c0 / step) * step; c <= c1 + 1; c += step) {
     const X = Math.round(sx({ x: c * CELL_W, y: 0 })) + 0.5;
-    line(ctx, X, 0, X, uiH, c % 10 === 0 ? 'rgba(255,248,225,0.6)' : 'rgba(255,248,225,0.28)', c === 0 ? 2 : 1);
+    line(ctx, X, 0, X, uiH, c % 10 === 0 ? 'rgba(255,248,225,0.32)' : 'rgba(255,248,225,0.14)', 1);
   }
-  for (let r = r0; r <= r1 + 1; r++) {
+  for (let r = Math.floor(r0 / step) * step; r <= r1 + 1; r += step) {
     const Y = Math.round(sy({ x: 0, y: r * CELL_W })) + 0.5;
-    line(ctx, 0, Y, uiW, Y, r % 10 === 0 ? 'rgba(255,248,225,0.6)' : 'rgba(255,248,225,0.28)', r === 0 ? 2 : 1);
+    line(ctx, 0, Y, uiW, Y, r % 10 === 0 ? 'rgba(255,248,225,0.32)' : 'rgba(255,248,225,0.14)', 1);
   }
-  // each cell's name when they are big enough to hold it
-  if (px >= 30) {
-    ctx.font = `${Math.min(11, Math.round(px / 4))}px ui-monospace, Menlo, monospace`;
+  // the cell under the mouse: outlined, with its name
+  if (hover) {
+    const p = at(hover.x, hover.y);
+    const c = Math.floor(p.x / CELL_W);
+    const r = Math.floor(p.y / CELL_W);
+    ctx.strokeStyle = '#fff4dc';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(sx({ x: c * CELL_W, y: 0 }), sy({ x: 0, y: (r + 1) * CELL_W }), px, px);
+    const name = cellName(c, r);
+    ctx.font = 'bold 11px ui-monospace, Menlo, monospace';
     ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(255,244,220,0.7)';
-    for (let c = c0; c <= c1; c++) {
-      for (let r = r0; r <= r1; r++) ctx.fillText(cellName(c, r), sx({ x: (c + 0.5) * CELL_W, y: 0 }), sy({ x: 0, y: (r + 0.5) * CELL_W }) + 4);
-    }
-  }
-  // column numbers along the top, row letters down the left
-  const every = Math.max(1, Math.ceil(26 / px));
-  ctx.font = 'bold 10px ui-monospace, Menlo, monospace';
-  ctx.fillStyle = 'rgba(30,22,12,0.6)';
-  ctx.fillRect(0, 0, uiW, 16);
-  ctx.fillRect(0, 16, 30, uiH - 16);
-  ctx.fillStyle = '#fff4dc';
-  ctx.textAlign = 'center';
-  for (let c = c0; c <= c1; c++) if (c % every === 0) ctx.fillText(String(c), sx({ x: (c + 0.5) * CELL_W, y: 0 }), 12);
-  for (let r = r0; r <= r1; r++) {
-    const Y = sy({ x: 0, y: (r + 0.5) * CELL_W }) + 4;
-    if (r % every === 0 && Y > 22) ctx.fillText(rowName(r), 15, Y);
+    const w = ctx.measureText(name).width + 8;
+    ctx.fillStyle = 'rgba(30,22,12,0.7)';
+    ctx.fillRect(hover.x - w / 2, hover.y - 26, w, 15);
+    ctx.fillStyle = '#fff4dc';
+    ctx.fillText(name, hover.x, hover.y - 15);
   }
   ctx.restore();
 }

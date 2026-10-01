@@ -39,6 +39,8 @@ export interface FrameView {
   /** Show the village from above instead of from the street, at its own zoom. */
   topView: boolean;
   topZoom: number;
+  /** Where the mouse is (canvas px), if over the canvas: the grid names the cell under it. */
+  hover?: { x: number; y: number } | null;
 }
 
 export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: FrameView): void {
@@ -48,7 +50,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   if (v.topView) {
     ctx.setTransform(v.uiScale, 0, 0, v.uiScale, 0, 0);
-    drawTopView(ctx, world, v.uiW, v.uiH, v.topZoom, v.showGrid);
+    drawTopView(ctx, world, v.uiW, v.uiH, v.topZoom, v.showGrid, v.hover ? { x: v.hover.x / v.uiScale, y: v.hover.y / v.uiScale } : null);
   } else {
   ctx.setTransform(v.worldScale, 0, 0, v.worldScale, 0, v.offsetY);
   drawScene(ctx, world, {
@@ -62,6 +64,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
     destroyLabel: v.touch ? 'Tap the hammer to destroy' : 'Press ↓ or Space to destroy',
     turnLabel: v.touch ? 'Tap ▲ or ▼ to turn onto the crossing street' : 'Press W / ↑ or S / ↓ to turn onto the crossing street',
     showGrid: v.showGrid,
+    hover: v.hover ? { x: v.hover.x / v.worldScale, y: (v.hover.y - v.offsetY) / v.worldScale } : null,
   });
   }
 

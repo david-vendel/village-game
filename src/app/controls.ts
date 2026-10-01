@@ -19,6 +19,8 @@ export interface Controls {
   topView(): boolean;
   /** The view from above has its own zoom, apart from the street view's. */
   topZoom(): number;
+  /** Where the mouse is over the canvas (canvas px), if it is. */
+  hover(): { x: number; y: number } | null;
 }
 
 const GAME_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'Enter', 'Escape', 'Tab', 'w', 'a', 's', 'd']);
@@ -201,6 +203,12 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
     if (role === 'pinch') startPinchIfReady();
   });
 
+  // where the mouse is over the canvas (canvas px), for what the grid names under it
+  let hover: { x: number; y: number } | null = null;
+  canvas.addEventListener('pointermove', (e) => {
+    if (e.pointerType === 'mouse') hover = { x: e.clientX * screen.dpr, y: e.clientY * screen.dpr };
+  });
+  canvas.addEventListener('pointerleave', () => (hover = null));
   canvas.addEventListener('pointermove', (e) => {
     const p = pointers.get(e.pointerId);
     if (!p) return;
@@ -262,5 +270,6 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
     touchHeld: () => ({ left: held('left'), right: held('right') }),
     topView: () => topView,
     topZoom: () => topZoom,
+    hover: () => hover,
   };
 }

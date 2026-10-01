@@ -57,6 +57,8 @@ export interface SceneView {
   turnLabel: string;
   /** Overlay the land grid (debug view). */
   showGrid: boolean;
+  /** The mouse in scene units (x from the camera's left edge, y world depth), if over the canvas. */
+  hover?: { x: number; y: number } | null;
 }
 
 export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
@@ -187,7 +189,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   flushEmissive(ctx, light.night);
   drawSkyBehind(ctx, v, light);
   drawGrade(ctx, viewW, sv.top, sv.bottom);
-  if (sv.showGrid) drawLandGrid(ctx, world, camX, viewW);
+  if (sv.showGrid) drawLandGrid(ctx, world, camX, viewW, sv.hover ?? null);
 
   // world-anchored UI
   for (const b of world.buildings) {
