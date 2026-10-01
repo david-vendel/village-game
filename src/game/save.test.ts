@@ -18,8 +18,8 @@ function roundTrip(world: World): World {
 function busyWorld(): World {
   const w = createWorld();
   run(w, 20, { left: false, right: true });
-  placeBuilding(w, 12, 'farm', { free: true }); // under construction
-  placeBuilding(w, 9, 'mill', { instant: true, free: true });
+  placeBuilding(w, w.plots[12].x, 'farm', { free: true }); // under construction
+  placeBuilding(w, w.plots[9].x, 'mill', { instant: true, free: true });
   run(w, 5);
   w.events.length = 0;
   return w;
@@ -57,7 +57,7 @@ describe('save games', () => {
 
   it('does not save the open build menu or tuning knobs', () => {
     const w = createWorld();
-    w.menu = { kind: 'build', plotIndex: 0, selection: 2 };
+    w.menu = { kind: 'build', x: 1000, selection: 2 };
     w.params.riderMaxSpeed = 999;
     const back = roundTrip(w);
     expect(back.menu).toBeNull();
@@ -73,7 +73,7 @@ describe('save games', () => {
       { version: SAVE_VERSION },
       { ...good, world: { ...good.world, time: 'late' } },
       { ...good, world: { ...good.world, buildings: [{ ...good.world.buildings[0], type: 'castle' }] } },
-      { ...good, world: { ...good.world, buildings: [{ ...good.world.buildings[0], plotIndex: 999 }] } },
+      { ...good, world: { ...good.world, buildings: [{ ...good.world.buildings[0], x: 999999 }] } },
       { ...good, world: { ...good.world, buildings: [good.world.buildings[0], { ...good.world.buildings[0], id: 500 }] } },
     ];
     for (const data of bad) {
@@ -94,7 +94,7 @@ describe('save games', () => {
     const r = loadWorld(s);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    const b = placeBuilding(r.world, 0, 'well')!;
+    const b = placeBuilding(r.world, r.world.plots[0].x, 'well')!;
     expect(r.world.buildings.filter((x) => x.id === b.id)).toHaveLength(1);
   });
 });

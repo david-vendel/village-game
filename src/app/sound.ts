@@ -283,7 +283,7 @@ export function createSound(initialVolume = 0.6): Sound {
         const b = getBuilding(world, ev.buildingId);
         if (!b || played.has(ev.kind)) continue;
         played.add(ev.kind);
-        const x = world.plots[b.plotIndex].x;
+        const x = b.x;
         if (ev.kind === 'placed') sfx.thunk(x);
         else sfx.chime(x);
       }
@@ -293,7 +293,7 @@ export function createSound(initialVolume = 0.6): Sound {
       const bellStruck = strokes > lastBellStrokes;
       lastBellStrokes = strokes;
       for (const b of world.buildings) {
-        const x = world.plots[b.plotIndex].x;
+        const x = b.x;
         const near = Math.abs(x - listenerX) < EARSHOT + 300;
 
         // people at work here: the blows and sweeps of their tools (render/farm.ts drawWorker)
@@ -336,7 +336,7 @@ export function createSound(initialVolume = 0.6): Sound {
         // a load worked on turns into what was made: nothing was put down or picked up
         const madeInside = !!before && !!now;
         if (!b || before === undefined || before === now || madeInside) continue;
-        const wx = world.plots[b.plotIndex].x + p.job!.worker.dx;
+        const wx = b.x + p.job!.worker.dx;
         if (before) sfx.setDown(wx, before);
         if (now) sfx.setDown(wx, now, 0.5);
       }

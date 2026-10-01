@@ -23,7 +23,7 @@ import type { Building, World } from './world';
 const PICK_UP_TIME = 0.4;
 
 export function workshopWorkplace(world: World, b: Building, recipe: Recipe): Workplace {
-  const x = world.plots[b.plotIndex].x;
+  const x = b.x;
   const capacity = BUILDINGS[b.type].storage;
   const { from, to, batch, per, seconds, verb, door, at } = recipe;
   const errand = errandWork(world, x);

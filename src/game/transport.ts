@@ -57,7 +57,7 @@ export function errandResource(action: string): Resource | null {
 }
 
 const isPile = (s: Source): s is Pile => 'resource' in s;
-const xOf = (world: World, s: Source) => (isPile(s) ? s.x : world.plots[s.plotIndex].x);
+const xOf = (_world: World, s: Source) => (isPile(s) ? s.x : s.x);
 const done = (world: World, id: number | undefined) => world.buildings.find((b) => b.id === id && b.status === 'done');
 /** What an errand picks up from: the pile for a collect, else a finished building. */
 const sourceOf = (world: World, job: JobTicket): Source | undefined => (errandResource(job.action) && job.action.startsWith('collect-') ? pileById(world, job.target) : done(world, job.target));

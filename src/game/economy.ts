@@ -17,7 +17,7 @@ import type { Building, World } from './world';
 /** What the starting village's warehouse holds. */
 export const WAREHOUSE_START: Stock = stockOf({ wood: 250, stone: 200 });
 
-const xOf = (world: World, b: Building) => world.plots[b.plotIndex].x;
+const xOf = (_world: World, b: Building) => b.x;
 /** How far building b is from world x, along the streets. */
 const away = (world: World, b: Building, x: number) => streetDist(world, x, xOf(world, b));
 

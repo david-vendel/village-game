@@ -3,11 +3,10 @@
 
 import { BUILDINGS } from '../game/buildings';
 import { timeOfDay } from '../game/daynight';
-import { PLOT_SPACING } from '../game/layout';
 import { laneY, type Person } from '../game/people';
 import { offDuty } from '../game/worker';
 import { makeCollapsible } from './panel';
-import { getBuilding, type Building, type World } from '../game/world';
+import { buildingAt, getBuilding, type Building, type World } from '../game/world';
 
 function occupation(p: Person): string {
   if (p.profession) return p.profession;
@@ -20,8 +19,7 @@ const resource = (action: string, verb: string) => (action.startsWith(`${verb}-`
 
 /** What stands where someone is: the building whose lot holds world x, else the open street. */
 function whereAt(world: World, x: number): string {
-  const plot = world.plots.reduce((best, p) => (Math.abs(p.x - x) < Math.abs(best.x - x) ? p : best));
-  const b = Math.abs(plot.x - x) <= PLOT_SPACING / 2 ? getBuilding(world, plot.buildingId) : undefined;
+  const b = buildingAt(world, x);
   return b ? `the ${nameOf(b)}${b.site ? ' site' : ''}` : 'the street';
 }
 
@@ -40,7 +38,7 @@ function activity(world: World, p: Person): string {
   }
   const b = getBuilding(world, p.job.buildingId);
   if (!b) return 'between jobs';
-  const x = world.plots[b.plotIndex].x;
+  const x = b.x;
   const place = `the ${nameOf(b)}${b.site ? ' site' : ''}`;
   const w = p.job.worker;
   const t = w.task;

@@ -103,7 +103,7 @@ export function openings(b: Building, buildersPerSite: number, dayLabour: boolea
 /** Where someone is along the street now (world x). */
 function whereX(world: World, p: Person): number {
   const b = p.job && world.buildings.find((x) => x.id === p.job!.buildingId);
-  return b ? world.plots[b.plotIndex].x + p.job!.worker.dx : p.stroll.x;
+  return b ? b.x + p.job!.worker.dx : p.stroll.x;
 }
 
 /** A serf between errands: carrying nothing and not in the middle of picking something up. */
@@ -135,7 +135,7 @@ export function staffBuildings(world: World, hire: (b: Building, role: Role, who
   for (const role of ROLES) {
     for (const b of world.buildings) {
       const open = (openingsOf(b)[role] ?? 0) - employees(world, b).filter((p) => p.job!.role === role).length;
-      const x = world.plots[b.plotIndex].x;
+      const x = b.x;
       for (let n = 0; n < open; n++) {
         const tier = candidates(world, role).find((list) => list.length);
         if (!tier) break; // nobody for this job: on to the next
@@ -157,7 +157,7 @@ export function release(world: World, p: Person): void {
   const b = p.job && world.buildings.find((x) => x.id === p.job!.buildingId);
   if (b) {
     const w = p.job!.worker;
-    p.stroll.x = world.plots[b.plotIndex].x + w.dx;
+    p.stroll.x = b.x + w.dx;
     p.stroll.y = w.y;
     p.stroll.dir = w.facing;
   }

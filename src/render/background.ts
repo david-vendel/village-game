@@ -4,9 +4,10 @@
 // the street, on which the rest of the village stands (plane.ts), and the
 // street being looked at (its trees and the quarries are in the world: render/nature.ts).
 
+import { LANE_YS, ROAD_FAR_Y, ROAD_NEAR_Y } from '../game/layout';
 import { SIDE_ROAD_HALF } from '../game/streets';
 import { depthScale, groundTiles, groundX, HORIZON_Y } from './ground';
-import { circle, type Ctx, ellipse, GROUND_Y, hash, mix, poly, rect, shade, smoke, VIEW_H } from './util';
+import { circle, type Ctx, ellipse, hash, mix, poly, rect, shade, smoke, VIEW_H } from './util';
 
 const HAZE = '#dcc9ad';
 
@@ -164,19 +165,19 @@ export function drawHaze(ctx: Ctx, v: View): void {
 
 function drawStreetGround(ctx: Ctx, v: View): void {
   // grass verge the buildings stand on
-  const g = ctx.createLinearGradient(0, 418, 0, GROUND_Y + 10);
+  const g = ctx.createLinearGradient(0, 418, 0, ROAD_FAR_Y + 2);
   g.addColorStop(0, '#869a45');
   g.addColorStop(1, '#6f8238');
   ctx.fillStyle = g;
-  ctx.fillRect(0, 420, v.width, GROUND_Y + 12 - 420);
+  ctx.fillRect(0, 420, v.width, ROAD_FAR_Y + 4 - 420);
 
-  // the dirt street
-  const r = ctx.createLinearGradient(0, GROUND_Y + 6, 0, 500);
+  // the dirt street: three lanes, a land-grid cell each (game/layout.ts)
+  const r = ctx.createLinearGradient(0, ROAD_FAR_Y, 0, ROAD_NEAR_Y);
   r.addColorStop(0, '#a8875b');
   r.addColorStop(0.5, '#b89668');
   r.addColorStop(1, '#9b7a50');
   ctx.fillStyle = r;
-  ctx.fillRect(0, GROUND_Y + 6, v.width, 500 - GROUND_Y - 6);
+  ctx.fillRect(0, ROAD_FAR_Y, v.width, ROAD_NEAR_Y - ROAD_FAR_Y);
 
   // Ruts, stones and hoofprints lie on the ground, so they follow its
   // perspective (ground.ts): nearer ones are spread wider and scroll faster.
@@ -186,13 +187,13 @@ function drawStreetGround(ctx: Ctx, v: View): void {
       rect(ctx, sx + dx * s, y + hash(i, salt) * 2, T * s * (0.4 + hash(i, salt + 1) * 0.5), 1.5, '#7e6040');
     });
   ctx.globalAlpha = 0.35;
-  rut(458, 0, 100);
-  rut(484, 10, 102);
+  rut(LANE_YS[0], 0, 100);
+  rut(LANE_YS[1], 10, 102);
   ctx.globalAlpha = 1;
   // stones: each at its own depth; the tile index keeps them fixed in the world
   groundTiles(v.camX, v.width, 470, T, (i) => {
     if (hash(i, 104) >= 0.5) return;
-    const y = 445 + hash(i, 106) * 50;
+    const y = ROAD_FAR_Y + 2 + hash(i, 106) * (ROAD_NEAR_Y - ROAD_FAR_Y - 4);
     const s = depthScale(y);
     const x = groundX(i * T + hash(i, 105) * T - v.camX, y, v.width / 2);
     ellipse(ctx, x, y, (2 + hash(i, 107) * 2.5) * s, 1.5 + hash(i, 108), shade('#b0a08a', -hash(i, 109) * 0.3));
@@ -200,24 +201,26 @@ function drawStreetGround(ctx: Ctx, v: View): void {
 
   // grassy edge between verge and street
   ctx.fillStyle = '#6a7c33';
-  groundTiles(v.camX, v.width, GROUND_Y + 8, T / 2, (i, sx, s) => {
+  const edge = ROAD_FAR_Y + 2;
+  groundTiles(v.camX, v.width, edge, T / 2, (i, sx, s) => {
     ctx.beginPath();
-    ctx.moveTo(sx, GROUND_Y + 8);
-    ctx.lineTo(sx + (4 + hash(i, 110) * 6) * s, GROUND_Y + 3 - hash(i, 111) * 5);
-    ctx.lineTo(sx + 14 * s, GROUND_Y + 8);
-    ctx.lineTo(sx + 20 * s, GROUND_Y + 10);
-    ctx.lineTo(sx, GROUND_Y + 10);
+    ctx.moveTo(sx, edge);
+    ctx.lineTo(sx + (4 + hash(i, 110) * 6) * s, edge - 5 - hash(i, 111) * 5);
+    ctx.lineTo(sx + 14 * s, edge);
+    ctx.lineTo(sx + 20 * s, edge + 2);
+    ctx.lineTo(sx, edge + 2);
     ctx.fill();
   });
 
   // foreground meadow below the street
   const bottom = Math.max(VIEW_H, v.bottom);
-  const f = ctx.createLinearGradient(0, 498, 0, bottom);
+  const meadow = ROAD_NEAR_Y - 2;
+  const f = ctx.createLinearGradient(0, meadow, 0, bottom);
   f.addColorStop(0, '#6d8236');
-  f.addColorStop(Math.min(1, (VIEW_H - 498) / (bottom - 498)), '#4d6127');
+  f.addColorStop(Math.min(1, (VIEW_H - meadow) / (bottom - meadow)), '#4d6127');
   f.addColorStop(1, '#3a4a1d');
   ctx.fillStyle = f;
-  ctx.fillRect(0, 498, v.width, bottom - 498);
+  ctx.fillRect(0, meadow, v.width, bottom - meadow);
 }
 
 /**
@@ -233,7 +236,7 @@ export function drawSideRoad(ctx: Ctx, v: View, x: number, alpha = 1): void {
   const bottom = Math.max(VIEW_H, v.bottom);
   // behind the street it narrows faster than the ground does, running off into the distance
   const far = 396;
-  const street = GROUND_Y + 8;
+  const street = ROAD_FAR_Y;
   const narrow = (y: number) => 0.45 + 0.55 * ((y - far) / (street - far));
   const at = (y: number, side: -1 | 1, k = 1) => groundX(sx + side * hw * k, y, vp);
   ctx.save();
@@ -246,7 +249,7 @@ export function drawSideRoad(ctx: Ctx, v: View, x: number, alpha = 1): void {
   ctx.fillStyle = g;
   ctx.fill();
   // in front of the street, down to the bottom of the view
-  const near = 496;
+  const near = ROAD_NEAR_Y - 4;
   const f = ctx.createLinearGradient(0, near, 0, bottom);
   f.addColorStop(0, '#9b7a50');
   f.addColorStop(0.3, '#b08e60');
@@ -281,8 +284,8 @@ export function drawSideRoad(ctx: Ctx, v: View, x: number, alpha = 1): void {
 /** Where a street ends (world x range `ends`): past each end the road gives way to grass. */
 export function drawStreetEnds(ctx: Ctx, v: View, ends: { min: number; max: number }): void {
   const vp = v.width / 2;
-  const top = GROUND_Y + 5;
-  const bottom = 502;
+  const top = ROAD_FAR_Y - 2;
+  const bottom = ROAD_NEAR_Y + 2;
   const verge = ctx.createLinearGradient(0, top, 0, bottom);
   verge.addColorStop(0, '#7a8e3e');
   verge.addColorStop(1, '#6d8236');

@@ -11,12 +11,12 @@ import { clock } from '../game/daynight';
 import { buildShortfall, upgradeShortfall, villageStock } from '../game/economy';
 import { demolitionWork } from '../game/demolition';
 import { materialsAllow, siteWork, upgrading } from '../game/site';
-import { isBorrowed } from '../game/farm';
+import { sizeOf } from '../game/grid';
 import { WOOD_REACH } from '../game/nature';
 import { employees, jobsOf } from '../game/people';
 import { RESOURCES, type Amounts } from '../game/resources';
 import { backOf, mapPoint, streetOf, streetRange } from '../game/streets';
-import { constructionStage, demolitionYield, getBuilding, streetFrom, whyNotDemolish, type Building, type BuildingOption, type ConstructionStage, type World } from '../game/world';
+import { constructionStage, demolitionYield, getBuilding, streetFrom, whyNotBuild, whyNotDemolish, type Building, type BuildingOption, type ConstructionStage, type World } from '../game/world';
 import { BUILDING_ART } from './buildings';
 import { drawBuildingIcon } from './sprites';
 import type { Ctx } from './util';
@@ -310,7 +310,7 @@ function drawMiniMap(ctx: Ctx, world: World, r: Rect): void {
   const lots = world.buildings
     .filter((b) => b.type !== 'intersection')
     .map((b) => {
-      const x = world.plots[b.plotIndex].x;
+      const x = b.x;
       const p = mapPoint(world, x);
       const back = backOf(world.streets[streetOf(x)]?.dir ?? { x: 1, y: 0 });
       return { b, x: sx(p.x + back.x * MAP_LOT), y: sy(p.y + back.y * MAP_LOT) };
@@ -528,6 +528,7 @@ function drawBuildingMenu(ctx: Ctx, world: World, uiW: number, uiH: number): voi
 export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number): void {
   if (world.menu?.kind === 'building') return drawBuildingMenu(ctx, world, uiW, uiH);
   if (!world.menu) return;
+  const menuX = world.menu.x;
   const M = menuLayout(uiW, uiH);
 
   ctx.fillStyle = 'rgba(20,14,8,0.35)';
@@ -550,8 +551,8 @@ export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number):
     }
     roundRect(ctx, r.x, r.y, r.w, r.h - 24, 6);
     ctx.clip();
-    // what the village can't afford is shown faded
-    if (Object.keys(buildShortfall(world, type)).length) ctx.globalAlpha = 0.4;
+    // what the village can't afford, or what doesn't fit here, is shown faded
+    if (Object.keys(buildShortfall(world, type)).length || whyNotBuild(world, type, menuX)) ctx.globalAlpha = 0.4;
     const previewH = r.h - 34;
     const scale = Math.min(0.6, (r.w - 8) / (def.width * 1.3), previewH / (BUILDING_ART[type].height + 20));
     drawBuildingIcon(ctx, type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time);
@@ -565,8 +566,11 @@ export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number):
   const time = world.constructionEnabled ? `Builds in ${+(def.buildTime / world.params.buildSpeed).toFixed(1)}s` : 'Builds instantly (construction off)';
   const lack = buildShortfall(world, def.type);
   const cost = `Costs ${amounts(def.cost)}` + (Object.keys(lack).length ? ` — need ${amounts(lack)} more` : '');
-  const info = `${cost}   ·   ${time}`;
-  text(ctx, info, uiW / 2, M.infoY + 20, fitSize(ctx, info, 12, M.panel.w - 24), Object.keys(lack).length ? '#e89a7a' : '#cbbfa4', 'center');
+  const { w, d } = sizeOf(def.type);
+  const why = whyNotBuild(world, def.type, menuX);
+  const size = def.type === 'intersection' ? 'a road across' : `${w} × ${d} squares`;
+  const info = `${cost}   ·   ${time}   ·   ${size}` + (why ? `   ·   ${why}` : '');
+  text(ctx, info, uiW / 2, M.infoY + 20, fitSize(ctx, info, 12, M.panel.w - 24), Object.keys(lack).length || why ? '#e89a7a' : '#cbbfa4', 'center');
 
   button(ctx, M.cancel, false);
   text(ctx, 'Cancel', M.cancel.x + M.cancel.w / 2, M.cancel.y + 25, 15, '#f3ead8', 'center', true);
@@ -627,12 +631,11 @@ export function drawBuildingLabel(ctx: Ctx, world: World, b: Building, sx: numbe
     lines.push(`${ROLE_NAME[role]}: ${names || 'nobody free to hire'}${slots > 1 ? ` (${staff.length}/${slots})` : ''}`);
   }
   if (b.farm) {
-    // idle borrowed land isn't waiting to be sown, it's spare
-    const n = (st: string) => b.farm!.plots.filter((p) => p.state === st && (st !== 'fallow' || !isBorrowed(p))).length;
+    const n = (st: string) => b.farm!.plots.filter((p) => p.state === st).length;
     lines.push(`Fields: ${n('ripe')} ripe · ${n('growing')} growing · ${n('fallow')} to sow`);
   }
   if (b.type === 'woodcutter') {
-    const x = world.plots[b.plotIndex].x;
+    const x = b.x;
     const near = world.trees.filter((t) => Math.abs(t.x - x) <= WOOD_REACH);
     const n = (st: string) => near.filter((t) => t.state === st).length;
     lines.push(`Woods in reach: ${n('grown')} trees to fell · ${n('growing')} growing`);

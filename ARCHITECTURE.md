@@ -142,14 +142,13 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   building as a `Workplace`: its door, the next job and where it is done, how long a job takes,
   what it yields and where that goes down (`dropSpot`, asked again on the way as piles change),
   and whether a load is taken indoors to be worked on there (`inside`).
-- `farm.ts`: the farm's fields, and the farm as a `Workplace`. Tested by `farm.test.ts`. Plots lie
-  on the free land-grid cells around it (see `land.ts`) in rows (`FIELD_ROWS` in `layout.ts`): one
-  behind the road, two in front of it. A new farm is just the farmstead: a plot stays grass until
-  the farmer first works it (`tilled`), and borrowed land in front of the neighbouring lots
-  returns to grass after each harvest. Each plot keeps its own state (fallow → growing → ripe) and
-  age (150 s to ripe). Jobs: harvest while the farm store has room for the sheaf, else sow, own
-  land before borrowed, nearest first; each takes `sowPerCell` / `harvestPerCell` seconds per grid
-  cell of plot width (tuning sliders). A harvest yields a sheaf, stacked in its own place in the
+- `farm.ts`: the farm's fields, and the farm as a `Workplace`. Tested by `farm.test.ts`. Each
+  field is one land-grid cell (see `land.ts`) in one of the field rows (`FIELD_ROWS` in
+  `layout.ts`): three behind the road (the two lot rows and the verge), two in front of it. A new
+  farm is just the farmstead: a field stays grass until the farmer first works it (`tilled`). Each
+  field keeps its own state (fallow → growing → ripe) and age (150 s to ripe). Jobs: harvest while
+  the farm store has room for the sheaf, else sow, nearest first; each takes `sowPerCell` /
+  `harvestPerCell` seconds (tuning sliders). A harvest yields a sheaf, stacked in its own place in the
   store (`SHEAF_SLOTS`), from where serfs carry them to a warehouse (`transport.ts`).
 - `daynight.ts`: time of day, from `world.dayClock`, which runs at the `timeSpeed` knob (a day is
   `DAY_LENGTH` = 300 s at 1×). The `nightHours` knob (0–12) shapes the sun's path: fewer hours
@@ -178,14 +177,20 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   its left (`backOf`) and a new street runs off into what lay behind the old one. The rider turns at
   a crossroads (`turnAtCrossroads`): ↑ onto the road away from the viewer, ↓ towards them. A new
   street gets its own woods; trees are cut where roads run off, and no field is sown across one.
-- `land.ts`: the land grid, tested by `land.test.ts`. The street is cut into 25 px cells in two
-  rows: `back` (behind the road, where buildings stand) and `front` (between the road and the
-  viewer). A building claims its footprint cells (its `width` rounded up to whole cells, centred on
-  the plot) as soon as it is placed. A farm's back fields fill the free cells up to the next
-  building on each side (usually one plot per side); its front fields take any front cells within
-  `FIELD_REACH` that are nearer to it than to another farm. Placing a building re-lays neighbouring
-  farms' fields (`syncFarmFields`): a plot the new building trims keeps its crop on the land
-  that is left; only plots whose land is taken entirely are lost.
+- `grid.ts`: the land grid, tested by `land.test.ts`. The whole plane is cut into 25 px cells,
+  north up: columns numbered 0, 1, 2… east (-1, -2… west), rows lettered A, B, C… north (-A, -B…
+  south), so a cell is named like B3. Roads take three cells across (one per lane), every street's
+  middle lane running down a row or column of cells; buildings take `width` (rounded up to cells)
+  × `depth` (default 2) cells; fields one cell each; quarries their rocky land (`landUse`). Seen
+  from a street, cells lie in rows j along it (`LOT_ROW` in `layout.ts`): the road is rows -1..1,
+  row 2 the verge, buildings stand from row 3 back. A building goes anywhere along a street where
+  it fits (`whyNotHere`): on free cells, one cell from its road and from any other road. Only
+  crossroads keep to the 250 px plots, so streets still meet at a plot of each.
+- `land.ts`: the farms' fields on the grid. A farm works the free cells nearest to it, up to
+  `FIELD_REACH` cells to either side and `FIELD_CELLS` in all (more once upgraded); its own verge is
+  sown except the cell before its door, other buildings' verges are left free. Building over a
+  field, or a new road, re-lays the fields (`syncFarmFields`): fields keep their crops where their
+  cells are still theirs, and the farm takes the next nearest free cells instead.
 - `layout.ts`: the shared world geometry (see above), including the grid constants.
   World y is a real depth on the ground (`behindRoad`: the camera's perspective, `HORIZON_Y`,
   `EYE_DIST`), so the village is a plane; a quarry takes real land behind the main street
@@ -236,8 +241,10 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
 - `construction.ts`: generic staged construction for any building: stakes → foundation →
   timber frame → walls → roof. The finished art is revealed bottom-up behind scaffolding, or,
   for a building with stage sprites, each stage's image fades in over the one before.
-- `grid.ts`: the land-grid debug overlay (tuning panel → "land grid", or `?grid=1`): cells tinted
-  by use (building footprint red, field green), plot boundaries dashed.
+- `grid.ts`: the land-grid overlay (G, or `?grid=1`) on the street being looked at: its rows of
+  cells tinted by use (road, building, field, quarry) and named where the names fit; and the cells
+  the building chosen in the build menu would take, green where it fits, red where not. From above
+  (`topview.ts`) the grid covers the whole plane, with column numbers and row letters at the edges.
 - `topview.ts`: the village from above (Tab, or the small map's spot on screen), at its own zoom: the
   plane north up around the rider, with streets, fields, the quarries' rocky land, roofs exactly on
   their footprint cells, sites as frames filling in, the mill's sails turning, trees where they stand,

@@ -122,15 +122,18 @@ export function drawFrontField(ctx: Ctx, a: Anchor, farm: FarmState | undefined,
   }
 }
 
-/** Low fences along the road side of the back plots. */
+/** Low fences along the road side of the back fields: in front of the field nearest the road in each column of cells. */
 export function drawBackFences(ctx: Ctx, a: Anchor, farm: FarmState | undefined): void {
-  const y = FIELD_ROWS.back[0].near;
-  for (const p of plotsOf(farm, 'back')) {
+  const nearest = new Map<number, FieldPlot>();
+  for (const p of plotsOf(farm, 'back')) if ((nearest.get(p.dx)?.row ?? -1) < p.row) nearest.set(p.dx, p);
+  for (const p of nearest.values()) {
+    const y = FIELD_ROWS.back[p.row].near;
+    const base = toScreenY(a, y);
     const [s0] = pt(a, p.dx - p.width / 2, y);
     const e0 = pt(a, p.dx + p.width / 2, y)[0] - 3;
-    for (let fx = s0; fx <= e0; fx += 16) rect(ctx, fx, a.base - 14, 3, 14, '#6b4f35');
-    rect(ctx, s0, a.base - 12, e0 - s0 + 3, 2, '#7d5d3f');
-    rect(ctx, s0, a.base - 6, e0 - s0 + 3, 2, '#7d5d3f');
+    for (let fx = s0; fx <= e0; fx += 12) rect(ctx, fx, base - 10, 2.5, 10, '#6b4f35');
+    rect(ctx, s0, base - 9, e0 - s0 + 3, 1.6, '#7d5d3f');
+    rect(ctx, s0, base - 4.5, e0 - s0 + 3, 1.6, '#7d5d3f');
   }
 }
 
@@ -173,8 +176,8 @@ export function drawStore(ctx: Ctx, a: Anchor, sheaves: number): void {
   const cx = a.x + STORE.dx;
   const y = toScreenY(a, STORE.y) + 1;
   // wooden pallet the sheaves stand on
-  poly(ctx, [cx - 24, y, cx + 24, y, cx + 28, y - 4, cx - 20, y - 4], '#6b4f35');
-  line(ctx, cx - 24, y, cx + 24, y, '#4d3826', 1.5);
+  poly(ctx, [cx - 16, y, cx + 16, y, cx + 19, y - 3, cx - 13, y - 3], '#6b4f35');
+  line(ctx, cx - 16, y, cx + 16, y, '#4d3826', 1.5);
   // each sheaf in its own place (game/layout.ts), where the farmer put it down
   for (let i = 0; i < Math.min(sheaves, SHEAF_SLOTS.length); i++) sheaf(ctx, a.x + SHEAF_SLOTS[i].dx, y - 3 - SHEAF_SLOTS[i].lift);
 }

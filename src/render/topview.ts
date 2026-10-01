@@ -4,12 +4,12 @@
 // Positions come straight from the game's map (game/streets.ts groundPoint).
 
 import { BUILDINGS, type BuildingType } from '../game/buildings';
-import { CELL_W, FIELD_ROWS, FRONT_FIELD, GROUND_Y, QUARRIES, quarryLand, ROAD_BOTTOM, STREET_BAND_HALF, behindRoad, type FieldZone } from '../game/layout';
-import { cellX, footprint, landGrid, type CellUse } from '../game/land';
+import { CELL_W, FIELD_ROWS, QUARRIES, quarryLand, ROAD_HALF, rowFar, rowNear, type FieldZone } from '../game/layout';
+import { cellName, footprintOf, landUse, rowName, type LandUse } from '../game/grid';
 import { treeGrowth } from '../game/nature';
 import { GROUND_PILE_Y } from '../game/piles';
 import type { Load } from '../game/resources';
-import { backOf, groundPoint, mapPoint, streetOf, streetPoint, streetRange, type Vec } from '../game/streets';
+import { backOf, groundPoint, mapPoint, streetOf, streetPoint, streetRange, streetStart, type Vec } from '../game/streets';
 import { getBuilding, type World } from '../game/world';
 import { doorProgress } from './farm';
 import { figureOf, outfitOf } from './figure';
@@ -34,9 +34,6 @@ const ROOF: Record<BuildingType, string> = {
   stonecutter: '#8a8680',
   intersection: '#a8875b',
 };
-
-/** A building stands on its lot's row of land-grid cells behind the road (the cells its footprint claims, land.ts). */
-const LOT_ROW = FIELD_ROWS.back[0];
 
 const RESOURCE_COLOUR: Record<Load['resource'], string> = { wood: '#7b5634', stone: '#a89c88', grain: '#d8b850', flour: '#f1ece0', bread: '#c58a46' };
 
@@ -94,15 +91,23 @@ export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zo
   // streets
   for (const s of world.streets) {
     if (s.gone) continue;
+    // three lanes, a cell each
     const { min, max } = streetRange(world, s.index);
-    const road = [groundPoint(world, min, GROUND_Y + 6), groundPoint(world, max, GROUND_Y + 6), groundPoint(world, max, ROAD_BOTTOM), groundPoint(world, min, ROAD_BOTTOM)];
+    const road = [streetPoint(world, min, ROAD_HALF), streetPoint(world, max, ROAD_HALF), streetPoint(world, max, -ROAD_HALF), streetPoint(world, min, -ROAD_HALF)];
     shape(road, '#b89668', '#8a6a44', 1);
+    for (const d of [-ROAD_HALF / 3, ROAD_HALF / 3]) {
+      const a = streetPoint(world, min, d);
+      const b = streetPoint(world, max, d);
+      ctx.setLineDash([6 * S, 6 * S]);
+      line(ctx, sx(a), sy(a), sx(b), sy(b), 'rgba(110,80,50,0.45)', Math.max(0.5, 1.2 * S));
+      ctx.setLineDash([]);
+    }
   }
 
   // fields
   for (const b of world.buildings) {
     if (!b.farm) continue;
-    const fx = world.plots[b.plotIndex].x;
+    const fx = b.x;
     for (const p of b.farm.plots) {
       if (!p.tilled) continue;
       const row = FIELD_ROWS[p.zone as FieldZone][p.row];
@@ -125,13 +130,14 @@ export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zo
   // buildings: a roof on the lot behind the road; sites are open frames filling in
   for (const b of world.buildings) {
     if (b.type === 'intersection') continue;
-    const x = world.plots[b.plotIndex].x;
-    const cells = footprint(world, b);
-    const x0 = cellX(cells.from);
-    const x1 = cellX(cells.to);
+    const x = b.x;
+    const f = footprintOf(b);
+    if (!f) continue;
+    const x0 = streetStart(f.street) + f.i0 * CELL_W;
+    const x1 = streetStart(f.street) + (f.i1 + 1) * CELL_W;
     const w = x1 - x0;
-    const front = behindRoad(LOT_ROW.near);
-    const deep = behindRoad(LOT_ROW.far) - front;
+    const front = rowNear(f.j0);
+    const deep = rowFar(f.j1) - front;
     const corners = [lot(x0, front), lot(x1, front), lot(x1, front + deep), lot(x0, front + deep)];
     const roof = ROOF[b.type];
     // shadow to the north-east
@@ -178,7 +184,7 @@ export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zo
   // the crossroads' fingerposts
   for (const b of world.buildings) {
     if (b.type !== 'intersection') continue;
-    const p = lot(world.plots[b.plotIndex].x - 44, behindRoad(LOT_ROW.near));
+    const p = lot(b.x - 44, rowNear(3));
     circle(ctx, sx(p), sy(p), Math.max(1.5, 4 * S), '#6b4c30');
   }
 
@@ -234,7 +240,7 @@ export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zo
     if (p.job && b) {
       const w = p.job.worker;
       if (doorProgress(w) >= 1) continue; // indoors
-      const x = world.plots[b.plotIndex].x + w.dx;
+      const x = b.x + w.dx;
       person(groundPoint(world, x, w.y), o.top, o.skin, headingAt(x, w.facing), w.stride * 0.25, w.task.kind === 'walk', w.carrying);
     } else if (!p.job) {
       const s = p.stroll;
@@ -277,62 +283,67 @@ export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zo
   ctx.textAlign = 'left';
 }
 
-const GRID_FILL: Record<CellUse['kind'] | 'quarry', string> = {
-  free: 'rgba(255,255,255,0.06)',
+const GRID_FILL: Record<LandUse['kind'], string> = {
+  road: 'rgba(200,170,120,0.35)',
   building: 'rgba(214,82,62,0.45)',
   field: 'rgba(120,206,80,0.45)',
-  spare: 'rgba(120,206,80,0.15)',
   quarry: 'rgba(150,150,170,0.45)',
 };
 
 /**
- * The land grid from above: every street's cells, row by row (the lots behind
- * the road, the two rows in front), tinted by what uses them, outlined; the
- * quarries' cells; and each plot's lot, dashed, with its number.
+ * The land grid from above (G): the whole plane in cells, north up, every cell
+ * taken by something tinted by what takes it; columns numbered along the top
+ * and rows lettered down the left, and each cell named once there is room.
  */
 function drawGrid(ctx: Ctx, world: World, sx: (p: Vec) => number, sy: (p: Vec) => number, S: number, uiW: number, uiH: number): void {
-  const quad = (pts: Vec[], fill: string) => {
-    if (pts.every((p) => sx(p) < -20) || pts.every((p) => sx(p) > uiW + 20) || pts.every((p) => sy(p) < -20) || pts.every((p) => sy(p) > uiH + 20)) return;
-    poly(ctx, pts.flatMap((p) => [sx(p), sy(p)]), fill, 'rgba(255,248,225,0.5)', 0.6);
-  };
-  const grid = landGrid(world);
-  for (const { zone, row, cells } of grid.rows) {
-    const band = FIELD_ROWS[zone][row];
-    cells.forEach((c, k) => {
-      const x0 = cellX(k);
-      const street = world.streets[streetOf(x0)];
-      if (!street) return;
-      const { min, max } = streetRange(world, street.index);
-      if (x0 < min || x0 + CELL_W > max) return;
-      quad([groundPoint(world, x0, band.far), groundPoint(world, x0 + CELL_W, band.far), groundPoint(world, x0 + CELL_W, band.near), groundPoint(world, x0, band.near)], GRID_FILL[c.kind]);
-    });
+  const px = CELL_W * S;
+  // the cells on screen
+  const at = (X: number, Y: number) => ({ x: (X - sx({ x: 0, y: 0 })) / S, y: -(Y - sy({ x: 0, y: 0 })) / S });
+  const tl = at(0, 0);
+  const br = at(uiW, uiH);
+  const c0 = Math.floor(tl.x / CELL_W);
+  const c1 = Math.floor(br.x / CELL_W);
+  const r0 = Math.floor(br.y / CELL_W);
+  const r1 = Math.floor(tl.y / CELL_W);
+  // what takes the land
+  for (const [key, use] of landUse(world)) {
+    const [c, r] = key.split(',').map(Number);
+    if (c < c0 || c > c1 || r < r0 || r > r1) continue;
+    ctx.fillStyle = GRID_FILL[use.kind];
+    ctx.fillRect(sx({ x: c * CELL_W, y: 0 }), sy({ x: 0, y: (r + 1) * CELL_W }), px, px);
   }
-  for (const q of QUARRIES) {
-    const r = quarryLand(q);
-    for (let x = r.x0; x < r.x1 - 1e-6; x += CELL_W) {
-      for (let y = r.y0; y < r.y1 - 1e-6; y += CELL_W) {
-        quad([{ x, y }, { x: x + CELL_W, y }, { x: x + CELL_W, y: y + CELL_W }, { x, y: y + CELL_W }], GRID_FILL.quarry);
-      }
-    }
-  }
-  // the plots' lots: across the street's whole band, PLOT_SPACING wide
+  if (px < 4) return;
+  // the lines between the cells, every tenth a little stronger
   ctx.save();
-  ctx.setLineDash([5, 4]);
-  for (const p of world.plots) {
-    if (p.off) continue;
-    for (const edge of [-125, 125]) {
-      const a = streetPoint(world, p.x + edge, -STREET_BAND_HALF);
-      const b = streetPoint(world, p.x + edge, STREET_BAND_HALF);
-      if (Math.max(sx(a), sx(b)) < -10 || Math.min(sx(a), sx(b)) > uiW + 10 || Math.max(sy(a), sy(b)) < -10 || Math.min(sy(a), sy(b)) > uiH + 10) continue;
-      line(ctx, sx(a), sy(a), sx(b), sy(b), 'rgba(232,200,114,0.85)', 1.2);
+  for (let c = c0; c <= c1 + 1; c++) {
+    const X = Math.round(sx({ x: c * CELL_W, y: 0 })) + 0.5;
+    line(ctx, X, 0, X, uiH, c % 10 === 0 ? 'rgba(255,248,225,0.6)' : 'rgba(255,248,225,0.28)', c === 0 ? 2 : 1);
+  }
+  for (let r = r0; r <= r1 + 1; r++) {
+    const Y = Math.round(sy({ x: 0, y: r * CELL_W })) + 0.5;
+    line(ctx, 0, Y, uiW, Y, r % 10 === 0 ? 'rgba(255,248,225,0.6)' : 'rgba(255,248,225,0.28)', r === 0 ? 2 : 1);
+  }
+  // each cell's name when they are big enough to hold it
+  if (px >= 30) {
+    ctx.font = `${Math.min(11, Math.round(px / 4))}px ui-monospace, Menlo, monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(255,244,220,0.7)';
+    for (let c = c0; c <= c1; c++) {
+      for (let r = r0; r <= r1; r++) ctx.fillText(cellName(c, r), sx({ x: (c + 0.5) * CELL_W, y: 0 }), sy({ x: 0, y: (r + 0.5) * CELL_W }) + 4);
     }
-    if (S > 0.25) {
-      const c = streetPoint(world, p.x, behindRoad(FRONT_FIELD.bottom) - 14);
-      ctx.font = `10px ${SERIF}`;
-      ctx.textAlign = 'center';
-      ctx.fillStyle = 'rgba(255,240,200,0.9)';
-      ctx.fillText(`plot ${p.index}`, sx(c), sy(c));
-    }
+  }
+  // column numbers along the top, row letters down the left
+  const every = Math.max(1, Math.ceil(26 / px));
+  ctx.font = 'bold 10px ui-monospace, Menlo, monospace';
+  ctx.fillStyle = 'rgba(30,22,12,0.6)';
+  ctx.fillRect(0, 0, uiW, 16);
+  ctx.fillRect(0, 16, 30, uiH - 16);
+  ctx.fillStyle = '#fff4dc';
+  ctx.textAlign = 'center';
+  for (let c = c0; c <= c1; c++) if (c % every === 0) ctx.fillText(String(c), sx({ x: (c + 0.5) * CELL_W, y: 0 }), 12);
+  for (let r = r0; r <= r1; r++) {
+    const Y = sy({ x: 0, y: (r + 0.5) * CELL_W }) + 4;
+    if (r % every === 0 && Y > 22) ctx.fillText(rowName(r), 15, Y);
   }
   ctx.restore();
 }

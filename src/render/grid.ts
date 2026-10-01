@@ -1,106 +1,105 @@
-// Debug overlay of the land grid (toggled from the tuning panel): every cell in
-// the row behind the road and the row in front of it, tinted by what uses it —
-// a building's footprint, a farm field, or free land — plus the plot boundaries.
-// Drawn in the ground perspective (ground.ts), so it lines up with the fields.
+// The land grid on the street being looked at (G): every cell in the rows
+// along it, from the land in front of the road to well behind the lots,
+// tinted by what takes it (game/grid.ts): road, building, field, quarry, or
+// free. Drawn in the ground perspective (ground.ts), so it lines up with the
+// fields; each cell is named where its name fits. Also the cells a building
+// chosen in the build menu would take (drawSitePreview).
 
-import { BUILDINGS } from '../game/buildings';
-import { cellAt, cellX, landGrid, type CellUse } from '../game/land';
-import { BACK_FIELD, FIELD_ROWS, FRONT_FIELD } from '../game/layout';
-import { getBuilding, PLOT_SPACING, type World } from '../game/world';
+import { BUILDINGS, type BuildingType } from '../game/buildings';
+import { cellKey, cellName, footprintAt, landUse, streetCell, type LandUse } from '../game/grid';
+import { CELL_W, rowFar, rowNear, yAt } from '../game/layout';
+import { streetOf, streetStart } from '../game/streets';
+import { placeAt, whyNotBuild, type World } from '../game/world';
 import { groundX } from './ground';
 import type { Ctx } from './util';
 
-const FILL: Record<CellUse['kind'], string> = {
-  free: 'rgba(255,255,255,0.06)',
+const FILL: Record<LandUse['kind'] | 'free', string> = {
+  free: 'rgba(255,255,255,0.05)',
+  road: 'rgba(200,170,120,0.35)',
   building: 'rgba(214,82,62,0.42)',
   field: 'rgba(120,206,80,0.42)',
-  spare: 'rgba(120,206,80,0.14)',
+  quarry: 'rgba(150,150,170,0.45)',
 };
 
+/** Rows of cells drawn, near to far (row j: j cells behind the middle of the road). */
+const ROWS = { near: -4, far: 8 };
+
+/** A cell's corners on screen: cells i0..i1 along street `street`, rows j0..j1, the camera at camX. */
+function block(ctx: Ctx, street: number, i0: number, i1: number, j0: number, j1: number, camX: number, vpX: number): void {
+  const x0 = streetStart(street) + i0 * CELL_W;
+  const x1 = streetStart(street) + (i1 + 1) * CELL_W;
+  const far = yAt(rowFar(j1));
+  const near = yAt(rowNear(j0));
+  ctx.beginPath();
+  ctx.moveTo(groundX(x0 - camX, far, vpX), far);
+  ctx.lineTo(groundX(x1 - camX, far, vpX), far);
+  ctx.lineTo(groundX(x1 - camX, near, vpX), near);
+  ctx.lineTo(groundX(x0 - camX, near, vpX), near);
+  ctx.closePath();
+}
+
 export function drawLandGrid(ctx: Ctx, world: World, camX: number, viewW: number): void {
-  const grid = landGrid(world);
+  const street = world.streets[streetOf(camX + viewW / 2)];
+  if (!street) return;
+  const land = landUse(world);
   const vpX = viewW / 2;
-  /** Camera-relative x → screen x at depth y. */
-  const gx = (x: number, y: number) => groundX(x - camX, y, vpX);
-  /** Ground quad from world x0 to x1 between depths top and bottom (far → near). */
-  const quad = (x0: number, x1: number, top: number, bottom: number) => {
-    ctx.beginPath();
-    ctx.moveTo(gx(x0, top), top);
-    ctx.lineTo(gx(x1, top), top);
-    ctx.lineTo(gx(x1, bottom), bottom);
-    ctx.lineTo(gx(x0, bottom), bottom);
-    ctx.closePath();
-  };
+  const start = streetStart(street.index);
   // the near ground fans out past the screen edges, so look a little wider
-  const margin = viewW * 0.25;
-  const first = Math.max(0, cellAt(camX - margin));
-  const last = Math.min(grid.count - 1, cellAt(camX + viewW + margin));
-
+  const margin = viewW * 0.3;
+  const first = Math.floor((camX - margin - start) / CELL_W);
+  const last = Math.ceil((camX + viewW + margin - start) / CELL_W);
   ctx.save();
-  for (const { zone, row: r, cells } of grid.rows) {
-    const band = FIELD_ROWS[zone][r];
-    const row = { top: band.far, bottom: band.near };
-    for (let k = first; k <= last; k++) {
-      quad(cellX(k), cellX(k + 1), row.top, row.bottom);
-      ctx.fillStyle = FILL[cells[k].kind];
+  ctx.font = 'bold 8px ui-monospace, Menlo, monospace';
+  ctx.textAlign = 'center';
+  for (let j = ROWS.far; j >= ROWS.near; j--) {
+    const far = yAt(rowFar(j));
+    const near = yAt(rowNear(j));
+    for (let i = first; i <= last; i++) {
+      const cell = streetCell(street, i, j);
+      const use = land.get(cellKey(cell.c, cell.r));
+      block(ctx, street.index, i, i, j, j, camX, vpX);
+      ctx.fillStyle = FILL[use?.kind ?? 'free'];
       ctx.fill();
-      ctx.strokeStyle = 'rgba(255,248,225,0.55)';
-      ctx.lineWidth = 0.75;
+      ctx.strokeStyle = 'rgba(255,248,225,0.5)';
+      ctx.lineWidth = 0.6;
       ctx.stroke();
-    }
-    // outline each building footprint / farm field run
-    for (let k = first; k <= last; k++) {
-      const c = cells[k];
-      if (c.kind === 'free') continue;
-      const prev = cells[k - 1];
-      if (prev && prev.kind === c.kind && 'buildingId' in prev && prev.buildingId === c.buildingId) continue;
-      let end = k;
-      while (end + 1 < grid.count) {
-        const n = cells[end + 1];
-        if (n.kind !== c.kind || !('buildingId' in n) || n.buildingId !== c.buildingId) break;
-        end++;
-      }
-      ctx.strokeStyle = c.kind === 'building' ? '#ff9b7e' : c.kind === 'field' ? '#b8f08a' : 'rgba(184,240,138,0.55)';
-      ctx.lineWidth = 2;
-      quad(cellX(k) + 1, cellX(end + 1) - 1, row.top + 1, row.bottom - 1);
-      ctx.stroke();
-      if (c.kind === 'building') {
-        const b = getBuilding(world, c.buildingId);
-        if (b) label(ctx, `${BUILDINGS[b.type].name} · ${end - k + 1} cells`, gx((cellX(k) + cellX(end + 1)) / 2, row.top), row.top - 4);
+      // the cell's name, where it fits
+      const mid = (far + near) / 2;
+      const xa = groundX(start + i * CELL_W - camX, mid, vpX);
+      const xb = groundX(start + (i + 1) * CELL_W - camX, mid, vpX);
+      const name = cellName(cell.c, cell.r);
+      if (near - far >= 9 && xb - xa >= ctx.measureText(name).width + 3) {
+        ctx.fillStyle = 'rgba(255,244,220,0.85)';
+        ctx.fillText(name, (xa + xb) / 2, mid + 3);
       }
     }
-  }
-
-  // plot (lot) boundaries and centres
-  const top = BACK_FIELD.back - 18;
-  const bottom = FRONT_FIELD.bottom;
-  ctx.setLineDash([6, 5]);
-  ctx.strokeStyle = 'rgba(232,200,114,0.9)';
-  ctx.lineWidth = 1.5;
-  for (const p of world.plots) {
-    if (p.x < camX - margin - PLOT_SPACING || p.x > camX + viewW + margin + PLOT_SPACING) continue;
-    for (const edge of [p.x - PLOT_SPACING / 2, p.x + PLOT_SPACING / 2]) {
-      ctx.beginPath();
-      ctx.moveTo(gx(edge, top), top);
-      ctx.lineTo(gx(edge, bottom), bottom);
-      ctx.stroke();
-    }
-  }
-  ctx.setLineDash([]);
-  for (const p of world.plots) {
-    const x = gx(p.x, bottom);
-    if (x < -40 || x > viewW + 40) continue;
-    label(ctx, `plot ${p.index}`, x, bottom + 11);
   }
   ctx.restore();
 }
 
-function label(ctx: Ctx, s: string, x: number, y: number): void {
-  ctx.font = 'bold 10px ui-monospace, Menlo, monospace';
+/** The cells the building chosen in the build menu would take where the rider wants it: green if it fits there, red if not. */
+export function drawSitePreview(ctx: Ctx, world: World, type: BuildingType, wantX: number, camX: number, viewW: number): void {
+  const x = placeAt(world, type, wantX);
+  if (x === null) return;
+  const f = footprintAt(type, x);
+  const ok = !whyNotBuild(world, type, wantX);
+  const vpX = viewW / 2;
+  ctx.save();
+  for (let i = f.i0; i <= f.i1; i++) {
+    for (let j = f.j0; j <= f.j1; j++) {
+      block(ctx, f.street, i, i, j, j, camX, vpX);
+      ctx.fillStyle = ok ? 'rgba(140,230,110,0.35)' : 'rgba(235,90,70,0.35)';
+      ctx.fill();
+    }
+  }
+  block(ctx, f.street, f.i0, f.i1, f.j0, f.j1, camX, vpX);
+  ctx.strokeStyle = ok ? '#c8f5a0' : '#ff9b7e';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.font = 'bold 11px Georgia, serif';
   ctx.textAlign = 'center';
-  ctx.textBaseline = 'alphabetic';
-  ctx.fillStyle = 'rgba(0,0,0,0.6)';
-  ctx.fillText(s, x + 1, y + 1);
-  ctx.fillStyle = '#fff4dc';
-  ctx.fillText(s, x, y);
+  ctx.fillStyle = ok ? '#e8ffd8' : '#ffd8cc';
+  const y = yAt(rowFar(f.j1)) - 6;
+  ctx.fillText(BUILDINGS[type].name, groundX((streetStart(f.street) + ((f.i0 + f.i1 + 1) / 2) * CELL_W) - camX, y, vpX), y);
+  ctx.restore();
 }

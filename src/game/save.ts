@@ -28,10 +28,11 @@ import { RESOURCES, stockOf, type Load, type Resource, type Stock } from './reso
 import type { Worker, WorkerTask } from './worker';
 import { clearLand, createForest, type Tree } from './nature';
 import type { Pile } from './piles';
-import { streetOf } from './streets';
+import { cellKey, cellName, cellsOf, footprintOf, siteX } from './grid';
+import { PLOTS_PER_STREET, plotX, streetOf } from './streets';
 import { createWorld, goneStreet, layStreet, WORLD_WIDTH, type Building, type Rider, type World } from './world';
 
-export const SAVE_VERSION = 17;
+export const SAVE_VERSION = 18;
 
 /** How often (s) the village used to collect goods from stores (until v9); old migrations need it. */
 const OLD_COLLECT_EVERY = 30;
@@ -364,6 +365,20 @@ const MIGRATIONS: Record<number, (world: unknown) => unknown> = {
   15: (world) => world,
   // v17: a street can be gone (its crossroads pulled down): -1 in branches keeps its place; none were
   16: (world) => world,
+  // v18: the land is one grid (grid.ts): a building stands at a world x on whole cells, not on a plot;
+  // a crossroads stays where its plot was (plots are on cells' middles now, half a cell off)
+  17: (world) => {
+    const w = typeof world === 'object' && world !== null ? (world as Raw) : undefined;
+    for (const v of Array.isArray(w?.buildings) ? (w.buildings as unknown[]) : []) {
+      if (typeof v !== 'object' || v === null) continue;
+      const b = v as Raw;
+      if (typeof b.plotIndex !== 'number') continue;
+      const x = plotX(Math.floor(b.plotIndex / PLOTS_PER_STREET), b.plotIndex % PLOTS_PER_STREET);
+      b.x = b.type === 'intersection' || !BUILDINGS[b.type as BuildingType] ? x : siteX(b.type as BuildingType, x);
+      delete b.plotIndex;
+    }
+    return world;
+  },
 };
 
 /** Snapshot the world. The result shares nothing with the live world. */
@@ -411,15 +426,16 @@ function build(saved: SavedWorld): World {
   const { branches, ...state } = saved;
   Object.assign(world, state);
   // the streets, in the order they were opened: each branches off at a finished crossroads on one before
-  // it, and joins the streets it meets where crossroads were made for it (so buildings go on their plots first)
+  // it, and joins the streets it meets where crossroads were made for it (so those go on their plots first)
+  const plotOf = (b: Building) => world.plots.find((p) => p.x === b.x);
   const seat = () => {
     for (const b of world.buildings) {
-      const plot = world.plots[b.plotIndex];
+      const plot = b.type === 'intersection' ? plotOf(b) : undefined;
       if (plot && plot.buildingId === null) plot.buildingId = b.id;
     }
   };
   const layBranch = (b: Building) => {
-    if (!world.plots[b.plotIndex]) throw new SaveError(`building ${b.id}: no plot ${b.plotIndex}`);
+    if (!plotOf(b)) throw new SaveError(`crossroads ${b.id}: no plot at ${b.x}`);
     seat();
     layStreet(world, b);
   };
@@ -447,12 +463,21 @@ function build(saved: SavedWorld): World {
     }
   }
   const ids = new Set<number>();
+  const taken = new Set<string>();
   for (const b of world.buildings) {
-    const plot = world.plots[b.plotIndex];
-    if (!plot) throw new SaveError(`building ${b.id}: no plot ${b.plotIndex}`);
-    if (plot.buildingId !== null && plot.buildingId !== b.id) throw new SaveError(`building ${b.id}: plot ${b.plotIndex} already taken`);
+    const street = world.streets[streetOf(b.x)];
+    if (!street || street.gone) throw new SaveError(`building ${b.id}: no street at ${b.x}`);
     if (ids.has(b.id)) throw new SaveError(`duplicate building id ${b.id}`);
     ids.add(b.id);
+    const f = footprintOf(b);
+    for (const { c, r } of f ? cellsOf(world, f) : []) {
+      if (taken.has(cellKey(c, r))) throw new SaveError(`building ${b.id}: stands on another building at ${cellName(c, r)}`);
+      taken.add(cellKey(c, r));
+    }
+    if (b.type !== 'intersection') continue;
+    const plot = plotOf(b);
+    if (!plot) throw new SaveError(`crossroads ${b.id}: no plot at ${b.x}`);
+    if (plot.buildingId !== null && plot.buildingId !== b.id) throw new SaveError(`crossroads ${b.id}: plot at ${b.x} already taken`);
     plot.buildingId = b.id;
   }
   // what lies on the ground lies on a street that is there
@@ -563,7 +588,7 @@ function building(v: unknown, path: string): Building {
   const out: Building = {
     id: int(b.id, `${path}.id`),
     type: oneOf<BuildingType>(b.type, BUILDING_TYPES, `${path}.type`),
-    plotIndex: int(b.plotIndex, `${path}.plotIndex`),
+    x: num(b.x, `${path}.x`),
     progress: Math.min(1, Math.max(0, num(b.progress, `${path}.progress`))),
     status: oneOf(b.status, ['constructing', 'done', 'demolishing'] as const, `${path}.status`),
     completedAt: b.completedAt === null ? null : num(b.completedAt, `${path}.completedAt`),

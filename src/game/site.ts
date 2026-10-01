@@ -175,7 +175,7 @@ export function builderPositions(world: World, b: Building): number {
   let waiting = site.laid.filter((s, k) => total(s) > 1e-9 && !building.has(k)).length;
   for (const r of MATERIALS) waiting += loads(site.pile[r] - taken.filter((j) => j.action === takeAction(r)).length * LOAD_SIZE);
   const need = stillNeeded(world, b);
-  const x = world.plots[b.plotIndex].x;
+  const x = b.x;
   for (const r of RESOURCES) if (need[r] && (materialSource(world, r, x) || nearestPile(world, r, x))) waiting += loads(need[r]);
   return Math.min(BUILDERS_PER_SITE, busy.length + waiting);
 }
@@ -197,7 +197,7 @@ export function materialsAllow(b: Building): number {
 /** A construction site as a workplace for its builders. */
 export function siteWorkplace(world: World, b: Building, buildSpeed: number): Workplace {
   const site = b.site!;
-  const x = world.plots[b.plotIndex].x;
+  const x = b.x;
   const work = siteWork(b);
   const costTotal = total(work.cost);
   /** Materials one build job works in. */
@@ -245,7 +245,7 @@ export function siteWorkplace(world: World, b: Building, buildSpeed: number): Wo
         const from = materialSource(world, r, at);
         const pile = nearestPile(world, r, at);
         // off the ground if that is nearer (or there is nowhere else)
-        if (pile && (!from || streetDist(world, at, pile.x) <= streetDist(world, at, world.plots[from.plotIndex].x))) {
+        if (pile && (!from || streetDist(world, at, pile.x) <= streetDist(world, at, from.x))) {
           return { job: { action: gatherAction(r), target: pile.id, slot: target() }, ...groundSpot(pile, x) };
         }
         if (from) return { job: { action: fetchAction(r), target: from.id, slot: target() }, ...storeSpot(world, from, r, x, true) };

@@ -29,7 +29,7 @@ export type Notify = (text: string) => void;
 export interface Actions {
   toggleConstruction(): void;
   toggleSound(): void;
-  /** The menu at the plot the rider is at: build on an empty plot; upgrade or pull down a building. */
+  /** The menu where the rider is: build there; at a building, upgrade or pull it down. */
   openBuildMenu(): void;
   closeBuildMenu(): void;
   moveSelection(delta: number): void;
@@ -63,7 +63,7 @@ export function createActions(world: World, notify: Notify, isTouch: () => boole
       }
       if (isTouch()) {
         sound.ui('denied');
-        notify('Ride to a pennant to build');
+        notify('Nothing can be done here');
       }
     },
     closeBuildMenu() {

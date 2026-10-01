@@ -59,7 +59,7 @@ export function tearDown(world: World, b: Building, seconds: number): void {
     out[r] = d.left[r] * share;
     d.left[r] -= out[r]!;
   }
-  dropAll(world, world.plots[b.plotIndex].x, out);
+  dropAll(world, b.x, out);
 }
 
 /** A building coming down, as a workplace for the builders taking it apart. */

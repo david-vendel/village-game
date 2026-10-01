@@ -69,8 +69,10 @@ export interface BuildingDef {
   type: BuildingType;
   name: string;
   purpose: string;
-  /** Footprint width in world px (must fit a plot). Rounded up to whole land-grid cells. */
+  /** Footprint width along the street in world px, rounded up to whole land-grid cells (grid.ts). */
   width: number;
+  /** Footprint depth in land-grid cells, back from the verge (default 2). */
+  depth?: number;
   /** Seconds to construct when construction is enabled. */
   buildTime: number;
   /** Materials builders must bring from the warehouse to build it (site.ts). */
@@ -114,8 +116,9 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     type: 'farm',
     name: 'Farm',
     purpose: 'A farmstead with wheat fields. Feeds the village.',
-    // farmhouse, barn and grain store; the fields use free land around it
-    width: 200,
+    // farmhouse, barn and grain store on 4 × 2 cells; the fields use free cells around it
+    width: 100,
+    depth: 2,
     buildTime: 12,
     cost: { wood: 50, stone: 20 },
     storage: { grain: 5 },

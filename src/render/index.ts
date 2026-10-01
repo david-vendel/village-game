@@ -2,7 +2,7 @@
 // frame; everything about how things look — draw order, art, HUD, menus — is
 // decided in src/render. Rendering only reads game state, never changes it.
 
-import { canDemolish, crossroadAt, getBuilding, plotAt, type World } from '../game/world';
+import { buildingAt, canDemolish, crossroadAt, type World } from '../game/world';
 import { drawScene } from './scene';
 import { drawTopView } from './topview';
 import { drawBuildMenu, drawHud, drawToasts, drawTurnFade, type Toast } from './ui';
@@ -69,13 +69,12 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
   ctx.setTransform(v.uiScale, 0, 0, v.uiScale, 0, 0);
   // from above a turn is just a turn: the map doesn't change, so no fade
   if (!v.topView) drawTurnFade(ctx, world, v.uiW, v.uiH);
-  const plot = plotAt(world, world.rider.x);
-  const here = getBuilding(world, plot?.buildingId ?? null);
+  const here = buildingAt(world, world.rider.x);
   drawHud(ctx, world, v.uiW, v.uiH, {
     touch: v.touch,
     leftHeld: v.leftHeld,
     rightHeld: v.rightHeld,
-    canBuild: (!!plot && plot.buildingId === null) || (!!here && canDemolish(here)),
+    canBuild: !here || canDemolish(here),
     canTurn: !world.menu && !!crossroadAt(world),
     topView: v.topView,
   });

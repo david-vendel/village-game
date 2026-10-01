@@ -7,7 +7,7 @@
 // carry them to a warehouse (transport.ts). Everything else about a farmer's
 // day is the generic worker routine.
 import { BUILDINGS } from './buildings';
-import { CELL_W, FIELD_REACH, FIELD_ROWS, HOME, PLOT_CELLS, PLOT_SPACING, SHEAF_SLOTS, STAND_Y, workY, type FieldZone, type Spot } from './layout';
+import { CELL_W, FIELD_ROWS, HOME, SHEAF_SLOTS, STAND_Y, workY, type FieldZone, type Spot } from './layout';
 import { room, type Load, type Stock } from './resources';
 import { currentJob, retarget, type JobTicket, type Worker, type Workplace } from './worker';
 
@@ -56,66 +56,18 @@ export interface FarmWork {
 export const DEFAULT_WORK: FarmWork = { sowPerCell: 2, harvestPerCell: 3 };
 
 /**
- * Cut the free land around a farm into field plots. `isFree(zone, c)` says
- * whether grid cell `c` (relative to the farm centre: it covers dx from
- * c·CELL_W to (c+1)·CELL_W) may be farmed. Each run of free cells is split
- * into plots working outward from the farm; a lone leftover cell joins the
- * plot next to it, and a run too short for a plot stays grass. In front of
- * the road plots never straddle the edge of the farm's own lot, so each is
- * either the farm's own land or borrowed from a neighbouring lot.
+ * Fields for a farm with nothing around it (menu previews): a block of cells
+ * either side of the farmstead behind the road, and a row of them in front.
  */
-export function fieldSpots(isFree: (zone: FieldZone, c: number) => boolean): FieldSpot[] {
-  const lotCells = PLOT_SPACING / 2 / CELL_W;
+export function openFieldSpots(): FieldSpot[] {
   const spots: FieldSpot[] = [];
   for (const zone of ['back', 'front'] as const) {
-    const reach = Math.floor(FIELD_REACH[zone] / CELL_W);
-    for (const side of [-1, 1]) {
-      // cells walking outward from the farm centre on this side
-      const cells = Array.from({ length: reach }, (_, i) => (side > 0 ? i : -1 - i));
-      let run: number[] = [];
-      const flush = () => {
-        const chunks: number[][] = [];
-        for (let i = 0; i < run.length; i += PLOT_CELLS.max) chunks.push(run.slice(i, i + PLOT_CELLS.max));
-        const last = chunks[chunks.length - 1];
-        if (last && last.length < PLOT_CELLS.min) {
-          chunks.pop();
-          if (chunks.length) chunks[chunks.length - 1].push(...last);
-        }
-        for (const ch of chunks) {
-          const lo = Math.min(...ch);
-          const dx = (lo + ch.length / 2) * CELL_W;
-          FIELD_ROWS[zone].forEach((_, row) => spots.push({ zone, row, dx, width: ch.length * CELL_W }));
-        }
-        run = [];
-      };
-      cells.forEach((c, i) => {
-        if (zone === 'front' && i === lotCells) flush(); // leaving the farm's own lot
-        if (isFree(zone, c)) run.push(c);
-        else flush();
-      });
-      flush();
-    }
+    FIELD_ROWS[zone].forEach((_, row) => {
+      const cells = zone === 'back' ? [-5, -4, -3, 2, 3, 4] : [-4, -3, -2, -1, 0, 1, 2, 3];
+      for (const c of cells) spots.push({ zone, row, dx: (c + 0.5) * CELL_W, width: CELL_W });
+    });
   }
   return spots;
-}
-
-/** Cells (relative to the centre) a building of this width covers: [-n, n). */
-export function footprintHalfCells(width: number): number {
-  return Math.ceil(width / 2 / CELL_W);
-}
-
-/**
- * A plot in front of a neighbouring lot: farmed only once the farm's own land
- * is all in use. (Behind the road the fields stop at the next building.)
- */
-export function isBorrowed(s: FieldSpot): boolean {
-  return s.zone === 'front' && Math.abs(s.dx) > PLOT_SPACING / 2;
-}
-
-/** Fields of a farm with nothing built around it. */
-export function openFieldSpots(): FieldSpot[] {
-  const n = footprintHalfCells(BUILDINGS.farm.width);
-  return fieldSpots((zone, c) => zone === 'front' || c < -n || c >= n);
 }
 
 /** Width (px) two plots of the same zone share. */
@@ -230,8 +182,7 @@ export function farmWorkplace(farm: FarmState, stock: Stock, work: FarmWork = DE
         const ripe = pick('ripe');
         if (ripe >= 0) return at(ripe, 'harvest');
       }
-      const own = pick('fallow', (p) => !isBorrowed(p));
-      const fallow = own >= 0 ? own : pick('fallow');
+      const fallow = pick('fallow');
       return fallow >= 0 ? at(fallow, 'sow') : null;
     },
     begin(job) {
@@ -250,7 +201,6 @@ export function farmWorkplace(farm: FarmState, stock: Stock, work: FarmWork = DE
         return null;
       }
       p.state = 'fallow';
-      if (isBorrowed(p)) p.tilled = false; // borrowed land goes back to grass
       return { resource: 'grain', amount: 1 }; // a sheaf
     },
     dropSpot() {
@@ -266,7 +216,7 @@ export function farmWorkplace(farm: FarmState, stock: Stock, work: FarmWork = DE
 export function demoFarm(): FarmState {
   const farm = createFarm();
   for (const p of farm.plots) {
-    p.tilled = !isBorrowed(p);
+    p.tilled = true;
     p.state = 'ripe';
     p.age = GROW_TIME;
   }

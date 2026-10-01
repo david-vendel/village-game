@@ -9,7 +9,7 @@ import {
   moveMenu,
   openMenu,
   placeBuilding,
-  plotAt,
+  buildingAt,
   RIDER_MAX_SPEED,
   setConstructionEnabled,
   update,
@@ -35,19 +35,20 @@ describe('building registry', () => {
 });
 
 describe('placement', () => {
-  it('places a building on an empty plot and marks the plot taken', () => {
+  it('places a building on whole cells where the rider wants it', () => {
     const w = emptyWorld();
-    const b = placeBuilding(w, 0, 'mill', { free: true });
+    const b = placeBuilding(w, w.plots[0].x, 'mill', { free: true });
     expect(b).not.toBeNull();
-    expect(w.plots[0].buildingId).toBe(b!.id);
+    expect(buildingAt(w, w.plots[0].x)).toBe(b);
+    expect(b!.x % 25).toBe(0); // 6 cells wide: its middle on a cell edge
     expect(b!.status).toBe('constructing');
   });
 
-  it('refuses to place on an occupied or missing plot', () => {
+  it('refuses to place over another building or off the streets', () => {
     const w = emptyWorld();
-    placeBuilding(w, 0, 'house', { free: true });
-    expect(placeBuilding(w, 0, 'farm', { free: true })).toBeNull();
-    expect(placeBuilding(w, 9999, 'farm', { free: true })).toBeNull();
+    placeBuilding(w, w.plots[0].x, 'house', { free: true });
+    expect(placeBuilding(w, w.plots[0].x, 'farm', { free: true })).toBeNull();
+    expect(placeBuilding(w, 999999, 'farm', { free: true })).toBeNull();
     expect(w.buildings).toHaveLength(1);
   });
 
@@ -67,7 +68,7 @@ describe('placement', () => {
 describe('build menu', () => {
   it('builds at an empty plot, and offers what can be done to a building', () => {
     const w = emptyWorld();
-    placeBuilding(w, 10, 'warehouse', { instant: true, free: true })!.stock = stockOf({ wood: 300, stone: 300 });
+    placeBuilding(w, w.plots[10].x, 'warehouse', { instant: true, free: true })!.stock = stockOf({ wood: 300, stone: 300 });
     w.rider.x = w.plots[2].x + 10;
     expect(openMenu(w)).toBe(true);
     moveMenu(w, 2);
@@ -78,11 +79,11 @@ describe('build menu', () => {
     expect(w.menu?.kind).toBe('building');
   });
 
-  it('does not open between plots', () => {
+  it('opens anywhere along the street: there are no plots to ride to', () => {
     const w = emptyWorld();
     w.rider.x = (w.plots[0].x + w.plots[1].x) / 2;
-    expect(plotAt(w, w.rider.x)).toBeNull();
-    expect(openMenu(w)).toBe(false);
+    expect(openMenu(w)).toBe(true);
+    expect(w.menu?.kind).toBe('build');
   });
 
   it('selection wraps and is remembered after cancelling', () => {
@@ -109,7 +110,7 @@ describe('build menu', () => {
 describe('construction', () => {
   it('is built by its builders over buildTime of labour, and completes with an event', () => {
     const w = createWorld(); // villagers to hire
-    const b = placeBuilding(w, 7, 'well', { free: true })!; // materials already on site
+    const b = placeBuilding(w, w.plots[7].x, 'well', { free: true })!; // materials already on site
     w.events.length = 0;
     // builders walk over from the street, then two of them share the labour
     const done = () => b.status === 'done';
@@ -121,7 +122,7 @@ describe('construction', () => {
 
   it('nothing gets built without anyone to build it', () => {
     const w = emptyWorld();
-    const b = placeBuilding(w, 0, 'well', { free: true })!;
+    const b = placeBuilding(w, w.plots[0].x, 'well', { free: true })!;
     runFor(w, BUILDINGS.well.buildTime * 2);
     expect(b.progress).toBe(0);
   });
@@ -129,13 +130,13 @@ describe('construction', () => {
   it('with construction disabled buildings appear finished instantly', () => {
     const w = emptyWorld();
     setConstructionEnabled(w, false);
-    const b = placeBuilding(w, 1, 'chapel', { free: true })!;
+    const b = placeBuilding(w, w.plots[1].x, 'chapel', { free: true })!;
     expect(b.status).toBe('done');
   });
 
   it('disabling construction finishes buildings in progress', () => {
     const w = emptyWorld();
-    const b = placeBuilding(w, 1, 'chapel', { free: true })!;
+    const b = placeBuilding(w, w.plots[1].x, 'chapel', { free: true })!;
     runFor(w, 1);
     setConstructionEnabled(w, false);
     expect(b.status).toBe('done');
