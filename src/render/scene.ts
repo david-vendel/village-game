@@ -33,13 +33,8 @@ import { type Ctx, GROUND_Y, ROAD_Y, VIEW_H } from './util';
 const BASE = GROUND_Y + 4;
 
 export function cameraX(world: World, viewW: number): number {
-  // centred on the rider, so turning round doesn't swing the view
-  const target = world.rider.x - viewW / 2;
-  // the camera stays on the rider's street (and on a street shorter than the view, in its middle)
-  const { min, max } = streetRange(world, streetOf(world.rider.x));
-  const lo = min - 60;
-  const hi = max + 60 - viewW;
-  return lo > hi ? (lo + hi) / 2 : Math.max(lo, Math.min(hi, target));
+  // always centred on the rider, out to the very end of a street too (past it the grass runs on)
+  return world.rider.x - viewW / 2;
 }
 
 export interface SceneView {
