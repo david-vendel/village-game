@@ -40,7 +40,7 @@ export interface FrameView {
   /** Show the village from above instead of from the street, at its own zoom. */
   topView: boolean;
   topZoom: number;
-  /** Frames per second and the slowest frame (ms) lately, shown when given (?fps=1). */
+  /** Frames per second and the slowest frame (ms) lately, shown when given (unless ?fps=0). */
   fps?: { fps: number; worstMs: number };
 }
 

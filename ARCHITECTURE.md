@@ -232,7 +232,7 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   (plane.ts), so a building lands where its 2D art would and shows its side as the camera moves;
   the sun follows the game clock and casts shadows, which fade out as it sets. scene.ts
   composites the 3D image at the building pass and places the building's live details at its
-  projected points. `?3d=0` keeps everything 2D; `?fps=1` shows the frame rate.
+  projected points. `?3d=0` keeps everything 2D; the frame rate shows bottom left (`?fps=0` hides it).
 - `sprites.ts`: `drawBuilding`, which everything that draws a finished building calls: the
   building's sprite (shadow, colour, parts, smoke, then its `overlay`) when one is decoded, else
   its procedural `draw`. Stage sprites for construction, roadside views for buildings seen up a

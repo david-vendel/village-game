@@ -43,8 +43,8 @@ async function play(): Promise<void> {
   if (restored) notify('Welcome back to your village');
 
   let camX = cameraX(world, screen.vp.viewW);
-  // ?fps=1: frame rate over the last second, and the slowest frame in it
-  const showFps = new URLSearchParams(location.search).get('fps') === '1';
+  // frame rate over the last second, and the slowest frame in it (shown unless ?fps=0)
+  const showFps = new URLSearchParams(location.search).get('fps') !== '0';
   const frameTimes: number[] = [];
   let fps: { fps: number; worstMs: number } | undefined;
   let last = performance.now();
