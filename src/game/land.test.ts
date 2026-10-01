@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { cellKey, cellName, cellsOf, fieldCell, footprintOf, landUse, rowName, whyNotHere } from './grid';
 import { FIELD_CELLS } from './land';
-import { HOME, VERGE_ROW } from './layout';
+import { LOT_ROW } from './layout';
 import { createWorld, placeBuilding, whyNotBuild, type Building, type World } from './world';
 
 const emptyWorld = () => createWorld({ village: false });
@@ -28,31 +28,30 @@ describe('land grid', () => {
     expect(land.has(cellKey(40, 2))).toBe(false);
   });
 
-  it('a farm takes 4 × 2 cells, one cell back from the road', () => {
+  it('a farm takes 7 × 3 cells, right by the road', () => {
     const w = emptyWorld();
     const farm = placeBuilding(w, 1000, 'farm', { instant: true, free: true })!;
     const cells = cellsOf(w, footprintOf(farm)!);
-    expect(cells).toHaveLength(8);
-    expect(new Set(cells.map((c) => c.r))).toEqual(new Set([3, 4]));
-    expect(new Set(cells.map((c) => c.c)).size).toBe(4);
+    expect(cells).toHaveLength(21);
+    expect(new Set(cells.map((c) => c.r))).toEqual(new Set([2, 3, 4]));
+    expect(new Set(cells.map((c) => c.c)).size).toBe(7);
   });
 
-  it('a building goes anywhere it fits: not on another, not on the rocks, never next to a road', () => {
+  it('a building goes anywhere it fits: not on another, not on a road or the rocks', () => {
     const w = emptyWorld();
     const a = placeBuilding(w, 1000, 'farm', { free: true })!;
     // right beside it is fine, half over it is not
-    expect(whyNotBuild(w, 'farm', a.x + 100)).toBeNull();
-    expect(whyNotBuild(w, 'farm', a.x + 50)).toMatch(/in the way/);
-    // the quarry's land
+    expect(whyNotBuild(w, 'farm', a.x + 175)).toBeNull();
+    expect(whyNotBuild(w, 'farm', a.x + 100)).toMatch(/in the way/);
     expect(whyNotHere(w, 'farm', 1640)).toBeNull(); // the rocks start behind the lots
-    // a crossroads: its road needs a cell clear either side of it
+    // a crossroads: right up to its road, but not on it
     const x = w.plots[8].x;
     placeBuilding(w, x, 'intersection', { instant: true, free: true });
-    expect(whyNotBuild(w, 'farm', x + 50)).not.toBeNull();
-    expect(whyNotBuild(w, 'farm', x + 100)).toBeNull();
+    expect(whyNotBuild(w, 'farm', x + 100)).toMatch(/road/);
+    expect(whyNotBuild(w, 'farm', x + 125)).toBeNull();
   });
 
-  it("a farm's fields are single free cells near it: never on a road or a building, nor in front of its door", () => {
+  it("a farm's fields are single free cells near it, never on a road or a building", () => {
     const w = emptyWorld();
     const farm = placeBuilding(w, 1000, 'farm', { instant: true, free: true })!;
     const keys = fieldKeys(w, farm);
@@ -61,19 +60,16 @@ describe('land grid', () => {
     expect(farm.farm!.plots.every((p) => p.width === 25)).toBe(true);
     const land = landUse(w);
     for (const k of keys) expect(land.get(k)).toEqual({ kind: 'field', buildingId: farm.id });
-    // the verge in front of the farm is sown, but for the cell before its door
+    // right beside the farmstead, by the road
     const f = footprintOf(farm)!;
-    const verge = cellsOf(w, { ...f, j0: VERGE_ROW, j1: VERGE_ROW });
-    const door = cellsOf(w, { ...f, i0: Math.floor((farm.x + HOME.dx) / 25), i1: Math.floor((farm.x + HOME.dx) / 25), j0: VERGE_ROW, j1: VERGE_ROW })[0];
-    const sown = verge.filter((c) => keys.includes(cellKey(c.c, c.r)));
-    expect(sown).toHaveLength(3);
-    expect(keys).not.toContain(cellKey(door.c, door.r));
+    const beside = cellsOf(w, { ...f, i0: f.i1 + 1, i1: f.i1 + 1, j0: LOT_ROW, j1: LOT_ROW })[0];
+    expect(keys).toContain(cellKey(beside.c, beside.r));
   });
 
   it('building next to a farm takes back the cells its fields were on, and the farm sows others', () => {
     const w = emptyWorld();
     const farm = placeBuilding(w, 1000, 'farm', { instant: true, free: true })!;
-    const house = placeBuilding(w, farm.x + 125, 'house', { free: true })!; // still under construction: the land is claimed anyway
+    const house = placeBuilding(w, farm.x + 175, 'house', { free: true })!; // still under construction: the land is claimed anyway
     const keys = fieldKeys(w, farm);
     expect(keys).toHaveLength(FIELD_CELLS.base);
     for (const k of footKeys(w, house)) expect(keys).not.toContain(k);

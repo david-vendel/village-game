@@ -144,7 +144,7 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   and whether a load is taken indoors to be worked on there (`inside`).
 - `farm.ts`: the farm's fields, and the farm as a `Workplace`. Tested by `farm.test.ts`. Each
   field is one land-grid cell (see `land.ts`) in one of the field rows (`FIELD_ROWS` in
-  `layout.ts`): three behind the road (the two lot rows and the verge), two in front of it. A new
+  `layout.ts`): the three lot rows behind the road, two in front of it. A new
   farm is just the farmstead: a field stays grass until the farmer first works it (`tilled`). Each
   field keeps its own state (fallow → growing → ripe) and age (150 s to ripe). Jobs: harvest while
   the farm store has room for the sheaf, else sow, nearest first; each takes `sowPerCell` /
@@ -183,12 +183,11 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   middle lane running down a row or column of cells; buildings take `width` (rounded up to cells)
   × `depth` (default 2) cells; fields one cell each; quarries their rocky land (`landUse`). Seen
   from a street, cells lie in rows j along it (`LOT_ROW` in `layout.ts`): the road is rows -1..1,
-  row 2 the verge, buildings stand from row 3 back. A building goes anywhere along a street where
-  it fits (`whyNotHere`): on free cells, one cell from its road and from any other road. Only
-  crossroads keep to the 250 px plots, so streets still meet at a plot of each.
+  buildings stand right by it, from row 2 back. A building goes anywhere along a street where it
+  fits on free cells (`whyNotHere`). Only crossroads keep to the 250 px plots, so streets still
+  meet at a plot of each.
 - `land.ts`: the farms' fields on the grid. A farm works the free cells nearest to it, up to
-  `FIELD_REACH` cells to either side and `FIELD_CELLS` in all (more once upgraded); its own verge is
-  sown except the cell before its door, other buildings' verges are left free. Building over a
+  `FIELD_REACH` cells to either side and `FIELD_CELLS` in all (more once upgraded). Building over a
   field, or a new road, re-lays the fields (`syncFarmFields`): fields keep their crops where their
   cells are still theirs, and the farm takes the next nearest free cells instead.
 - `layout.ts`: the shared world geometry (see above), including the grid constants.

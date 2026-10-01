@@ -14,11 +14,10 @@
 // row j, j cells behind the middle of the road (layout.ts LOT_ROW).
 //
 // A building may stand anywhere along a street where it fits (whyNotHere):
-// on free land, from the row behind the verge back, so one cell from the
-// road, and no nearer than that to any other road either.
+// on free land, right by the road.
 
 import { BUILDINGS, type BuildingType } from './buildings';
-import { CELL_W, FIELD_ROW_J, LOT_ROW, QUARRIES, quarryLand, VERGE_ROW } from './layout';
+import { CELL_W, FIELD_ROW_J, LOT_ROW, QUARRIES, quarryLand } from './layout';
 import { backOf, streetOf, streetRange, streetStart, type Street, type Vec } from './streets';
 import type { Building, World } from './world';
 
@@ -81,14 +80,14 @@ export interface Footprint {
 
 /**
  * The cells a building of this type standing at world x takes. A crossroads
- * takes the verge and lots its road will run through, three cells wide,
- * until it is built (then they are road).
+ * takes the lots its road will run through, three cells wide, until it is
+ * built (then they are road).
  */
 export function footprintAt(type: BuildingType, x: number): Footprint {
   const street = streetOf(x);
   if (type === 'intersection') {
     const i = alongCell(x);
-    return { street, i0: i - 1, i1: i + 1, j0: VERGE_ROW, j1: LOT_ROW + 1 };
+    return { street, i0: i - 1, i1: i + 1, j0: LOT_ROW, j1: LOT_ROW + 2 };
   }
   const { w, d } = sizeOf(type);
   const i0 = Math.round((x - streetStart(street)) / CELL_W - w / 2);
@@ -198,11 +197,9 @@ export function landUse(world: World): Land {
 
 /**
  * Why a building of this type can't stand at world x (where siteX puts it),
- * or null if it fits: the street must run past all of it, its cells must be
- * free (fields give way), and no road may run within a cell of it (its own
- * street's road is beyond the verge). A crossroads stands across its road's
- * way instead, and only the land it takes must be clear, with a cell to spare
- * from buildings on either side.
+ * or null if it fits: the street must run past all of it, and its cells must
+ * be free (fields give way). A crossroads takes the land its road will run
+ * through.
  */
 export function whyNotHere(world: World, type: BuildingType, x: number): string | null {
   const s = world.streets[streetOf(x)];
@@ -225,31 +222,22 @@ export function whyNotHere(world: World, type: BuildingType, x: number): string 
       if (use?.kind === 'building') return `The ${nameOf(use.buildingId)} is in the way`;
     }
   }
-  for (let i = f.i0 - 1; i <= f.i1 + 1; i++) {
-    for (let j = f.j0 - 1; j <= f.j1 + 1; j++) {
-      const use = at(i, j);
-      if (type === 'intersection') {
-        if (use?.kind === 'building') return `Too close to the ${nameOf(use.buildingId)}`;
-      } else if (use?.kind === 'road') return 'Too close to a road';
-    }
-  }
   return null;
 }
 
 /**
  * Whether street s's road, from t0 to t1 along it (px from its start), would
- * run over the rocks, or over or right beside a building (a crossroads aside:
- * roads run through those).
+ * run over the rocks or a building (a crossroads aside: roads run through those).
  */
 export function roadBlocked(world: World, s: Street, t0: number, t1: number): boolean {
   const land = baseLand(world);
   const i0 = Math.floor(Math.min(t0, t1) / CELL_W + 1e-6);
   const i1 = Math.ceil(Math.max(t0, t1) / CELL_W - 1e-6) - 1;
   for (let i = i0; i <= i1; i++) {
-    for (let j = -2; j <= 2; j++) {
+    for (let j = -1; j <= 1; j++) {
       const cell = streetCell(s, i, j);
       const use = land.get(cellKey(cell.c, cell.r));
-      if (use?.kind === 'quarry' && Math.abs(j) <= 1) return true;
+      if (use?.kind === 'quarry') return true;
       if (use?.kind === 'building' && world.buildings.find((b) => b.id === use.buildingId)?.type !== 'intersection') return true;
     }
   }

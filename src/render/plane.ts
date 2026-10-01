@@ -12,7 +12,7 @@
 // scaled by distance.
 
 import { BUILDINGS } from '../game/buildings';
-import { BASE_Y, EYE_DIST, FIELD_ROWS, QUARRIES, quarryLand, ROAD_FAR_Y, ROAD_NEAR_Y, ROAD_Y, TREE_Y } from '../game/layout';
+import { BASE_Y, EYE_DIST, FIELD_ROWS, QUARRIES, quarryLand, ROAD_FAR_Y, ROAD_NEAR_Y, STREET_LINE_Y, TREE_Y } from '../game/layout';
 import { employees } from '../game/people';
 import { laidOut, onSite, upgrading } from '../game/site';
 import { backOf, crossings, groundPoint, mapPoint, SIDE_ROAD_HALF, streetOf, streetRange, type Street, type Vec } from '../game/streets';
@@ -31,7 +31,7 @@ import { type Ctx, mix } from './util';
 const SPAN = GROUND_REF_Y - HORIZON_Y;
 /** Distance from the camera of ground at depth y of the street being looked at. */
 export const distAt = (y: number) => (EYE_DIST * SPAN) / (y - HORIZON_Y);
-const ROAD_DIST = distAt(ROAD_Y);
+const ROAD_DIST = distAt(STREET_LINE_Y);
 /** Nothing nearer the camera than this is drawn (it is below the bottom of the screen anyway). */
 const NEAR = 150;
 /** Things this far off are too small to make out. */

@@ -100,7 +100,7 @@ export function mapPoint(world: World, x: number): Vec {
 
 /**
  * Map point of world (x, y): along the road of x's street, and y's depth
- * across it (behind the road for y above ROAD_Y, in front of it below).
+ * across it (behind the middle of the road for y above STREET_LINE_Y, in front of it below).
  */
 export function groundPoint(world: World, x: number, y: number): Vec {
   const s = world.streets[streetOf(x)] ?? world.streets[0];

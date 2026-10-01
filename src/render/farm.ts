@@ -176,8 +176,8 @@ export function drawStore(ctx: Ctx, a: Anchor, sheaves: number): void {
   const cx = a.x + STORE.dx;
   const y = toScreenY(a, STORE.y) + 1;
   // wooden pallet the sheaves stand on
-  poly(ctx, [cx - 16, y, cx + 16, y, cx + 19, y - 3, cx - 13, y - 3], '#6b4f35');
-  line(ctx, cx - 16, y, cx + 16, y, '#4d3826', 1.5);
+  poly(ctx, [cx - 24, y, cx + 24, y, cx + 28, y - 4, cx - 20, y - 4], '#6b4f35');
+  line(ctx, cx - 24, y, cx + 24, y, '#4d3826', 1.5);
   // each sheaf in its own place (game/layout.ts), where the farmer put it down
   for (let i = 0; i < Math.min(sheaves, SHEAF_SLOTS.length); i++) sheaf(ctx, a.x + SHEAF_SLOTS[i].dx, y - 3 - SHEAF_SLOTS[i].lift);
 }

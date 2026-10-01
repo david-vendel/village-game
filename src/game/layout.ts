@@ -32,10 +32,18 @@ export const HORIZON_Y = 200;
 export const EYE_DIST = 400;
 /** Distance from the camera of ground at depth y. */
 const eyeDist = (y: number) => (EYE_DIST * (BASE_Y - HORIZON_Y)) / (y - HORIZON_Y);
+/**
+ * Distance from the camera of the middle of the road: its far edge (half its
+ * three lanes of 25 px behind the middle, see ROAD_HALF) is just in front of
+ * the buildings, which stand right by the road.
+ */
+const LINE_DIST = eyeDist(GROUND_Y + 6) - 1.5 * 25;
 /** How far behind the middle of the road (map px) ground at depth y lies (negative: in front of it). */
-export const behindRoad = (y: number) => eyeDist(y) - eyeDist(ROAD_Y);
+export const behindRoad = (y: number) => eyeDist(y) - LINE_DIST;
 /** The depth y of ground lying d map px behind the middle of the road (the inverse of behindRoad). */
-export const yAt = (d: number) => HORIZON_Y + (EYE_DIST * (BASE_Y - HORIZON_Y)) / (d + eyeDist(ROAD_Y));
+export const yAt = (d: number) => HORIZON_Y + (EYE_DIST * (BASE_Y - HORIZON_Y)) / (d + LINE_DIST);
+/** Depth (world y) of the middle of the road: the street's line on the map. */
+export const STREET_LINE_Y = yAt(0);
 /**
  * Half the width of a street's whole band across the ground (map px): its
  * road, the lots and fields along it. Streets on the grid lie two bands apart.
@@ -46,9 +54,8 @@ export const STREET_BAND_HALF = 125;
 // All the land is cut into square cells CELL_W across (game/grid.ts), the same
 // grid everywhere on the plane. Seen from a street, cells lie in rows along it:
 // row j is j cells behind the middle of the road (negative: in front of it).
-// The road takes rows -1, 0 and 1, its three lanes. Row 2 is the verge: no
-// building stands there, so a building is always one cell back from the road.
-// Buildings stand from row LOT_ROW back, as many rows deep as they are.
+// The road takes rows -1, 0 and 1, its three lanes. Buildings stand right by
+// it, from row LOT_ROW back, as many rows deep as they are.
 
 export const CELL_W = 25;
 /** World x of the left edge of cell 0 along a street (streets start on cell edges). */
@@ -59,9 +66,8 @@ export const ROAD_HALF = 1.5 * CELL_W;
 export const ROAD_FAR_Y = yAt(ROAD_HALF);
 export const ROAD_NEAR_Y = yAt(-ROAD_HALF);
 export const LANE_YS = [yAt(CELL_W / 2), yAt(-CELL_W / 2)];
-/** The verge between the road and the buildings, and the first row buildings stand in. */
-export const VERGE_ROW = 2;
-export const LOT_ROW = 3;
+/** The first row buildings stand in: the one next to the road. */
+export const LOT_ROW = 2;
 /** Map px behind the middle of the road where row j's near and far edges lie. */
 export const rowNear = (j: number) => (j - 0.5) * CELL_W;
 export const rowFar = (j: number) => (j + 0.5) * CELL_W;
@@ -74,10 +80,10 @@ export type FieldZone = 'back' | 'front';
 
 /**
  * The rows of cells a farm's fields can lie in, far to near: behind the road
- * the two rows beside the buildings and the verge; in front of it the two
+ * the three rows of the lots, beside the buildings; in front of it the two
  * rows next to the road. Each field is one cell.
  */
-export const FIELD_ROW_J: Record<FieldZone, number[]> = { back: [LOT_ROW + 1, LOT_ROW, VERGE_ROW], front: [-2, -3] };
+export const FIELD_ROW_J: Record<FieldZone, number[]> = { back: [LOT_ROW + 2, LOT_ROW + 1, LOT_ROW], front: [-2, -3] };
 
 /** Row j of cells as a band of world y (depth): far edge and near edge. */
 const rowBand = (j: number) => ({ far: yAt(rowFar(j)), near: yAt(rowNear(j)) });
@@ -100,12 +106,10 @@ export function workY(zone: FieldZone, row: number): number {
   const r = FIELD_ROWS[zone][row];
   return (r.far + r.near) / 2;
 }
-/** The farmstead is drawn at this scale, to stand on its four cells (render/buildings.ts). */
-export const FARM_ART = 0.55;
 /** The farmyard: the farmer's home spot, by the farmhouse door. */
-export const HOME = { dx: -19 * FARM_ART, y: BASE_Y + 3 };
+export const HOME = { dx: -19, y: BASE_Y + 3 };
 /** The grain store, beside the farmhouse at the left end of the farmstead. */
-export const STORE = { dx: -40, y: BASE_Y + 3 };
+export const STORE = { dx: -70, y: BASE_Y + 3 };
 
 // --- Where things lie ----------------------------------------------------------------
 // Every stored thing has its own place on the ground: each sheaf in a farm's
@@ -141,11 +145,11 @@ export const pileItems = (amount: number) => Math.ceil(amount / PILE_UNIT - 1e-9
 
 /** Where each sheaf stands in the farm's grain store, in the order they are stacked. */
 export const SHEAF_SLOTS: readonly Slot[] = [
-  { dx: STORE.dx - 9, lift: 0 },
+  { dx: STORE.dx - 15, lift: 0 },
   { dx: STORE.dx, lift: 0 },
-  { dx: STORE.dx + 9, lift: 0 },
-  { dx: STORE.dx - 4.5, lift: 13 },
-  { dx: STORE.dx + 4.5, lift: 13 },
+  { dx: STORE.dx + 15, lift: 0 },
+  { dx: STORE.dx - 7.5, lift: 13 },
+  { dx: STORE.dx + 7.5, lift: 13 },
 ];
 
 /** Row sizes of a pile stacked in a pyramid (bottom row first). */

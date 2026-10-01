@@ -116,9 +116,9 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     type: 'farm',
     name: 'Farm',
     purpose: 'A farmstead with wheat fields. Feeds the village.',
-    // farmhouse, barn and grain store on 4 × 2 cells; the fields use free cells around it
-    width: 100,
-    depth: 2,
+    // farmhouse, barn and grain store on 7 × 3 cells; the fields use free cells around it
+    width: 175,
+    depth: 3,
     buildTime: 12,
     cost: { wood: 50, stone: 20 },
     storage: { grain: 5 },

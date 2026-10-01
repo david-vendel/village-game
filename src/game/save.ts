@@ -469,11 +469,11 @@ function build(saved: SavedWorld): World {
     if (!street || street.gone) throw new SaveError(`building ${b.id}: no street at ${b.x}`);
     if (ids.has(b.id)) throw new SaveError(`duplicate building id ${b.id}`);
     ids.add(b.id);
+    // two buildings in one place is a broken save (one that grew since it was saved may lean on a neighbour)
     const f = footprintOf(b);
-    for (const { c, r } of f ? cellsOf(world, f) : []) {
-      if (taken.has(cellKey(c, r))) throw new SaveError(`building ${b.id}: stands on another building at ${cellName(c, r)}`);
-      taken.add(cellKey(c, r));
-    }
+    const mid = f && cellsOf(world, { ...f, i0: Math.floor((f.i0 + f.i1) / 2), i1: Math.floor((f.i0 + f.i1) / 2), j1: f.j0 })[0];
+    if (mid && taken.has(cellKey(mid.c, mid.r))) throw new SaveError(`building ${b.id}: stands where another does, at ${cellName(mid.c, mid.r)}`);
+    if (mid) taken.add(cellKey(mid.c, mid.r));
     if (b.type !== 'intersection') continue;
     const plot = plotOf(b);
     if (!plot) throw new SaveError(`crossroads ${b.id}: no plot at ${b.x}`);

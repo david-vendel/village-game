@@ -4,7 +4,7 @@
 
 import type { BuildingType } from '../game/buildings';
 import type { FarmState } from '../game/farm';
-import { BAKERY_OVEN_MOUTH_DX, BAKERY_SLOTS, BASKET, FARM_ART, MILL_SLOTS, PILE_UNIT, SACK, pileItems, STONECUTTER_DOOR, STONECUTTER_SLOTS, TAVERN_SLOTS, warehouseSlot, WOODCUTTER_DOOR, WOODCUTTER_SLOTS, YARD_ITEMS, type Slot } from '../game/layout';
+import { BAKERY_OVEN_MOUTH_DX, BAKERY_SLOTS, BASKET, MILL_SLOTS, PILE_UNIT, SACK, pileItems, STONECUTTER_DOOR, STONECUTTER_SLOTS, TAVERN_SLOTS, warehouseSlot, WOODCUTTER_DOOR, WOODCUTTER_SLOTS, YARD_ITEMS, type Slot } from '../game/layout';
 import type { Amounts, Stock } from '../game/resources';
 import type { Worker } from '../game/worker';
 import { breadBasket, doorProgress, drawBackFences, drawBackField, drawFrontField, drawStore, stook } from './farm';
@@ -378,27 +378,11 @@ function drawFarmFrontField(ctx: Ctx, a: DrawArgs): void {
   drawFrontField(ctx, a, a.farm, a.seed);
 }
 
-/** Farmhouse points, from the anchor: its door (bottom centre), and where each room's sleeper snores (drawn at FARM_ART). */
-const FARM_POINTS: Record<string, [number, number]> = Object.fromEntries(
-  Object.entries({ door: [-19, 0], 'sleep:0': [-34, -70], 'sleep:1': [10, -70] }).map(([k, [x, y]]) => [k, [x * FARM_ART, y * FARM_ART]]),
-);
-
-/** Draw at the farmstead's scale (FARM_ART), about its anchor, so it stands on its four cells. */
-function farmScaled(ctx: Ctx, a: DrawArgs, draw: () => void): void {
-  ctx.save();
-  ctx.translate(a.x, a.base);
-  ctx.scale(FARM_ART, FARM_ART);
-  ctx.translate(-a.x, -a.base);
-  draw();
-  ctx.restore();
-}
+/** Farmhouse points, from the anchor: its door (bottom centre), and where each room's sleeper snores. */
+const FARM_POINTS: Record<string, [number, number]> = { door: [-19, 0], 'sleep:0': [-34, -70], 'sleep:1': [10, -70] };
 
 /** Small cottage with a lean-to barn: the static picture. */
 function farmBody(ctx: Ctx, a: DrawArgs): void {
-  farmScaled(ctx, a, () => farmHouse(ctx, a));
-}
-
-function farmHouse(ctx: Ctx, a: DrawArgs): void {
   const w = 80;
   const d = 40;
   const x0 = a.x - 58;
@@ -423,10 +407,8 @@ function farmHouse(ctx: Ctx, a: DrawArgs): void {
 /** The farmhouse's lit windows, as the body draws them. */
 function farmLights(ctx: Ctx, a: DrawArgs): void {
   const x0 = a.x - 58;
-  farmScaled(ctx, a, () => {
-    rect(ctx, x0 + 8, a.base - 40, 13, 13, '#f3b75a');
-    if (a.upgraded) rect(ctx, x0 + 59, a.base - 40, 13, 13, '#f3b75a');
-  });
+  rect(ctx, x0 + 8, a.base - 40, 13, 13, '#f3b75a');
+  if (a.upgraded) rect(ctx, x0 + 59, a.base - 40, 13, 13, '#f3b75a');
 }
 
 /** The farm's live details: the door open while someone steps through, fences, the grain store, sleepers. */
@@ -434,9 +416,8 @@ function farmOverlay(ctx: Ctx, a: DrawArgs, s: Surface): void {
   const doorOpen = (a.workers ?? []).some((w) => doorProgress(w) > 0 && doorProgress(w) < 1);
   const d = s.at('door');
   if (doorOpen && !s.part('doorOpen') && d) {
-    const k = FARM_ART;
-    door(ctx, d[0] - 9 * k, d[1], 18 * k, 34 * k, '#1c140d');
-    rect(ctx, d[0] - 13 * k, d[1] - 30 * k, 4 * k, 30 * k, '#6b4a2c'); // the door leaf, swung open
+    door(ctx, d[0] - 9, d[1], 18, 34, '#1c140d');
+    rect(ctx, d[0] - 13, d[1] - 30, 4, 30, '#6b4a2c'); // the door leaf, swung open
   }
   // low fences in front of the side plots
   drawBackFences(ctx, a, a.farm);
@@ -1137,7 +1118,7 @@ function drawCrossroads(ctx: Ctx, a: DrawArgs): void {
 export const BUILDING_ART: Record<BuildingType, BuildingArt> = {
   warehouse: { height: 100, draw: drawWarehouse },
   house: { height: 140, draw: drawHouse },
-  farm: { height: 70, behind: drawFarmField, draw: drawFarm, front: drawFarmFrontField, body: farmBody, overlay: farmOverlay, points: FARM_POINTS, lights: farmLights },
+  farm: { height: 120, behind: drawFarmField, draw: drawFarm, front: drawFarmFrontField, body: farmBody, overlay: farmOverlay, points: FARM_POINTS, lights: farmLights },
   mill: { height: 250, draw: drawMill },
   bakery: { height: 120, draw: drawBakery },
   blacksmith: { height: 150, draw: drawBlacksmith },
