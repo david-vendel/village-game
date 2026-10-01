@@ -151,7 +151,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     const a = args(b);
     if (has3d(b.type) && !b.demolition && !upgrading(b)) {
       const stage = b.status === 'done' ? undefined : constructionStage(b.progress).stage;
-      const m: Building3d = { id: b.id, type: b.type, x: world.plots[b.plotIndex].x, upgraded: !!b.upgraded, stage: stage === 'done' ? undefined : stage, parts: BUILDING_ART[b.type].stateParts?.(a) ?? [] };
+      const m: Building3d = { id: b.id, type: b.type, seed: a.seed, x: world.plots[b.plotIndex].x, upgraded: !!b.upgraded, stage: stage === 'done' ? undefined : stage, parts: BUILDING_ART[b.type].stateParts?.(a) ?? [] };
       in3d.push({ b, a, m });
       continue;
     }

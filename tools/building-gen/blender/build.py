@@ -81,9 +81,9 @@ def _outward(mesh: bpy.types.Mesh) -> bpy.types.Mesh:
 def _roof_mesh(p: dict) -> bpy.types.Mesh:
     """The thatch shell: a thick gable roof profile run along x, cut in segments so it can sag and bulge."""
     t = p["thickness"]
-    pitch = math.radians(p["pitch_deg"])
+    pitch = math.radians(p["pitchDeg"])
     drop = t / math.cos(pitch)
-    yf, yb, ez, ry, rz = p["y_front"], p["y_back"], p["eave_z"], p["ridge_y"], p["ridge_z"]
+    yf, yb, ez, ry, rz = p["yFront"], p["yBack"], p["eaveZ"], p["ridgeY"], p["ridgeZ"]
     # outer surface front eave → ridge → back eave, then the underside back; dense, so the
     # lumps can work on it and the ridge keeps its line (a slight rounding over the top)
     steps = 14
@@ -118,7 +118,7 @@ def _roof_mesh(p: dict) -> bpy.types.Mesh:
 def _gable_mesh(p: dict) -> bpy.types.Mesh:
     """The gable triangle of boards above the tie beam."""
     x, t = p["x"], p["thickness"]
-    y0, y1, z0, zr = p["y0"], p["y1"], p["z0"], p["z_ridge"]
+    y0, y1, z0, zr = p["y0"], p["y1"], p["z0"], p["zRidge"]
     ym = (y0 + y1) / 2
     tri = [(y0 + 0.3, z0), (y1 - 0.3, z0), (ym, zr)]
     verts = [(x - t / 2, y, z) for y, z in tri] + [(x + t / 2, y, z) for y, z in tri]
@@ -166,7 +166,7 @@ def element_object(e: Element) -> bpy.types.Object:
     rot = e.rot
     loc = Vector(e.at)
     if e.shape == "stone":
-        mesh = _stone_mesh(e.size, e.params["seed"])
+        mesh = _stone_mesh(e.size, e.seed)
     elif e.shape == "roof":
         mesh, loc, rot = _roof_mesh(e.params), Vector((0, 0, 0)), (0, 0, 0)
     elif e.shape == "gable":
@@ -183,7 +183,7 @@ def element_object(e: Element) -> bpy.types.Object:
     obj.location = loc
     obj.rotation_euler = rot
     if e.shape == "roof":
-        _lumpy(obj, e.params["seed"])
+        _lumpy(obj, e.seed)
     return obj
 
 

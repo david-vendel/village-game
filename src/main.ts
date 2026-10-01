@@ -11,14 +11,14 @@ import { installTuning } from './app/tuning';
 import { installWorkersPanel } from './app/workers';
 import { update } from './game/world';
 import { sizePanelButtons } from './app/panel';
-import { type ArtMode, cameraX, HUD_BUTTON, load3d, loadArt, renderFrame, showArtPreview, type Toast } from './render';
+import { type ArtMode, cameraX, HUD_BUTTON, loadArt, renderFrame, set3d, showArtPreview, type Toast } from './render';
 
 // ?art=procedural ignores sprite assets; ?art=preview shows the asset contact sheet instead of the game
 const artParam = new URLSearchParams(location.search).get('art');
 const art: ArtMode = artParam === 'procedural' || artParam === 'preview' ? artParam : 'auto';
 await loadArt({ mode: art, approvedOnly: import.meta.env.PROD });
 // buildings with a 3D model are drawn in real-time 3D (?3d=0 keeps them 2D)
-if (art === 'auto' && new URLSearchParams(location.search).get('3d') !== '0') await load3d();
+set3d(art === 'auto' && new URLSearchParams(location.search).get('3d') !== '0');
 if (art === 'preview') showArtPreview();
 else await play();
 
@@ -43,9 +43,19 @@ async function play(): Promise<void> {
   if (restored) notify('Welcome back to your village');
 
   let camX = cameraX(world, screen.vp.viewW);
+  // ?fps=1: frame rate over the last second, and the slowest frame in it
+  const showFps = new URLSearchParams(location.search).get('fps') === '1';
+  const frameTimes: number[] = [];
+  let fps: { fps: number; worstMs: number } | undefined;
   let last = performance.now();
 
   function frame(now: number): void {
+    if (showFps) {
+      frameTimes.push(now - last);
+      let sum = frameTimes.reduce((s, t) => s + t, 0);
+      while (sum > 1000 && frameTimes.length > 1) sum -= frameTimes.shift()!;
+      fps = { fps: (frameTimes.length * 1000) / sum, worstMs: Math.max(...frameTimes) };
+    }
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
 
@@ -64,7 +74,7 @@ async function play(): Promise<void> {
     sizePanelButtons((HUD_BUTTON * vp.uiScale) / screen.dpr);
 
     const held = controls.touchHeld();
-    renderFrame(ctx, world, { ...vp, camX, touch: screen.touch, leftHeld: held.left, rightHeld: held.right, toasts, showGrid: display.grid, topView: controls.topView(), topZoom: controls.topZoom() });
+    renderFrame(ctx, world, { ...vp, camX, touch: screen.touch, leftHeld: held.left, rightHeld: held.right, toasts, showGrid: display.grid, topView: controls.topView(), topZoom: controls.topZoom(), fps });
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);

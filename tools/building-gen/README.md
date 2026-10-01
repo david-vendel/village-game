@@ -6,12 +6,14 @@ and Blender renders them through the [render harness](../art-pipeline/README.md)
 
 ```sh
 npm run art:render -- tools/building-gen/scenes/farm.py tools/building-gen/scenes/farm.job.json
-npm run art:test      # core rules (plain Python) and the harness maths
+npm test              # the rules (tests/build3d-*.test.ts)
+npm run art:test      # the harness maths (plain Python)
 ```
 
 | Layer | What |
 | --- | --- |
-| `core/` (pure Python, tested) | `elements.py`: an `Element` is one piece (kind, shape, size and place, material, construction stage, order, what it rests on, tags for looks/scaffolding/parts). `farm.py`: the farm's rules, giving both looks merged. |
+| **The rules** | Live in the game: `src/render/build3d/` (`elements.ts`, `farm.ts`, tested in `tests/build3d-*.test.ts`). The game builds buildings from them in real-time 3D; `elements.ts` here prints them as JSON for Blender. |
+| `core/elements.py` | Loads that JSON into `Element`s for the Blender layer (runs Node). |
 | `blender/` (needs bpy) | `build.py`: elements → meshes (bevelled timber and boards shared by size, rough fieldstones, the thatch shell, gable boards, the lean-to roof), sorted into the harness's collections, points as empties. `materials.py`: procedural materials (no image textures), varied per element. |
 | `scenes/` | Builders for the harness (`build()`) and their render jobs. |
 
@@ -34,6 +36,6 @@ The **Large farm** adds a bay right of the hall with a second room and window; t
 gives up that bay, so the footprint stays 10 m. Elements both looks share are identical, so the
 upgrade reveal doesn't jump.
 
-Tests (`tests/test_farm.py`) check the footprint and the game's spots, posts on sills carrying the
+Tests (`tests/build3d-farm.test.ts`) check the footprint and the game's spots, posts on sills carrying the
 plates, braces at brace angles, the pitch and rafter pairs, the thatch lying on the battens, that
 nothing is built before what it rests on, and the looks and the open-door part.

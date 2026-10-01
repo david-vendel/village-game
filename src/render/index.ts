@@ -8,7 +8,7 @@ import { drawTopView } from './topview';
 import { drawBuildMenu, drawHud, drawToasts, drawTurnFade, type Toast } from './ui';
 
 export { artMode, loadArt, type ArtMode } from './assets';
-export { load3d } from './world3d';
+export { set3d } from './world3d';
 export { showArtPreview } from './preview';
 export { cameraX } from './scene';
 export { STRIDE as HORSE_STRIDE } from './horse';
@@ -40,6 +40,8 @@ export interface FrameView {
   /** Show the village from above instead of from the street, at its own zoom. */
   topView: boolean;
   topZoom: number;
+  /** Frames per second and the slowest frame (ms) lately, shown when given (?fps=1). */
+  fps?: { fps: number; worstMs: number };
 }
 
 export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: FrameView): void {
@@ -82,4 +84,18 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
   });
   drawToasts(ctx, v.toasts, world.time, v.uiW);
   drawBuildMenu(ctx, world, v.uiW, v.uiH);
+  if (v.fps) drawFps(ctx, v.fps, v.uiH);
+}
+
+/** The frame-rate readout, bottom left. */
+function drawFps(ctx: CanvasRenderingContext2D, f: { fps: number; worstMs: number }, uiH: number): void {
+  ctx.save();
+  ctx.font = 'bold 14px ui-monospace, monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = 'rgba(0,0,0,0.55)';
+  ctx.fillRect(8, uiH - 30, 230, 22);
+  ctx.fillStyle = f.fps >= 55 ? '#9be37a' : f.fps >= 30 ? '#f3d36b' : '#f07a6b';
+  ctx.fillText(`${f.fps.toFixed(0)} fps · worst ${f.worstMs.toFixed(0)} ms`, 14, uiH - 14);
+  ctx.restore();
 }

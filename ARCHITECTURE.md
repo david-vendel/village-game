@@ -223,6 +223,16 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   `behind`/`front` art, and the drawn `height`. Art split for sprites also has `body` (the static
   picture a sprite replaces), `overlay` (live details: open door, stock, sleepers, drawn over the
   body or its sprite at named points), `points` and `lights` (for the exported emissive layer).
+- `world3d.ts` and `build3d/`: buildings in real-time 3D (three.js), generated in the game, no
+  model files. `build3d/elements.ts` is the piece model (a construction element: kind, shape,
+  size and place, material, stage, what it rests on, tags for looks/scaffolding/parts),
+  `build3d/farm.ts` the farm's architecture rules (seeded: no two farms alike; tested in
+  `tests/build3d-farm.test.ts`), `build3d/geometry.ts` turns a look's pieces into one mesh per
+  material. `world3d.ts` draws this street's 3D buildings through the game's own pinhole camera
+  (plane.ts), so a building lands where its 2D art would and shows its side as the camera moves;
+  the sun follows the game clock and casts shadows, which fade out as it sets. scene.ts
+  composites the 3D image at the building pass and places the building's live details at its
+  projected points. `?3d=0` keeps everything 2D; `?fps=1` shows the frame rate.
 - `sprites.ts`: `drawBuilding`, which everything that draws a finished building calls: the
   building's sprite (shadow, colour, parts, smoke, then its `overlay`) when one is decoded, else
   its procedural `draw`. Stage sprites for construction, roadside views for buildings seen up a

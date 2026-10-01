@@ -6,18 +6,20 @@
 // side shows. The sun follows the game's clock, so shading and cast shadows
 // move through the day.
 //
-// Models are glTF files exported from the building generator
-// (tools/art-pipeline/export_gltf.py): every mesh carries its tags (stage:,
-// scaffold, variant:, novariant:, part:) and a random number. The 3D image of
-// this street's buildings is rendered offscreen and composited into the 2D
-// frame at the building pass (scene.ts), so 2D people still pass in front of
-// and behind it.
+// The buildings are generated here, piece by piece (build3d/): no model files.
+// Each building's seed varies its stones and boards, and each look (finished,
+// Large, a construction stage, its door open) is merged into one mesh per
+// material, so a farm draws in about ten calls. The 3D image of this street's
+// buildings is rendered offscreen and composited into the 2D frame at the
+// building pass (scene.ts), so 2D people still pass in front of and behind it.
 
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import type { BuildingType } from '../game/buildings';
 import { BASE_Y, EYE_DIST, HORIZON_Y } from '../game/layout';
 import type { ConstructionStage } from '../game/world';
+import type { Element, Vec3 } from './build3d/elements';
+import { farm, farmPoints } from './build3d/farm';
+import { type Look as MeshLook, mergedByMaterial } from './build3d/geometry';
 import type { Ctx } from './util';
 
 /** Units per metre (ASSET_SPEC §1): models are in metres, the game in world units. */
@@ -25,35 +27,20 @@ const U = 20;
 /** The camera's height above the ground: the span from the horizon to the building line, seen EYE_DIST away. */
 const EYE_H = BASE_Y - HORIZON_Y;
 
-const MODELS: Partial<Record<BuildingType, string>> = { farm: 'models/building.farm.glb' };
+/** What can be built in 3D: its pieces for a seed, and its named points (model space, metres). */
+const GENERATORS: Partial<Record<BuildingType, { elements: (seed: number) => Element[]; points: Record<string, Vec3> }>> = {
+  farm: { elements: farm, points: farmPoints() },
+};
 
-interface Model {
-  scene: THREE.Group;
-  /** Named points (point:door …) in model space, metres. */
-  points: Record<string, THREE.Vector3>;
-}
-
-const models = new Map<BuildingType, Model>();
 let enabled = false;
 
-export async function load3d(root = ''): Promise<void> {
-  const loader = new GLTFLoader();
-  const loaded = await Promise.all(
-    Object.entries(MODELS).map(async ([type, path]) => {
-      try {
-        const gltf = await loader.loadAsync(root + path);
-        return [type as BuildingType, prepare(gltf.scene)] as const;
-      } catch {
-        return null;
-      }
-    }),
-  );
-  for (const m of loaded) if (m) models.set(m[0], m[1]);
-  enabled = models.size > 0;
+/** Draw buildings that have a generator in 3D (true) or keep everything 2D (false). */
+export function set3d(on: boolean): void {
+  enabled = on;
 }
 
 export function has3d(type: BuildingType): boolean {
-  return enabled && models.has(type);
+  return enabled && !!GENERATORS[type];
 }
 
 // --- materials ---------------------------------------------------------------------
@@ -86,14 +73,14 @@ const LOOKS: Record<string, Look> = {
 /** Night windows: shared so the frame can turn them up at dusk. */
 const lit: THREE.MeshStandardMaterial[] = [];
 
-function material(name: string, rand: number): THREE.MeshStandardMaterial {
-  const look = LOOKS[name.replace(/\.\d+$/, '')] ?? LOOKS.planks;
-  const k = 0.88 + 0.24 * rand; // each piece a little lighter or darker
-  const m = new THREE.MeshStandardMaterial({
-    color: new THREE.Color(look.color[0] * k, look.color[1] * k * (0.98 + 0.04 * rand), look.color[2] * k),
-    roughness: look.rough,
-    metalness: 0,
-  });
+const materials = new Map<string, THREE.MeshStandardMaterial>();
+
+/** The material of that name, shared by every building: base colour × each piece's vertex colour, with surface noise. */
+function material(name: string): THREE.MeshStandardMaterial {
+  const known = materials.get(name);
+  if (known) return known;
+  const look = LOOKS[name] ?? LOOKS.planks;
+  const m = new THREE.MeshStandardMaterial({ color: new THREE.Color(...look.color), roughness: look.rough, metalness: 0, vertexColors: true });
   if (look.emissive) {
     m.emissive = new THREE.Color(...look.emissive);
     m.emissiveIntensity = 0;
@@ -105,7 +92,6 @@ function material(name: string, rand: number): THREE.MeshStandardMaterial {
     m.onBeforeCompile = (shader) => {
       shader.uniforms.uNoiseScale = { value: scale };
       shader.uniforms.uNoiseAmp = { value: look.amp };
-      shader.uniforms.uSeed = { value: rand * 100 };
       shader.vertexShader = shader.vertexShader
         .replace('#include <common>', '#include <common>\nvarying vec3 vModelPos;')
         .replace('#include <begin_vertex>', '#include <begin_vertex>\nvModelPos = position;');
@@ -114,7 +100,7 @@ function material(name: string, rand: number): THREE.MeshStandardMaterial {
           '#include <common>',
           `#include <common>
 varying vec3 vModelPos;
-uniform vec3 uNoiseScale; uniform float uNoiseAmp; uniform float uSeed;
+uniform vec3 uNoiseScale; uniform float uNoiseAmp;
 float h3(vec3 p) { return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453); }
 float vnoise(vec3 p) {
   vec3 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
@@ -125,33 +111,15 @@ float vnoise(vec3 p) {
         .replace(
           '#include <color_fragment>',
           `#include <color_fragment>
-vec3 q = vModelPos * uNoiseScale + uSeed;
+vec3 q = vModelPos * uNoiseScale;
 float n = 0.6 * vnoise(q) + 0.3 * vnoise(q * 2.7) + 0.1 * vnoise(q * 7.1);
 diffuseColor.rgb *= 1.0 - uNoiseAmp * (n - 0.35);`,
         );
     };
     m.customProgramCacheKey = () => `vn-${look.noise.join(',')}`;
   }
+  materials.set(name, m);
   return m;
-}
-
-/** Give a loaded model the game's materials, shadows and tags. */
-function prepare(scene: THREE.Group): Model {
-  const points: Record<string, THREE.Vector3> = {};
-  scene.updateMatrixWorld(true);
-  scene.traverse((o) => {
-    // named points (the exporter puts the name in the extras: three.js strips ':' from node names)
-    const point = (o.userData as { point?: string }).point;
-    if (point) points[point] = o.getWorldPosition(new THREE.Vector3());
-    if (!(o instanceof THREE.Mesh)) return;
-    const extras = o.userData as { tags?: string; rand?: number };
-    const name = Array.isArray(o.material) ? o.material[0].name : o.material.name;
-    o.material = material(name, extras.rand ?? 0.5);
-    o.castShadow = true;
-    o.receiveShadow = true;
-    o.userData.tagList = (extras.tags ?? '').split(',').filter(Boolean);
-  });
-  return { scene, points };
 }
 
 // --- what a building shows ------------------------------------------------------------
@@ -159,6 +127,8 @@ function prepare(scene: THREE.Group): Model {
 export interface Building3d {
   id: number;
   type: BuildingType;
+  /** Varies its stones, boards and colours. */
+  seed: number;
   /** World x of its plot centre. */
   x: number;
   upgraded: boolean;
@@ -166,23 +136,6 @@ export interface Building3d {
   stage?: Exclude<ConstructionStage, 'done'>;
   /** State parts to show (doorOpen while someone steps through the door). */
   parts: string[];
-}
-
-const STAGES = ['staking', 'foundation', 'frame', 'walls', 'roof'];
-
-/** The harness's visibility rule (tools/art-pipeline/harness/blender_render.py `visible`). */
-function visible(tags: string[], b: Building3d): boolean {
-  const variant = b.stage ? 'default' : b.upgraded ? 'upgraded' : 'default';
-  let stage: string | undefined;
-  for (const t of tags) {
-    const [k, v] = t.split(':');
-    if (k === 'variant' && v !== variant) return false;
-    if (k === 'novariant' && v === variant) return false;
-    if (k === 'part') return b.parts.includes(v);
-    if (k === 'stage') stage = v;
-  }
-  if (b.stage) return stage === undefined || STAGES.indexOf(stage) <= STAGES.indexOf(b.stage);
-  return !tags.includes('scaffold');
 }
 
 // --- the renderer -------------------------------------------------------------------------
@@ -193,7 +146,6 @@ let camera: THREE.PerspectiveCamera;
 let sun: THREE.DirectionalLight;
 let sky: THREE.HemisphereLight;
 let groundShadow: THREE.ShadowMaterial;
-const instances = new Map<number, THREE.Group>();
 
 function setup(): void {
   const canvas = document.createElement('canvas');
@@ -228,14 +180,33 @@ function setup(): void {
   scene.add(ground);
 }
 
-function instance(b: Building3d): THREE.Group {
-  let g = instances.get(b.id);
+interface Built {
+  seed: number;
+  elements: Element[];
+  looks: Map<string, THREE.Group>;
+}
+const built = new Map<number, Built>();
+
+/** The building's group for its current look, built (and merged) the first time it is needed. */
+function lookOf(b: Building3d): THREE.Group {
+  let bt = built.get(b.id);
+  if (!bt || bt.seed !== b.seed) {
+    bt = { seed: b.seed, elements: GENERATORS[b.type]!.elements(b.seed), looks: new Map() };
+    built.set(b.id, bt);
+  }
+  const look: MeshLook = { variant: b.upgraded ? 'upgraded' : 'default', stage: b.stage, parts: b.parts };
+  const key = `${look.variant}|${look.stage ?? ''}|${[...look.parts].sort().join()}`;
+  let g = bt.looks.get(key);
   if (!g) {
-    const model = models.get(b.type)!;
-    g = model.scene.clone(true);
-    // metres → world units; the model's front (+Z after glTF) faces the camera
-    g.scale.setScalar(U);
-    instances.set(b.id, g);
+    g = new THREE.Group();
+    for (const [name, geo] of mergedByMaterial(bt.elements, look)) {
+      const mesh = new THREE.Mesh(geo, material(name));
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      g.add(mesh);
+    }
+    g.scale.setScalar(U); // metres -> world units
+    bt.looks.set(key, g);
   }
   return g;
 }
@@ -321,20 +292,18 @@ export function draw3d(ctx: Ctx, buildings: Building3d[], v: View3d): Map<number
 
   const shown = new Set<THREE.Object3D>();
   for (const b of buildings) {
-    const g = instance(b);
+    const g = lookOf(b);
     g.position.set(b.x, 0, 0);
-    g.traverse((o) => {
-      if (o instanceof THREE.Mesh) o.visible = visible(o.userData.tagList as string[], b);
-    });
-    if (!g.parent) scene.add(g);
+    if (g.parent !== scene) scene.add(g);
     shown.add(g);
-    const model = models.get(b.type)!;
+    const points = GENERATORS[b.type]!.points;
     out.set(b.id, (name) => {
-      const p = model.points[name];
-      return p ? project(new THREE.Vector3(b.x + p.x * U, p.y * U, p.z * U), v) : null;
+      const p = points[name];
+      // model space (x, y back, z up), metres -> world (x, y up, z towards the camera)
+      return p ? project(new THREE.Vector3(b.x + p[0] * U, p[2] * U, -p[1] * U), v) : null;
     });
   }
-  for (const g of instances.values()) if (!shown.has(g)) g.removeFromParent();
+  for (const c of [...scene.children]) if (c instanceof THREE.Group && !shown.has(c)) c.removeFromParent();
 
   r.render(scene, camera);
   ctx.drawImage(r.domElement, 0, v.top, v.viewW, v.bottom - v.top);
