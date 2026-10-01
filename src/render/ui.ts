@@ -11,7 +11,7 @@ import { clock } from '../game/daynight';
 import { buildShortfall, upgradeShortfall, villageStock } from '../game/economy';
 import { demolitionWork } from '../game/demolition';
 import { materialsAllow, siteWork, upgrading } from '../game/site';
-import { sizeOf } from '../game/grid';
+import { sizeOf, sizeOfBuilding } from '../game/grid';
 import { WOOD_REACH } from '../game/nature';
 import { employees, jobsOf } from '../game/people';
 import { RESOURCES, type Amounts } from '../game/resources';
@@ -474,11 +474,14 @@ function drawBuildingMenu(ctx: Ctx, world: World, uiW: number, uiH: number): voi
     if (option === 'upgrade' && Object.keys(upgradeShortfall(world, b)).length) ctx.globalAlpha = 0.4;
     if (option !== 'upgrade' && whyNotDemolish(world, b)) ctx.globalAlpha = 0.4;
     const previewH = r.h - 34;
-    const scale = Math.min(0.6, (r.w - 8) / (def.width * 1.3), previewH / (BUILDING_ART[b.type].height + 20));
+    // this very building, as it stands: its width (a merged one), look, store and fields
+    const width = sizeOfBuilding(b).w * 25;
+    const like = { seed: b.id * 97, width, upgraded: !!b.upgraded, stock: b.stock, farm: b.farm };
+    const scale = Math.min(0.6, (r.w - 8) / (width * 1.3), previewH / (BUILDING_ART[b.type].height + 20));
     if (option !== 'upgrade') {
       // the building, faded, with a red cross over it (a small one, for a section)
       ctx.globalAlpha = 0.45;
-      drawBuildingIcon(ctx, b.type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time);
+      drawBuildingIcon(ctx, b.type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time, like);
       ctx.globalAlpha = 1;
       const k = option === 'demolishSection' ? 0.55 : 1;
       const cx = r.x + r.w / 2;
@@ -497,7 +500,7 @@ function drawBuildingMenu(ctx: Ctx, world: World, uiW: number, uiH: number): voi
       ctx.lineTo(cx - 18, cy + 18);
       ctx.stroke();
       ctx.restore();
-    } else drawBuildingIcon(ctx, b.type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time);
+    } else drawBuildingIcon(ctx, b.type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time, like);
     ctx.restore();
     const label = `${i + 1}. ${OPTION_NAME[option]}`;
     text(ctx, label, r.x + r.w / 2, r.y + r.h - 8, fitSize(ctx, label, 12, r.w - 6, sel), sel ? GOLD : '#f3ead8', 'center', sel);
@@ -571,10 +574,9 @@ export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number):
     ctx.clip();
     // what doesn't fit here is greyed out; what the village can't afford is shown faded
     const fits = !whyNotBuild(world, type, menuX);
-    if (!fits) {
-      ctx.filter = 'grayscale(1)';
-      ctx.globalAlpha = 0.3;
-    } else if (Object.keys(buildShortfall(world, type)).length) ctx.globalAlpha = 0.4;
+    // (no canvas filter: drawing every card through one each frame is far too slow)
+    if (!fits) ctx.globalAlpha = 0.2;
+    else if (Object.keys(buildShortfall(world, type)).length) ctx.globalAlpha = 0.4;
     const previewH = r.h - 34;
     const scale = Math.min(0.6, (r.w - 8) / (def.width * 1.3), previewH / (BUILDING_ART[type].height + 20));
     drawBuildingIcon(ctx, type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time);

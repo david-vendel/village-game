@@ -86,12 +86,13 @@ const DEMO_FARM = demoFarm();
 const DEMO_STOCK = stockOf({ grain: 3, wood: 60, stone: 50, flour: 20, bread: 25 });
 
 /** Small icon-sized preview for the build menu (draws the real art, or its sprite, scaled; no night glow). */
-export function drawBuildingIcon(ctx: Ctx, type: BuildingType, x: number, base: number, scale: number, time: number): void {
+export function drawBuildingIcon(ctx: Ctx, type: BuildingType, x: number, base: number, scale: number, time: number, like: Partial<DrawArgs> = {}): void {
   ctx.save();
   ctx.translate(x, base);
   ctx.scale(scale, scale);
   const art = BUILDING_ART[type];
-  const args: DrawArgs = { x: 0, base: 0, time, seed: 7, farm: type === 'farm' ? DEMO_FARM : undefined, stock: DEMO_STOCK };
+  // `like`: a particular building as it stands (its look, width, store), else a showpiece
+  const args: DrawArgs = { seed: 7, farm: type === 'farm' ? DEMO_FARM : undefined, stock: DEMO_STOCK, ...like, x: 0, base: 0, time };
   if (art.behind) art.behind(ctx, args);
   withoutEmissive(() => drawBuilding(ctx, type, args));
   ctx.restore();
