@@ -97,3 +97,41 @@ export function drawBuildingIcon(ctx: Ctx, type: BuildingType, x: number, base: 
   withoutEmissive(() => drawBuilding(ctx, type, args));
   ctx.restore();
 }
+
+/** Greyed-out building pictures, drawn once each (per type, size and resolution) and kept. */
+const greyIcons = new Map<string, HTMLCanvasElement>();
+
+/**
+ * A building's menu picture without colour and faded: one that can't be
+ * built here. Drawn once into an image and turned grey there (the art sets
+ * its own transparency as it draws, so fading it in place doesn't hold, and
+ * a canvas filter every frame is far too slow).
+ */
+export function drawBuildingIconGrey(ctx: Ctx, type: BuildingType, x: number, base: number, scale: number, alpha = 0.35): void {
+  const f = Math.max(1, Math.abs(ctx.getTransform().a));
+  const k = scale * f;
+  const key = `${type}:${k.toFixed(3)}`;
+  const W = Math.ceil(320 * k);
+  const H = Math.ceil((BUILDING_ART[type].height + 70) * k);
+  const foot = Math.ceil(30 * k);
+  let img = greyIcons.get(key);
+  if (!img) {
+    img = document.createElement('canvas');
+    img.width = W;
+    img.height = H;
+    const g = img.getContext('2d')!;
+    drawBuildingIcon(g, type, W / 2, H - foot, k, 0);
+    const data = g.getImageData(0, 0, W, H);
+    const p = data.data;
+    for (let i = 0; i < p.length; i += 4) {
+      const l = 0.3 * p[i] + 0.59 * p[i + 1] + 0.11 * p[i + 2];
+      p[i] = p[i + 1] = p[i + 2] = l;
+    }
+    g.putImageData(data, 0, 0);
+    greyIcons.set(key, img);
+  }
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.drawImage(img, x - W / 2 / f, base - (H - foot) / f, W / f, H / f);
+  ctx.restore();
+}

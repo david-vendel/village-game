@@ -18,7 +18,7 @@ import { RESOURCES, type Amounts } from '../game/resources';
 import { backOf, mapPoint, streetOf, streetRange } from '../game/streets';
 import { constructionStage, demolitionYield, getBuilding, streetFrom, whyNotBuild, whyNotDemolish, type Building, type BuildingOption, type ConstructionStage, type World } from '../game/world';
 import { BUILDING_ART } from './buildings';
-import { drawBuildingIcon } from './sprites';
+import { drawBuildingIcon, drawBuildingIconGrey } from './sprites';
 import type { Ctx } from './util';
 
 const SERIF = 'Georgia, "Times New Roman", serif';
@@ -575,12 +575,11 @@ export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number):
     ctx.clip();
     // what doesn't fit here is greyed out; what the village can't afford is shown faded
     const fits = menu.fits[i];
-    // (no canvas filter: drawing every card through one each frame is far too slow)
-    if (!fits) ctx.globalAlpha = 0.2;
-    else if (Object.keys(buildShortfall(world, type)).length) ctx.globalAlpha = 0.4;
+    if (fits && Object.keys(buildShortfall(world, type)).length) ctx.globalAlpha = 0.4;
     const previewH = r.h - 34;
     const scale = Math.min(0.6, (r.w - 8) / (def.width * 1.3), previewH / (BUILDING_ART[type].height + 20));
-    drawBuildingIcon(ctx, type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time);
+    if (fits) drawBuildingIcon(ctx, type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time);
+    else drawBuildingIconGrey(ctx, type, r.x + r.w / 2, r.y + r.h - 30, scale);
     ctx.restore();
     const label = `${i + 1}. ${def.name}`;
     text(ctx, label, r.x + r.w / 2, r.y + r.h - 8, fitSize(ctx, label, 12, r.w - 6, sel), !fits ? '#8a8378' : sel ? GOLD : '#f3ead8', 'center', sel);
