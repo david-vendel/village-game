@@ -12,10 +12,10 @@
 // scaled by distance.
 
 import { BUILDINGS } from '../game/buildings';
-import { BASE_Y, FIELD_ROWS, GROUND_Y, QUARRIES, QUARRY_Y, ROAD_Y, TREE_Y } from '../game/layout';
+import { BASE_Y, EYE_DIST, FIELD_ROWS, GROUND_Y, QUARRIES, quarryLand, ROAD_Y, TREE_Y } from '../game/layout';
 import { employees } from '../game/people';
 import { laidOut, onSite, upgrading } from '../game/site';
-import { backOf, crossings, mapPoint, SIDE_ROAD_HALF, streetOf, streetRange, type Street, type Vec } from '../game/streets';
+import { backOf, crossings, groundPoint, mapPoint, SIDE_ROAD_HALF, streetOf, streetRange, type Street, type Vec } from '../game/streets';
 import { getBuilding, type Building, type World } from '../game/world';
 import { BUILDING_ART, type DrawArgs } from './buildings';
 import { drawConstruction, drawUpgrade } from './construction';
@@ -26,14 +26,10 @@ import { drawQuarry, drawTreeAt } from './nature';
 import { drawVillager, walker } from './people';
 import { type Ctx, mix } from './util';
 
-/** Distance (map px) from the camera to the building line of the street being looked at: there things are drawn true size. */
-export const EYE_DIST = 400;
 const SPAN = GROUND_REF_Y - HORIZON_Y;
 /** Distance from the camera of ground at depth y of the street being looked at. */
 const distAt = (y: number) => (EYE_DIST * SPAN) / (y - HORIZON_Y);
 const ROAD_DIST = distAt(ROAD_Y);
-/** How far behind the middle of its road something at depth y (world y) lies, on the map. */
-const behindRoad = (y: number) => distAt(y) - ROAD_DIST;
 /** Nothing nearer the camera than this is drawn (it is below the bottom of the screen anyway). */
 const NEAR = 150;
 /** Things this far off are too small to make out. */
@@ -59,14 +55,7 @@ export function eyeOf(world: World, camX: number, viewW: number): Eye {
   return { street: s.index, at: mapPoint(world, x), dir: s.dir, back: backOf(s.dir), vpX: viewW / 2, viewW };
 }
 
-/** Map point of world (x, y): along street x's road, and y's depth across it. */
-function ground(world: World, x: number, y: number): Vec {
-  const s = world.streets[streetOf(x)] ?? world.streets[0];
-  const p = mapPoint(world, x);
-  const b = backOf(s.dir);
-  const d = behindRoad(y);
-  return { x: p.x + b.x * d, y: p.y + b.y * d };
-}
+const ground = groundPoint;
 
 /** Sideways (u) and away (z) from the camera. */
 function toEye(eye: Eye, p: Vec): { u: number; z: number } {
@@ -116,6 +105,11 @@ export function drawOtherGround(ctx: Ctx, world: World, eye: Eye): void {
   };
   const far = (pts: Vec[]) => Math.max(...pts.map((p) => toEye(eye, p).z));
   const shapes: Array<{ pts: Vec[]; fill: string }> = others(world, eye).map((s) => ({ pts: road(s), fill: '#a8875b' }));
+  // the quarries' rocky land
+  for (const q of QUARRIES) {
+    const r = quarryLand(q);
+    shapes.push({ pts: [{ x: r.x0, y: r.y0 }, { x: r.x1, y: r.y0 }, { x: r.x1, y: r.y1 }, { x: r.x0, y: r.y1 }], fill: '#9d9585' });
+  }
   for (const b of world.buildings) {
     const x = world.plots[b.plotIndex].x;
     if (!b.farm || streetOf(x) === eye.street) continue;
@@ -210,7 +204,13 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
     if (!elsewhere(t.x)) continue;
     add(ground(world, t.x, TREE_Y), 60, () => drawTreeAt(ctx, world, t, 0, 0, 1));
   }
-  if (eye.street !== 0) QUARRIES.forEach((q, i) => add(ground(world, q.x, QUARRY_Y), 320, () => drawQuarry(ctx, 0, 0, 1, i)));
+  // a quarry's crag rises over the middle of its land, seen from the other streets
+  if (eye.street !== 0) {
+    QUARRIES.forEach((q, i) => {
+      const r = quarryLand(q);
+      add({ x: q.x, y: (r.y0 + r.y1) / 2 }, 320, () => drawQuarry(ctx, 0, 0, 1, i));
+    });
+  }
   // people at work, and those strolling, wherever they are
   for (const p of world.people) {
     const b = p.job && getBuilding(world, p.job.buildingId);

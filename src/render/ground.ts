@@ -12,10 +12,10 @@
 //
 // Everything drawn on the land must go through groundX so it lines up exactly.
 
-import { BASE_Y } from '../game/layout';
+import { BASE_Y, HORIZON_Y } from '../game/layout';
 
-/** World y of the horizon, where lines on the ground meet: the far edge of the village's plane. */
-export const HORIZON_Y = 200;
+/** World y of the horizon, where lines on the ground meet: the far edge of the village's plane (game/layout.ts). */
+export { HORIZON_Y };
 /** Depth drawn at true width. */
 export const GROUND_REF_Y = BASE_Y;
 

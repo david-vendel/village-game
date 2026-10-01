@@ -20,9 +20,9 @@
 
 import { BUILDINGS } from './buildings';
 import { putAway, storeSpot } from './economy';
-import { CHOP_SPOT, PILE_UNIT, QUARRIES, QUARRY_SPOTS, QUARRY_W, QUARRY_Y, STONECUTTER_DOOR, STREET_LENGTH, WOODCUTTER_DOOR } from './layout';
+import { CHOP_SPOT, PILE_UNIT, QUARRIES, TREE_Y, QUARRY_SPOTS, QUARRY_W, QUARRY_Y, STONECUTTER_DOOR, STREET_LENGTH, WOODCUTTER_DOOR } from './layout';
 import { room, type Load } from './resources';
-import { crossings, STREET_BAND_HALF, streetDist, streetRange } from './streets';
+import { crossings, groundPoint, onQuarryLand, STREET_BAND_HALF, streetDist, streetRange } from './streets';
 import type { JobTicket, Workplace } from './worker';
 import type { Building, World } from './world';
 
@@ -68,8 +68,12 @@ export function treeGrowth(t: Tree): number {
 /** Trees keep this far (px) from the middle of a street crossing theirs: clear of its road, fields and woods. */
 const ROAD_CLEAR = STREET_BAND_HALF;
 
-/** Whether world x is where a road runs off at a crossroads (built or being built), so no tree stands there. */
+/**
+ * Whether no tree can stand at world x on its street's tree line: where another
+ * street crosses (or a crossroads is being built), or on a quarry's land.
+ */
 export function onRoad(world: World, x: number): boolean {
+  if (onQuarryLand(groundPoint(world, x, TREE_Y), 16)) return true;
   const near = (at: number) => Math.abs(at - x) < ROAD_CLEAR;
   return crossings(world).some((c) => near(c.x)) || world.buildings.some((b) => b.type === 'intersection' && near(world.plots[b.plotIndex].x));
 }

@@ -27,7 +27,7 @@
 // the buildings stand, lie to its left (`backOf`), and a new street runs off
 // into what lay behind the old one.
 
-import { FIRST_PLOT_X, PLOT_SPACING, STREET_LENGTH } from './layout';
+import { behindRoad, FIRST_PLOT_X, PLOT_SPACING, QUARRIES, quarryLand, STREET_LENGTH } from './layout';
 import type { World } from './world';
 
 /** Distance in x between the starts of neighbouring streets (more than a street's length). */
@@ -98,6 +98,26 @@ function onMap(s: Street, x: number): Vec {
 /** Where world x lies on the village map. */
 export function mapPoint(world: World, x: number): Vec {
   return onMap(world.streets[streetOf(x)] ?? world.streets[0], x);
+}
+
+/**
+ * Map point of world (x, y): along the road of x's street, and y's depth
+ * across it (behind the road for y above ROAD_Y, in front of it below).
+ */
+export function groundPoint(world: World, x: number, y: number): Vec {
+  const s = world.streets[streetOf(x)] ?? world.streets[0];
+  const p = onMap(s, x);
+  const b = backOf(s.dir);
+  const d = behindRoad(y);
+  return { x: p.x + b.x * d, y: p.y + b.y * d };
+}
+
+/** Whether map point p is on a quarry's land, or within `margin` of it. */
+export function onQuarryLand(p: Vec, margin = 0): boolean {
+  return QUARRIES.some((q) => {
+    const r = quarryLand(q);
+    return p.x > r.x0 - margin && p.x < r.x1 + margin && p.y > r.y0 - margin && p.y < r.y1 + margin;
+  });
 }
 
 /** Map point of plot k of street s. */

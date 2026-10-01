@@ -4,6 +4,7 @@
 
 import { canUpgrade, crossroadAt, getBuilding, plotAt, type World } from '../game/world';
 import { drawScene } from './scene';
+import { drawTopView } from './topview';
 import { drawBuildMenu, drawHud, drawToasts, drawTurnFade, type Toast } from './ui';
 
 export { cameraX } from './scene';
@@ -33,6 +34,9 @@ export interface FrameView {
   toasts: Toast[];
   /** Overlay the land grid. */
   showGrid: boolean;
+  /** Show the village from above instead of from the street; `zoom` scales it. */
+  topView: boolean;
+  zoom: number;
 }
 
 export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: FrameView): void {
@@ -40,6 +44,10 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
   // start transparent: the sky is composited behind the land (see sky.ts)
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+  if (v.topView) {
+    ctx.setTransform(v.uiScale, 0, 0, v.uiScale, 0, 0);
+    drawTopView(ctx, world, v.uiW, v.uiH, v.zoom);
+  } else {
   ctx.setTransform(v.worldScale, 0, 0, v.worldScale, 0, v.offsetY);
   drawScene(ctx, world, {
     camX: v.camX,
@@ -52,6 +60,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
     turnLabel: v.touch ? 'Tap ▲ or ▼ to turn onto the crossing street' : 'Press W / ↑ or S / ↓ to turn onto the crossing street',
     showGrid: v.showGrid,
   });
+  }
 
   // screen UI, unaffected by zoom
   ctx.setTransform(v.uiScale, 0, 0, v.uiScale, 0, 0);
@@ -64,6 +73,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
     rightHeld: v.rightHeld,
     canBuild: (!!plot && plot.buildingId === null) || (!!here && canUpgrade(here)),
     canTurn: !world.menu && !!crossroadAt(world),
+    topView: v.topView,
   });
   drawToasts(ctx, v.toasts, world.time, v.uiW);
   drawBuildMenu(ctx, world, v.uiW, v.uiH);

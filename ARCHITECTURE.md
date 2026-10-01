@@ -177,6 +177,9 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   farms' fields (`syncFarmFields`): a plot the new building trims keeps its crop on the land
   that is left; only plots whose land is taken entirely are lost.
 - `layout.ts`: the shared world geometry (see above), including the grid constants.
+  World y is a real depth on the ground (`behindRoad`: the camera's perspective, `HORIZON_Y`,
+  `EYE_DIST`), so the village is a plane; a quarry takes real land behind the main street
+  (`quarryLand`), which streets stop short of and no tree or field grows on.
 - `save.ts`: save games, tested by `save.test.ts`. `saveWorld` snapshots the simulation state
   (time, buildings with their stores and farms, people with their jobs and working day, animals,
   the stockpile, rider, RNG, id counter) as versioned JSON-safe data; `loadWorld` validates
@@ -212,6 +215,10 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   timber frame → walls → roof. The finished art is revealed bottom-up behind scaffolding.
 - `grid.ts`: the land-grid debug overlay (tuning panel → "land grid", or `?grid=1`): cells tinted
   by use (building footprint red, field green), plot boundaries dashed.
+- `topview.ts`: the village from above (Tab, or the small map's spot on screen): the plane north up
+  around the rider, with streets, fields, the quarries' rocky land, roofs on their lots (sites as
+  frames filling in, the mill's sails turning), trees, and people (stepping, carrying their loads),
+  chickens and the rider moving about. Zoom works as in the street view.
 - `ground.ts`: the ground perspective (the camera's, with the horizon on screen at `HORIZON_Y`;
   plane.ts uses the same projection for the rest of the village). Anything lying or standing on the land (fields, the land
   grid, ruts and stones in the road, the grass edge, foreground grass, the farmer, villagers and

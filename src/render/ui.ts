@@ -193,6 +193,8 @@ export interface HudState {
   canBuild: boolean;
   /** Rider stands at a crossroads. */
   canTurn: boolean;
+  /** The village is shown from above: no small map. */
+  topView: boolean;
 }
 
 export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: HudState): void {
@@ -200,7 +202,7 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
   text(ctx, 'Village Crown', 16, 34, 24, GOLD, 'left', true);
   const lines = st.touch
     ? ['Hold the arrows to ride, hammer to build or upgrade', 'Pinch or tap - + to zoom']
-    : ['A D / ← → ride   S / ↓ / Space build/upgrade   W / S turn at a crossroads   C construction   M sound', 'In the menu: WASD choose, Space build, Esc / Q close   - + zoom'];
+    : ['A D / ← → ride   S / ↓ / Space build/upgrade   W / S turn at a crossroads   Tab view from above   C construction   M sound', 'In the menu: WASD choose, Space build, Esc / Q close   - + zoom'];
   const maxW = L.map.x - 28;
   let y = 54;
   for (const s of lines) {
@@ -215,7 +217,13 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
   const stockLine = `Stored: ${amounts(villageStock(world))}   People ${world.people.length} (${working} at work)`;
   text(ctx, stockLine, 16, y + 18, fitSize(ctx, stockLine, 12, maxW), '#e8d9a8');
 
-  drawMiniMap(ctx, world, L.map);
+  if (!st.topView) drawMiniMap(ctx, world, L.map);
+  else {
+    // where the small map was: the way back to the street
+    const r = { ...L.map, h: 34 };
+    panel(ctx, r.x, r.y, r.w, r.h, 0.75);
+    text(ctx, 'Back to the street', r.x + r.w / 2, r.y + 22, fitSize(ctx, 'Back to the street', 13, r.w - 12, true), GOLD, 'center', true);
+  }
   button(ctx, L.zoomOut, false);
   plusMinusIcon(ctx, L.zoomOut, false);
   button(ctx, L.zoomIn, false);

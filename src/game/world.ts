@@ -21,7 +21,7 @@ import { clearRoad, createForest, onRoad, gatherWorkplace, isGatherHut, updateFo
 import { employees, laneY, nameFor, openings, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
 import { builderPositions, builders, createSite, siteWork, siteWorkplace, upgrading, type Site } from './site';
 import { RESOURCES, stockOf, type Stock } from './resources';
-import { CROSS_PLOT, mainStreet, newStreet, plotPoint, plotX, PLOTS_PER_STREET, route, streetOf, streetRange, streetsAt, turnFacing, type Junction, type Street } from './streets';
+import { CROSS_PLOT, mainStreet, newStreet, onQuarryLand, STREET_BAND_HALF, plotPoint, plotX, PLOTS_PER_STREET, route, streetOf, streetRange, streetsAt, turnFacing, type Junction, type Street } from './streets';
 import { eatAtTaverns } from './tavern';
 import { serfPositions, transportHub, transportWorkplace } from './transport';
 import { createWorker, currentJob, offDuty, updateWorker, type Nav, type Worker, type Workplace } from './worker';
@@ -396,7 +396,8 @@ export function layStreet(world: World, b: Building): Street {
   for (const step of [-1, 1]) {
     for (let k = CROSS_PLOT + step; k >= 0 && k < PLOTS_PER_STREET; k += step) {
       const meet = streetsAt(world, street.dir, plotPoint(street, k));
-      if (meet.along) break;
+      // it stops short of the rocks, and of a street along the same line
+      if (meet.along || onQuarryLand(plotPoint(street, k), STREET_BAND_HALF)) break;
       if (meet.crossing) {
         const plot = plotOf(world, meet.crossing.street, meet.crossing.k);
         const there = getBuilding(world, plot.buildingId);

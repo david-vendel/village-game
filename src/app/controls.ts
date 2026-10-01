@@ -13,9 +13,11 @@ export interface Controls {
   move(): MoveInput;
   /** Which on-screen ride buttons are held (for pressed styling). */
   touchHeld(): { left: boolean; right: boolean };
+  /** Whether the village is shown from above (Tab, or a tap on the small map). */
+  topView(): boolean;
 }
 
-const GAME_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'Enter', 'Escape', 'w', 'a', 's', 'd']);
+const GAME_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'Enter', 'Escape', 'Tab', 'w', 'a', 's', 'd']);
 const ZOOM_STEP = 1.2;
 
 type Role = 'left' | 'right' | 'pinch' | 'none';
@@ -25,6 +27,7 @@ export function installControls(world: World, screen: Screen, actions: Actions):
   const keys = new Set<string>();
   const pointers = new Map<number, { role: Role; x: number; y: number }>();
   let pinch: { dist: number; zoom: number } | null = null;
+  let topView = false;
 
   // --- Keyboard -----------------------------------------------------------------
 
@@ -38,6 +41,10 @@ export function installControls(world: World, screen: Screen, actions: Actions):
     keys.add(key);
     if (e.repeat) return;
 
+    if (key === 'Tab') {
+      topView = !topView;
+      return;
+    }
     if (key === 'c') return actions.toggleConstruction();
     if (key === 'm') return actions.toggleSound();
     if (key === '-' || key === '_') return screen.zoomBy(1 / ZOOM_STEP);
@@ -118,6 +125,7 @@ export function installControls(world: World, screen: Screen, actions: Actions):
       const L = hudLayout(uiW, uiH);
       const dir = screen.touch ? dirAt(ux, uy) : null;
       if (hit(L.zoomOut, ux, uy)) screen.zoomBy(1 / ZOOM_STEP);
+      else if (hit(L.map, ux, uy)) topView = !topView;
       else if (hit(L.zoomIn, ux, uy)) screen.zoomBy(ZOOM_STEP);
       else if (dir) role = dir;
       else if (screen.touch && actions.atCrossroads() && hit(L.turnUp, ux, uy)) actions.turn('up');
@@ -169,5 +177,6 @@ export function installControls(world: World, screen: Screen, actions: Actions):
       right: keys.has('ArrowRight') || keys.has('d') || held('right'),
     }),
     touchHeld: () => ({ left: held('left'), right: held('right') }),
+    topView: () => topView,
   };
 }

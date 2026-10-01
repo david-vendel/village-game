@@ -20,6 +20,20 @@ export const ROAD_Y = 474;
 /** Bottom edge of the road; the land in front of it runs to VIEW_H. */
 export const ROAD_BOTTOM = 500;
 
+// --- Depth on the ground ---------------------------------------------------------
+// World y says how far across the street something is, the way the street is
+// seen: from a camera EYE_DIST in front of the building line, with the horizon
+// at HORIZON_Y (render/ground.ts, render/plane.ts). So it stands for a real
+// distance on the ground, the village being a plane (game/streets.ts).
+
+/** Where the horizon is (world y), and how far the camera stands from the building line (map px). */
+export const HORIZON_Y = 200;
+export const EYE_DIST = 400;
+/** Distance from the camera of ground at depth y. */
+const eyeDist = (y: number) => (EYE_DIST * (BASE_Y - HORIZON_Y)) / (y - HORIZON_Y);
+/** How far behind the middle of the road (map px) ground at depth y lies (negative: in front of it). */
+export const behindRoad = (y: number) => eyeDist(y) - eyeDist(ROAD_Y);
+
 // --- Farm (x relative to the farm's plot centre, y in world units) ---------------
 
 export type FieldZone = 'back' | 'front';
@@ -228,6 +242,16 @@ export const QUARRIES: readonly { x: number }[] = [{ x: 1640 }, { x: 4390 }];
 export const QUARRY_W = 280;
 /** Depth of the quarry face, where stonecutters stand to cut. */
 export const QUARRY_Y = TREE_Y + 1;
+/**
+ * The land a quarry takes behind the main street (map px; the main street runs
+ * along y = 0, its lots to the north): from just behind the tree line, QUARRY_W
+ * wide and QUARRY_DEEP deep. No street, field or tree is in it.
+ */
+export const QUARRY_DEEP = 260;
+export function quarryLand(q: { x: number }): { x0: number; x1: number; y0: number; y1: number } {
+  const y0 = behindRoad(QUARRY_Y) - 4;
+  return { x0: q.x - QUARRY_W / 2, x1: q.x + QUARRY_W / 2, y0, y1: y0 + QUARRY_DEEP };
+}
 /** Places along a quarry's face where a stonecutter works (dx from its centre). */
 export const QUARRY_SPOTS: readonly number[] = [-46, 0, 46];
 
