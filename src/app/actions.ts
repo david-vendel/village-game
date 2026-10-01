@@ -17,9 +17,11 @@ import {
   selectMenu,
   setConstructionEnabled,
   turnAtCrossroads,
+  turnToward,
   upgradeBuilding,
   type World,
 } from '../game/world';
+import type { Vec } from '../game/streets';
 import type { Sound } from './sound';
 
 export type Notify = (text: string) => void;
@@ -36,6 +38,8 @@ export interface Actions {
   atCrossroads(): boolean;
   /** Turn onto the street crossing this one: up (away from the viewer) or down (towards them). */
   turn(way: 'up' | 'down'): void;
+  /** At a crossroads, turn onto the crossing street if it runs along map direction v (the view from above). */
+  turnToward(v: Vec): void;
 }
 
 export function createActions(world: World, notify: Notify, isTouch: () => boolean, sound: Sound): Actions {
@@ -90,6 +94,9 @@ export function createActions(world: World, notify: Notify, isTouch: () => boole
     },
     turn(way) {
       if (turnAtCrossroads(world, way)) sound.ui('menuMove');
+    },
+    turnToward(v) {
+      if (turnToward(world, v)) sound.ui('menuMove');
     },
     build() {
       if (!world.menu) return;

@@ -21,7 +21,7 @@ import { clearLand, plantWoods, gatherWorkplace, isGatherHut, updateForest, type
 import { employees, laneY, nameFor, openings, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
 import { builderPositions, builders, createSite, siteWork, siteWorkplace, upgrading, type Site } from './site';
 import { RESOURCES, stockOf, type Stock } from './resources';
-import { CROSS_PLOT, mainStreet, newStreet, onQuarryLand, STREET_BAND_HALF, STREET_END_RUN, plotPoint, plotX, PLOTS_PER_STREET, route, streetOf, streetRange, streetsAt, turnFacing, type Junction, type Street } from './streets';
+import { CROSS_PLOT, mainStreet, newStreet, onQuarryLand, STREET_BAND_HALF, STREET_END_RUN, plotPoint, plotX, PLOTS_PER_STREET, route, streetOf, streetRange, streetsAt, turnFacing, type Junction, type Street, type Vec } from './streets';
 import { eatAtTaverns } from './tavern';
 import { serfPositions, transportHub, transportWorkplace } from './transport';
 import { createWorker, currentJob, offDuty, updateWorker, type Nav, type Worker, type Workplace } from './worker';
@@ -464,8 +464,27 @@ export function crossroadAt(world: World): { building: Building; street: number;
 export function turnAtCrossroads(world: World, way: 'up' | 'down'): boolean {
   const c = world.menu ? null : crossroadAt(world);
   if (!c) return false;
+  return turnOnto(world, c, turnFacing(world, streetOf(world.rider.x), c.street, way));
+}
+
+/**
+ * At a crossroads, turn onto the crossing street if it runs along map
+ * direction v (the view from above), heading that way. Returns whether the
+ * rider turned.
+ */
+export function turnToward(world: World, v: Vec): boolean {
+  const c = world.menu ? null : crossroadAt(world);
+  if (!c) return false;
+  const d = world.streets[c.street].dir;
+  const along = d.x * v.x + d.y * v.y;
+  const here = world.streets[streetOf(world.rider.x)].dir;
+  // only when v points more along the crossing street than this one
+  if (Math.abs(along) <= Math.abs(here.x * v.x + here.y * v.y)) return false;
+  return turnOnto(world, c, along > 0 ? 1 : -1);
+}
+
+function turnOnto(world: World, c: { x: number }, facing: 1 | -1): boolean {
   const r = world.rider;
-  const facing = turnFacing(world, streetOf(r.x), c.street, way);
   r.x = c.x;
   r.facing = facing;
   r.vx = facing * Math.abs(r.vx) * 0.5;

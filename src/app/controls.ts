@@ -3,6 +3,7 @@
 // Tap targets come from the render layer's layout functions, so what you tap
 // is exactly what is drawn.
 
+import { streetOf } from '../game/streets';
 import type { MoveInput, World } from '../game/world';
 import { hit, hudLayout, menuLayout } from '../render';
 import type { Actions } from './actions';
@@ -75,6 +76,8 @@ export function installControls(world: World, screen: Screen, actions: Actions):
       else if (/^[1-9]$/.test(key)) actions.select(Number(key) - 1);
       return;
     }
+    // from above the arrows point on the map (see move), so ↓ rides rather than builds
+    if (topView && (key === 'ArrowUp' || key === 'w' || key === 'ArrowDown' || key === 's')) return;
     // at a crossroads up and down turn onto the crossing street
     if (actions.atCrossroads() && (key === 'ArrowUp' || key === 'w')) return actions.turn('up');
     if (actions.atCrossroads() && (key === 'ArrowDown' || key === 's')) return actions.turn('down');
@@ -185,11 +188,30 @@ export function installControls(world: World, screen: Screen, actions: Actions):
 
   const held = (role: Role) => [...pointers.values()].some((p) => p.role === role);
 
+  const keyLeft = () => keys.has('ArrowLeft') || keys.has('a');
+  const keyRight = () => keys.has('ArrowRight') || keys.has('d');
+  const keyUp = () => keys.has('ArrowUp') || keys.has('w');
+  const keyDown = () => keys.has('ArrowDown') || keys.has('s');
+
+  /**
+   * From above (north up) the arrow keys point on the map: the rider heads the
+   * way they point along the street, and at a crossroads turns onto the
+   * crossing street when that runs the way they point.
+   */
+  function moveOnMap(): MoveInput {
+    const v = { x: (keyRight() ? 1 : 0) - (keyLeft() ? 1 : 0), y: (keyUp() ? 1 : 0) - (keyDown() ? 1 : 0) };
+    if (!v.x && !v.y) return { left: held('left'), right: held('right') };
+    actions.turnToward(v);
+    const d = world.streets[streetOf(world.rider.x)]?.dir ?? { x: 1, y: 0 };
+    const along = d.x * v.x + d.y * v.y;
+    return { left: along < 0 || held('left'), right: along > 0 || held('right') };
+  }
+
   return {
-    move: () => ({
-      left: keys.has('ArrowLeft') || keys.has('a') || held('left'),
-      right: keys.has('ArrowRight') || keys.has('d') || held('right'),
-    }),
+    move: () =>
+      topView && !world.menu
+        ? moveOnMap()
+        : { left: keyLeft() || held('left'), right: keyRight() || held('right') },
     touchHeld: () => ({ left: held('left'), right: held('right') }),
     topView: () => topView,
     topZoom: () => topZoom,
