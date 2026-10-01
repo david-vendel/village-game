@@ -1,4 +1,5 @@
 import { stockOf } from './resources';
+import { plotX } from './streets';
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS, BUILDING_TYPES } from './buildings';
 import {
@@ -173,5 +174,17 @@ describe('rider', () => {
     const w = emptyWorld();
     runFor(w, 60, { left: true, right: false });
     expect(w.rider.x).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('streets', () => {
+  it('builders reach a site two streets away, turning at each crossroads only once', () => {
+    const w = createWorld();
+    w.buildings.find((b) => b.type === 'warehouse')!.stock.wood = 300;
+    placeBuilding(w, 2837.5, 'intersection', { instant: true });
+    placeBuilding(w, plotX(1, 50), 'intersection', { instant: true });
+    const h = placeBuilding(w, plotX(2, 42) - 25, 'house')!;
+    runFor(w, 90, { left: false, right: false });
+    expect(h.status).toBe('done');
   });
 });

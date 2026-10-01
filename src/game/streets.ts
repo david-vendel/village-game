@@ -210,6 +210,13 @@ interface Ways {
 
 const cache = new WeakMap<World, Ways>();
 
+/**
+ * What turning at a crossroads counts for (px), however short: without it,
+ * turning back onto the street just come from and then out again ties with
+ * going straight on, and someone standing at the corner turns there for ever.
+ */
+const TURN_COST = 1;
+
 function ways(world: World): Ways {
   const known = cache.get(world);
   if (known && known.junctions === world.junctions.length) return known;
@@ -223,7 +230,7 @@ function ways(world: World): Ways {
   });
   for (let i = 0; i < n; i++) {
     dist[i * n + i] = 0;
-    dist[i * n + (i ^ 1)] = 0;
+    dist[i * n + (i ^ 1)] = TURN_COST;
     for (const k of ends.get(streetOf(xs[i]))!) dist[i * n + k] = Math.min(dist[i * n + k], Math.abs(xs[i] - xs[k]));
   }
   for (let m = 0; m < n; m++) {
@@ -252,7 +259,7 @@ function bestTurn(world: World, from: number, to: number): { end: number; d: num
   for (const e of g.ends.get(streetOf(from)) ?? []) {
     for (const f of g.ends.get(streetOf(to)) ?? []) {
       // turning at e: over to the other street, then on to f and along to `to`
-      const d = Math.abs(from - g.xs[e]) + g.dist[(e ^ 1) * n + f] + Math.abs(g.xs[f] - to);
+      const d = Math.abs(from - g.xs[e]) + TURN_COST + g.dist[(e ^ 1) * n + f] + Math.abs(g.xs[f] - to);
       if (d < (best?.d ?? Infinity)) best = { end: e, d };
     }
   }
