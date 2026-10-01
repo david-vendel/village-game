@@ -29,9 +29,9 @@ import type { Worker, WorkerTask } from './worker';
 import { clearLand, createForest, type Tree } from './nature';
 import type { Pile } from './piles';
 import { streetOf } from './streets';
-import { createWorld, layStreet, WORLD_WIDTH, type Building, type Rider, type World } from './world';
+import { createWorld, goneStreet, layStreet, WORLD_WIDTH, type Building, type Rider, type World } from './world';
 
-export const SAVE_VERSION = 16;
+export const SAVE_VERSION = 17;
 
 /** How often (s) the village used to collect goods from stores (until v9); old migrations need it. */
 const OLD_COLLECT_EVERY = 30;
@@ -362,6 +362,8 @@ const MIGRATIONS: Record<number, (world: unknown) => unknown> = {
   },
   // v16: buildings can be being pulled down (status 'demolishing', with a demolition record); none were
   15: (world) => world,
+  // v17: a street can be gone (its crossroads pulled down): -1 in branches keeps its place; none were
+  16: (world) => world,
 };
 
 /** Snapshot the world. The result shares nothing with the live world. */
@@ -379,7 +381,7 @@ export function saveWorld(world: World): SaveData {
     lastSelection: world.lastSelection,
     nextId: world.nextId,
     rngState: world.rngState,
-    branches: world.streets.flatMap((s) => (s.from === null ? [] : [s.from])),
+    branches: world.streets.slice(1).map((s) => (s.gone ? -1 : s.from!)),
   };
   return { version: SAVE_VERSION, world: JSON.parse(JSON.stringify(saved)) as SavedWorld };
 }
@@ -422,14 +424,18 @@ function build(saved: SavedWorld): World {
     layStreet(world, b);
   };
   for (const id of branches) {
+    if (id === -1) {
+      goneStreet(world);
+      continue;
+    }
     const b = world.buildings.find((x) => x.id === id);
-    if (!b || b.type !== 'intersection' || b.status !== 'done') throw new SaveError(`a street branches off at ${id}, which is no finished crossroads`);
+    if (!b || b.type !== 'intersection' || b.status === 'constructing') throw new SaveError(`a street branches off at ${id}, which is no finished crossroads`);
     if (world.streets.some((st) => st.from === id)) throw new SaveError(`two streets branch off at crossroads ${id}`);
     layBranch(b);
   }
   // (a finished crossroads always leads somewhere)
   for (const b of world.buildings) {
-    if (b.type === 'intersection' && b.status === 'done' && !b.junction && !world.streets.some((st) => st.from === b.id)) layBranch(b);
+    if (b.type === 'intersection' && b.status !== 'constructing' && !b.junction && !world.streets.some((st) => st.from === b.id)) layBranch(b);
   }
   // a crossroads made where streets met, that no street met after all, is just a plot again
   world.buildings = world.buildings.filter((b) => !b.junction || world.junctions.some((j) => j.buildingId === b.id));
@@ -450,7 +456,7 @@ function build(saved: SavedWorld): World {
     plot.buildingId = b.id;
   }
   // what lies on the ground lies on a street that is there
-  world.piles = world.piles.filter((p) => p.amount > 1e-9 && !!world.streets[streetOf(p.x)]);
+  world.piles = world.piles.filter((p) => p.amount > 1e-9 && !!world.streets[streetOf(p.x)] && !world.streets[streetOf(p.x)].gone);
   const maxId = Math.max(0, ...[...world.buildings, ...world.people, ...world.animals, ...world.trees, ...world.piles].map((x) => x.id));
   world.nextId = Math.max(world.nextId, maxId + 1);
   // a construction site record belongs to buildings under construction, or

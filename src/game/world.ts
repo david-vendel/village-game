@@ -294,7 +294,7 @@ export function placeBuilding(
   opts: { instant?: boolean; free?: boolean } = {},
 ): Building | null {
   const plot = world.plots[plotIndex];
-  if (!plot || plot.off || plot.buildingId !== null) return null;
+  if (!plot || plot.off || plot.buildingId !== null || closing(world, plot.street)) return null;
   // the warehouses must hold its materials, beyond what other sites are owed
   if (!opts.free && Object.keys(buildShortfall(world, type)).length) return null;
   const instant = opts.instant ?? !world.constructionEnabled;
@@ -346,10 +346,41 @@ export function upgradeBuilding(world: World, b: Building): boolean {
   return true;
 }
 
-/** Whether a building can be pulled down: anything but a crossroads (the streets run through it). */
+/**
+ * Whether a building can be offered for pulling down: anything not already
+ * coming down, but a crossroads made where two streets met (it goes with the
+ * street that made it). Whether it may be pulled down now: whyNotDemolish.
+ */
 export function canDemolish(b: Building): boolean {
-  return b.type !== 'intersection' && b.status !== 'demolishing';
+  return b.status !== 'demolishing' && !b.junction;
 }
+
+/** The street a finished crossroads opened, if any. */
+export function streetFrom(world: World, b: Building): Street | undefined {
+  return b.type === 'intersection' ? world.streets.find((s) => !s.gone && s.from === b.id) : undefined;
+}
+
+/**
+ * Why a building can't be pulled down now, or null if it can. A crossroads
+ * takes the street it opened with it, so that street must have nothing on it
+ * but the crossroads where it met other streets: no building, and no other
+ * crossroads opening a street of its own.
+ */
+export function whyNotDemolish(world: World, b: Building): string | null {
+  if (!canDemolish(b)) return 'It cannot be pulled down';
+  const street = streetFrom(world, b);
+  if (!street) return null;
+  const on = world.plots.filter((p) => p.street === street.index && p.buildingId !== null && p.buildingId !== b.id).map((p) => getBuilding(world, p.buildingId));
+  if (on.some((o) => o && o.type !== 'intersection')) return 'Its street has buildings on it';
+  if (on.some((o) => o && !o.junction)) return 'Another street branches off its street';
+  return null;
+}
+
+/** Whether street i is closing: the crossroads that opened it is being pulled down (nothing new is built on it). */
+const closing = (world: World, i: number) => {
+  const from = world.streets[i]?.from;
+  return from != null && getBuilding(world, from)?.status === 'demolishing';
+};
 
 /** What pulling a building down leaves lying: its materials (built in or brought to its site) and its store. */
 export function demolitionYield(b: Building): Stock {
@@ -367,7 +398,7 @@ export function demolitionYield(b: Building): Stock {
  * Returns whether it started.
  */
 export function demolish(world: World, b: Building): boolean {
-  if (!canDemolish(b)) return false;
+  if (whyNotDemolish(world, b)) return false;
   const x = world.plots[b.plotIndex].x;
   for (const p of employees(world, b)) {
     const w = p.job!.worker;
@@ -391,11 +422,64 @@ export function demolish(world: World, b: Building): boolean {
 /** A building is down: its plot is free again. */
 function pulledDown(world: World, b: Building): void {
   for (const p of employees(world, b)) release(world, p);
+  const street = streetFrom(world, b);
+  if (street) closeStreet(world, b, street);
   world.buildings = world.buildings.filter((o) => o !== b);
   world.plots[b.plotIndex].buildingId = null;
   // its land is free again for the neighbouring farms' fields
   syncFarmFields(world);
   world.events.push({ kind: 'demolished', buildingId: b.id });
+}
+
+/**
+ * A crossroads is down, and the street it opened goes with it: the crossroads
+ * where that street met others go too (their plots on the other streets are
+ * free again), and whoever and whatever was on it is moved to where the
+ * crossroads stood. The street keeps its place in the list (world x's are
+ * worked out from it), as one that is gone: no road, no plots.
+ */
+function closeStreet(world: World, b: Building, street: Street): void {
+  const own = world.junctions.find((j) => j.buildingId === b.id);
+  const here = own ? (streetOf(own.a) === street.index ? own.b : own.a) : world.plots[b.plotIndex].x;
+  const on = (x: number) => streetOf(x) === street.index;
+  const gone = world.junctions.filter((j) => on(j.a) || on(j.b));
+  world.junctions = world.junctions.filter((j) => !gone.includes(j));
+  for (const j of gone) {
+    const jb = getBuilding(world, j.buildingId);
+    if (jb?.junction && !world.junctions.some((o) => o.buildingId === jb.id)) {
+      world.buildings = world.buildings.filter((o) => o !== jb);
+      world.plots[jb.plotIndex].buildingId = null;
+    }
+  }
+  for (const p of world.plots) {
+    if (p.street !== street.index) continue;
+    p.off = true;
+    p.buildingId = null;
+  }
+  street.gone = true;
+  street.lo = CROSS_PLOT;
+  street.hi = CROSS_PLOT - 1;
+  // everyone and everything on it comes back to the crossroads' spot
+  if (on(world.rider.x)) world.rider.x = here;
+  for (const who of [...world.people, ...world.animals]) if (on(who.stroll.x)) who.stroll.x = here;
+  for (const pile of world.piles) if (on(pile.x)) pile.x = here;
+  for (const p of world.people) {
+    const at = p.job && getBuilding(world, p.job.buildingId);
+    if (!at) continue;
+    const x0 = world.plots[at.plotIndex].x;
+    const w = p.job!.worker;
+    if (on(x0 + w.dx)) w.dx = here - x0;
+    if (w.task.kind === 'walk' && on(x0 + w.task.toDx)) w.task.toDx = here - x0;
+  }
+  world.trees = world.trees.filter((t) => !on(t.x));
+}
+
+/** A street that is gone (save.ts): its place in the list, with no road and no plots. */
+export function goneStreet(world: World): Street {
+  const street: Street = { ...mainStreet(), index: world.streets.length, gone: true, lo: CROSS_PLOT, hi: CROSS_PLOT - 1 };
+  world.streets.push(street);
+  layPlots(world, street);
+  return street;
 }
 
 /**
@@ -511,7 +595,8 @@ function openStreet(world: World, b: Building): void {
 export function crossroadAt(world: World): { building: Building; street: number; x: number } | null {
   const plot = plotAt(world, world.rider.x);
   const b = getBuilding(world, plot?.buildingId ?? null);
-  if (!plot || !b || b.type !== 'intersection' || b.status !== 'done') return null;
+  // (one being pulled down can still be turned at until it is down)
+  if (!plot || !b || b.type !== 'intersection' || b.status === 'constructing') return null;
   const j = world.junctions.find((o) => o.buildingId === b.id);
   if (!j) return null;
   const to = j.a === plot.x ? j.b : j.a;
@@ -565,6 +650,7 @@ export function openMenu(world: World): boolean {
   const plot = plotAt(world, world.rider.x);
   if (!plot) return false;
   const b = getBuilding(world, plot.buildingId);
+  if (plot.buildingId === null && closing(world, plot.street)) return false;
   if (plot.buildingId === null) world.menu = { kind: 'build', plotIndex: plot.index, selection: world.lastSelection };
   else if (b && canDemolish(b)) {
     const options: BuildingOption[] = canUpgrade(b) ? ['upgrade', 'demolish'] : ['demolish'];

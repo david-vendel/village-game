@@ -99,7 +99,7 @@ function groundShape(ctx: Ctx, eye: Eye, pts: Vec[], fill: string): void {
   ctx.fill();
 }
 
-const others = (world: World, eye: Eye) => world.streets.filter((s) => s.index !== eye.street);
+const others = (world: World, eye: Eye) => world.streets.filter((s) => s.index !== eye.street && !s.gone);
 
 /** The roads of the other streets, and the fields of the farms along them, on the ground. */
 export function drawOtherGround(ctx: Ctx, world: World, eye: Eye): void {

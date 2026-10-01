@@ -10,6 +10,7 @@ import {
   confirmMenu,
   crossroadAt,
   demolish,
+  whyNotDemolish,
   getBuilding,
   moveMenu,
   openMenu,
@@ -93,6 +94,12 @@ export function createActions(world: World, notify: Notify, isTouch: () => boole
         if (!b) return closeMenu(world);
         const name = BUILDINGS[b.type].name;
         if (menu.options[menu.selection] === 'demolish') {
+          const why = whyNotDemolish(world, b);
+          if (why) {
+            sound.ui('denied');
+            notify(`The ${name} can't be pulled down: ${why.toLowerCase()}`);
+            return;
+          }
           demolish(world, b);
           sound.ui('toggle');
           notify(world.constructionEnabled ? `Builders will pull the ${name} down` : `The ${name} is pulled down; serfs will carry off what is left`);

@@ -16,7 +16,7 @@ import { WOOD_REACH } from '../game/nature';
 import { employees, jobsOf } from '../game/people';
 import { RESOURCES, type Amounts } from '../game/resources';
 import { backOf, mapPoint, streetOf, streetRange } from '../game/streets';
-import { constructionStage, demolitionYield, getBuilding, type Building, type BuildingOption, type ConstructionStage, type World } from '../game/world';
+import { constructionStage, demolitionYield, getBuilding, streetFrom, whyNotDemolish, type Building, type BuildingOption, type ConstructionStage, type World } from '../game/world';
 import { BUILDING_ART } from './buildings';
 import { drawBuildingIcon } from './sprites';
 import type { Ctx } from './util';
@@ -272,7 +272,7 @@ function drawMiniMap(ctx: Ctx, world: World, r: Rect): void {
   roundRect(ctx, r.x + 1, r.y + 1, r.w - 2, r.h - 2, 6);
   ctx.clip();
 
-  const ends = world.streets.map((s) => {
+  const ends = world.streets.filter((s) => !s.gone).map((s) => {
     const { min, max } = streetRange(world, s.index);
     return [mapPoint(world, min), mapPoint(world, max)] as const;
   });
@@ -468,6 +468,7 @@ function drawBuildingMenu(ctx: Ctx, world: World, uiW: number, uiH: number): voi
     roundRect(ctx, r.x, r.y, r.w, r.h - 24, 6);
     ctx.clip();
     if (option === 'upgrade' && Object.keys(upgradeShortfall(world, b)).length) ctx.globalAlpha = 0.4;
+    if (option === 'demolish' && whyNotDemolish(world, b)) ctx.globalAlpha = 0.4;
     const previewH = r.h - 34;
     const scale = Math.min(0.6, (r.w - 8) / (def.width * 1.3), previewH / (BUILDING_ART[b.type].height + 20));
     if (option === 'demolish') {
@@ -507,8 +508,12 @@ function drawBuildingMenu(ctx: Ctx, world: World, uiW: number, uiH: number): voi
     const rounded: Amounts = {};
     for (const r of RESOURCES) if (left[r] >= 0.5) rounded[r] = Math.round(left[r]);
     const secs = +(demolitionWork(b) / world.params.buildSpeed).toFixed(1);
-    line1 = world.constructionEnabled ? `Builders pull it down in ${secs}s; its workers are let go` : 'Pull it down at once (construction off); its workers are let go';
-    line2 = Object.keys(rounded).length ? `Leaves ${amounts(rounded)} on the ground for serfs to carry off` : 'Leaves nothing behind';
+    const street = streetFrom(world, b);
+    const why = whyNotDemolish(world, b);
+    line1 = world.constructionEnabled ? `Builders pull it down in ${secs}s` : 'Pull it down at once (construction off)';
+    line1 += street ? '; the street it opened goes with it' : '; its workers are let go';
+    line2 = why ? `Can't: ${why.toLowerCase()}` : Object.keys(rounded).length ? `Leaves ${amounts(rounded)} on the ground for serfs to carry off` : 'Leaves nothing behind';
+    short = !!why;
   }
   text(ctx, line1, uiW / 2, M.infoY, fitSize(ctx, line1, 14, M.panel.w - 24), '#f3ead8', 'center');
   text(ctx, line2, uiW / 2, M.infoY + 20, fitSize(ctx, line2, 12, M.panel.w - 24), short ? '#e89a7a' : '#cbbfa4', 'center');

@@ -81,6 +81,7 @@ export function treeRoom(world: World, p: Vec, crowd = true, not?: Tree): boolea
   if (onQuarryLand(p, TRUNK_ROOM)) return false;
   const seen = world.streets.map((s) => fromStreet(world, s.index, p));
   for (const s of world.streets) {
+    if (s.gone) continue;
     const { x, d } = seen[s.index];
     const { min, max } = streetRange(world, s.index);
     if (x > min - TRUNK_ROOM && x < max + TRUNK_ROOM && d > ROAD_BAND.from && d < ROAD_BAND.to) return false;
@@ -127,7 +128,7 @@ const WOODS = { behind: [140, 900], front: [-320, -200] } as const;
 function sprout(world: World, x: number, d: number, grown: boolean, rand: () => number): boolean {
   const s = streetOf(x);
   const { min, max } = streetRange(world, s);
-  if (x < min || x > max || !world.streets[s]) return false;
+  if (x < min || x > max || !world.streets[s] || world.streets[s].gone) return false;
   if (d < WOODS.front[0]) return false;
   const p = streetPoint(world, x, d);
   if (!treeRoom(world, p)) return false;
@@ -179,8 +180,8 @@ export function updateForest(world: World, dt: number, rand: () => number): void
     if (t.state === 'growing' && t.age >= TREE_GROW) t.state = 'grown';
   }
   world.trees = world.trees.filter((t) => t.state !== 'stump' || t.age < STUMP_TIME);
-  const streets = world.streets.length;
-  if (world.trees.length >= MAX_TREES * streets || rand() >= dt / SPROUT_EVERY) return;
+  const live = world.streets.filter((s) => !s.gone);
+  if (world.trees.length >= MAX_TREES * live.length || rand() >= dt / SPROUT_EVERY) return;
   const grown = world.trees.filter((t) => t.state === 'grown');
   if (grown.length && rand() < 0.75) {
     // a seed falls near a grown tree
@@ -189,7 +190,7 @@ export function updateForest(world: World, dt: number, rand: () => number): void
     const r = TREE_GAP + rand() * 70;
     sprout(world, parent.x + Math.cos(a) * r, behindRoad(parent.y) + Math.sin(a) * r, false, rand);
   } else {
-    const s = Math.floor(rand() * streets);
+    const s = live[Math.floor(rand() * live.length)].index;
     const { min, max } = streetRange(world, s);
     const band = rand() < 0.75 ? WOODS.behind : WOODS.front;
     sprout(world, min + rand() * (max - min), band[0] + rand() * (band[1] - band[0]), false, rand);

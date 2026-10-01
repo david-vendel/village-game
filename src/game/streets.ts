@@ -58,6 +58,8 @@ export interface Street {
   /** Its first and last plot (0..PLOTS_PER_STREET-1): it may end short where it met another street. */
   lo: number;
   hi: number;
+  /** Gone (its crossroads was pulled down): no road and no plots, kept only for its place in the list. */
+  gone?: true;
 }
 
 /** Where two streets meet: the crossroads standing there, and the spot's world x on each street. */
@@ -209,6 +211,7 @@ const near = (a: number, b: number) => Math.abs(a - b) < 1e-6;
 export function streetsAt(world: World, dir: Vec, p: Vec): { along: boolean; crossing: { street: number; k: number } | null } {
   let crossing: { street: number; k: number } | null = null;
   for (const s of world.streets) {
+    if (s.gone) continue;
     // how far along s the point is, and whether it is on its line at all
     const t = (p.x - s.origin.x) * s.dir.x + (p.y - s.origin.y) * s.dir.y;
     const off = (p.x - s.origin.x) * -s.dir.y + (p.y - s.origin.y) * s.dir.x;

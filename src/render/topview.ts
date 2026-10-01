@@ -93,6 +93,7 @@ export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zo
 
   // streets
   for (const s of world.streets) {
+    if (s.gone) continue;
     const { min, max } = streetRange(world, s.index);
     const road = [groundPoint(world, min, GROUND_Y + 6), groundPoint(world, max, GROUND_Y + 6), groundPoint(world, max, ROAD_BOTTOM), groundPoint(world, min, ROAD_BOTTOM)];
     shape(road, '#b89668', '#8a6a44', 1);
