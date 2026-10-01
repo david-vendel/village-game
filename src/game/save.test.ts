@@ -57,7 +57,7 @@ describe('save games', () => {
 
   it('does not save the open build menu or tuning knobs', () => {
     const w = createWorld();
-    w.menu = { kind: 'build', x: 1000, selection: 2 };
+    w.menu = { kind: 'build', x: 1000, selection: 2, fits: [] };
     w.params.riderMaxSpeed = 999;
     const back = roundTrip(w);
     expect(back.menu).toBeNull();

@@ -3,6 +3,7 @@
 // Tap targets come from the render layer's layout functions, so what you tap
 // is exactly what is drawn.
 
+import { canChoose } from '../game/world';
 import { streetOf } from '../game/streets';
 import type { MoveInput, World } from '../game/world';
 import { buildingMenuLayout, hit, hudLayout, menuLayout } from '../render';
@@ -134,14 +135,16 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
     const { cards } = menuLayout(screen.vp.uiW, screen.vp.uiH);
     const cur = cards[world.menu.selection];
     const rows = [...new Set(cards.map((c) => c.y))].sort((a, b) => a - b);
-    const rowY = rows[rows.indexOf(cur.y) + delta];
-    if (rowY === undefined) return; // already on the top / bottom row
     const mid = (c: { x: number; w: number }) => c.x + c.w / 2;
-    let best = -1;
-    cards.forEach((c, i) => {
-      if (c.y === rowY && (best < 0 || Math.abs(mid(c) - mid(cur)) < Math.abs(mid(cards[best]) - mid(cur)))) best = i;
-    });
-    actions.select(best);
+    const menu = world.menu;
+    // the nearest card that can be chosen in the next row that has one (rows of only greyed-out cards are jumped)
+    for (let r = rows.indexOf(cur.y) + delta; r >= 0 && r < rows.length; r += delta) {
+      let best = -1;
+      cards.forEach((c, i) => {
+        if (c.y === rows[r] && canChoose(menu, i) && (best < 0 || Math.abs(mid(c) - mid(cur)) < Math.abs(mid(cards[best]) - mid(cur)))) best = i;
+      });
+      if (best >= 0) return actions.select(best);
+    }
   }
   window.addEventListener('blur', () => {
     keys.clear();

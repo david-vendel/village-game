@@ -134,7 +134,8 @@ export type BuildingOption = 'upgrade' | 'demolishSection' | 'demolish';
 
 /** The menu open where the rider is: what to build there (at world x), or what to do with the building there. */
 export type BuildMenu =
-  | { kind: 'build'; x: number; selection: number }
+  /** fits: which of BUILDING_TYPES fit where the rider is, worked out once as the menu opens; only those can be chosen. */
+  | { kind: 'build'; x: number; selection: number; fits: boolean[] }
   | { kind: 'building'; buildingId: number; options: BuildingOption[]; selection: number; x: number };
 
 export interface GameEvent {
@@ -807,7 +808,7 @@ export function openMenu(world: World): boolean {
   } else {
     const fits = BUILDING_TYPES.map((t) => !whyNotBuild(world, t, x));
     if (!fits.includes(true)) return false;
-    world.menu = { kind: 'build', x, selection: fits[world.lastSelection] ? world.lastSelection : fits.indexOf(true) };
+    world.menu = { kind: 'build', x, selection: fits[world.lastSelection] ? world.lastSelection : fits.indexOf(true), fits };
   }
   world.rider.vx = 0;
   return true;
@@ -815,14 +816,26 @@ export function openMenu(world: World): boolean {
 
 const menuSize = (menu: BuildMenu) => (menu.kind === 'build' ? BUILDING_TYPES.length : menu.options.length);
 
+/** Whether menu entry i can be chosen: in the build menu, only what fits. */
+export const canChoose = (menu: BuildMenu, i: number) => menu.kind !== 'build' || !!menu.fits[i];
+
+/** Move the selection by delta entries that can be chosen, round and round, jumping over the rest. */
 export function moveMenu(world: World, delta: number): void {
-  if (!world.menu) return;
-  const n = menuSize(world.menu);
-  world.menu.selection = (((world.menu.selection + delta) % n) + n) % n;
+  const menu = world.menu;
+  if (!menu) return;
+  const n = menuSize(menu);
+  let i = menu.selection;
+  for (let k = 0; k < Math.abs(delta); k++) {
+    for (let step = 0; step < n; step++) {
+      i = (((i + Math.sign(delta)) % n) + n) % n;
+      if (canChoose(menu, i)) break;
+    }
+  }
+  menu.selection = i;
 }
 
 export function selectMenu(world: World, index: number): void {
-  if (!world.menu || index < 0 || index >= menuSize(world.menu)) return;
+  if (!world.menu || index < 0 || index >= menuSize(world.menu) || !canChoose(world.menu, index)) return;
   world.menu.selection = index;
 }
 

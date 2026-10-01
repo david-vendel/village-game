@@ -548,8 +548,9 @@ function drawBuildingMenu(ctx: Ctx, world: World, uiW: number, uiH: number): voi
 
 export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number): void {
   if (world.menu?.kind === 'building') return drawBuildingMenu(ctx, world, uiW, uiH);
-  if (!world.menu) return;
-  const menuX = world.menu.x;
+  const menu = world.menu;
+  if (!menu) return;
+  const menuX = menu.x;
   const M = menuLayout(uiW, uiH);
 
   ctx.fillStyle = 'rgba(20,14,8,0.35)';
@@ -573,7 +574,7 @@ export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number):
     roundRect(ctx, r.x, r.y, r.w, r.h - 24, 6);
     ctx.clip();
     // what doesn't fit here is greyed out; what the village can't afford is shown faded
-    const fits = !whyNotBuild(world, type, menuX);
+    const fits = menu.fits[i];
     // (no canvas filter: drawing every card through one each frame is far too slow)
     if (!fits) ctx.globalAlpha = 0.2;
     else if (Object.keys(buildShortfall(world, type)).length) ctx.globalAlpha = 0.4;
@@ -585,7 +586,7 @@ export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number):
     text(ctx, label, r.x + r.w / 2, r.y + r.h - 8, fitSize(ctx, label, 12, r.w - 6, sel), !fits ? '#8a8378' : sel ? GOLD : '#f3ead8', 'center', sel);
   });
 
-  const def = BUILDINGS[BUILDING_TYPES[world.menu.selection]];
+  const def = BUILDINGS[BUILDING_TYPES[menu.selection]];
   text(ctx, def.purpose, uiW / 2, M.infoY, fitSize(ctx, def.purpose, 14, M.panel.w - 24), '#f3ead8', 'center');
   const time = world.constructionEnabled ? `Builds in ${+(def.buildTime / world.params.buildSpeed).toFixed(1)}s` : 'Builds instantly (construction off)';
   const lack = buildShortfall(world, def.type);
