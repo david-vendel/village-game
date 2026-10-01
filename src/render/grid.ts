@@ -24,8 +24,23 @@ const FILL: Record<LandUse['kind'], string> = {
 
 /** Rows of cells drawn, near to far (row j: j cells behind the middle of the road): on to the horizon. */
 const ROWS = { near: -4, far: 80 };
-/** Lines between cells closer together than this on screen (px) are thinned out: every second, fourth… */
+/** Lines closer together than this on screen (px) are left out, the finer ones first. */
 const MIN_GAP = 7;
+
+/**
+ * How strong the line before cell (or row) k is: 2 on the edge of a block of
+ * nine cells, 1 on the edge of a block of three, 0 between single cells.
+ * Blocks start at k ≡ `at` (mod 3), the nine-blocks at k ≡ `at9` (mod 9).
+ */
+export function lineLevel(k: number, at: number, at9: number): 0 | 1 | 2 {
+  const mod = (a: number, n: number) => ((a % n) + n) % n;
+  return mod(k - at9, 9) === 0 ? 2 : mod(k - at, 3) === 0 ? 1 : 0;
+}
+/** Line opacity at each level, and how many cells apart lines of that level are. */
+export const LINE_ALPHA = [0.12, 0.3, 0.5] as const;
+const LEVEL_CELLS = [1, 3, 9] as const;
+/** Whether lines of this level are far enough apart on screen (cells `cellPx` px wide) to draw. */
+export const showLevel = (level: 0 | 1 | 2, cellPx: number) => cellPx * LEVEL_CELLS[level] >= MIN_GAP;
 
 /** A cell's corners on screen: cells i0..i1 along street `street`, rows j0..j1, the camera at camX. */
 function block(ctx: Ctx, street: number, i0: number, i1: number, j0: number, j1: number, camX: number, vpX: number): void {
@@ -73,20 +88,29 @@ export function drawLandGrid(ctx: Ctx, world: World, camX: number, viewW: number
       ctx.fillStyle = FILL[use.kind];
       ctx.fill();
     }
-    // the lines: the row's far edge, and the cells' sides, fewer the smaller they get
-    ctx.globalAlpha = 0.28 * fade * fade;
+    // the lines: the row's far edge, and the cells' sides, stronger on the blocks of three and of
+    // nine (the road's three lanes are one block, the lots behind it the next), the finer left out as they crowd
     ctx.strokeStyle = '#fff8e1';
-    ctx.lineWidth = 0.6;
+    ctx.lineWidth = 0.7;
+    const rowLevel = lineLevel(j + 1, 2, 5);
+    ctx.globalAlpha = LINE_ALPHA[rowLevel] * fade * fade;
     ctx.beginPath();
     ctx.moveTo(0, far);
     ctx.lineTo(viewW, far);
-    const step = 2 ** Math.max(0, Math.ceil(Math.log2(MIN_GAP / (CELL_W * s))));
-    for (let i = Math.floor(first / step) * step; i <= last; i += step) {
-      const x = start + i * CELL_W - camX;
-      ctx.moveTo(groundX(x, far, vpX), far);
-      ctx.lineTo(groundX(x, near, vpX), near);
-    }
     ctx.stroke();
+    const cellPx = CELL_W * s;
+    for (const level of [0, 1, 2] as const) {
+      if (!showLevel(level, cellPx)) continue;
+      ctx.globalAlpha = LINE_ALPHA[level] * fade * fade;
+      ctx.beginPath();
+      for (let i = first; i <= last; i++) {
+        if (lineLevel(i, 1, 1) !== level) continue;
+        const x = start + i * CELL_W - camX;
+        ctx.moveTo(groundX(x, far, vpX), far);
+        ctx.lineTo(groundX(x, near, vpX), near);
+      }
+      ctx.stroke();
+    }
   }
   // the cell under the mouse: outlined, with its name
   if (hover && hover.y > yAt(rowFar(ROWS.far))) {

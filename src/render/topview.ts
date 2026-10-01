@@ -6,6 +6,7 @@
 import { BUILDINGS, type BuildingType } from '../game/buildings';
 import { CELL_W, FIELD_ROWS, QUARRIES, quarryLand, ROAD_HALF, rowFar, rowNear, type FieldZone } from '../game/layout';
 import { cellName, footprintOf, landUse, type LandUse } from '../game/grid';
+import { LINE_ALPHA, lineLevel, showLevel } from './grid';
 import { treeGrowth } from '../game/nature';
 import { GROUND_PILE_Y } from '../game/piles';
 import type { Load } from '../game/resources';
@@ -313,16 +314,21 @@ function drawGrid(ctx: Ctx, world: World, sx: (p: Vec) => number, sy: (p: Vec) =
     ctx.fillStyle = GRID_FILL[use.kind];
     ctx.fillRect(sx({ x: c * CELL_W, y: 0 }), sy({ x: 0, y: (r + 1) * CELL_W }), px, px);
   }
-  // the lines between the cells: thinned out as they crowd together
-  const step = 2 ** Math.max(0, Math.ceil(Math.log2(7 / px)));
+  // the lines between the cells: faint between single cells, stronger round the blocks of three
+  // (the main street's three lanes are one, its lots the next) and of nine; the finer left out as they crowd
   ctx.save();
-  for (let c = Math.floor(c0 / step) * step; c <= c1 + 1; c += step) {
+  const colour = (level: 0 | 1 | 2) => `rgba(255,248,225,${LINE_ALPHA[level]})`;
+  for (let c = c0; c <= c1 + 1; c++) {
+    const level = lineLevel(c, 1, 1);
+    if (!showLevel(level, px)) continue;
     const X = Math.round(sx({ x: c * CELL_W, y: 0 })) + 0.5;
-    line(ctx, X, 0, X, uiH, c % 10 === 0 ? 'rgba(255,248,225,0.32)' : 'rgba(255,248,225,0.14)', 1);
+    line(ctx, X, 0, X, uiH, colour(level), 1);
   }
-  for (let r = Math.floor(r0 / step) * step; r <= r1 + 1; r += step) {
+  for (let r = r0; r <= r1 + 1; r++) {
+    const level = lineLevel(r, 2, 5);
+    if (!showLevel(level, px)) continue;
     const Y = Math.round(sy({ x: 0, y: r * CELL_W })) + 0.5;
-    line(ctx, 0, Y, uiW, Y, r % 10 === 0 ? 'rgba(255,248,225,0.32)' : 'rgba(255,248,225,0.14)', 1);
+    line(ctx, 0, Y, uiW, Y, colour(level), 1);
   }
   // the cell under the mouse: outlined, with its name
   if (hover) {
