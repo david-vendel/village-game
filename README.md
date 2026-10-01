@@ -9,8 +9,13 @@ npm install
 npm run dev        # play in the browser
 npm test           # logic tests + layer-boundary checks (headless)
 npm run typecheck  # whole project, plus src/game alone without browser APIs
-npm run build      # typecheck + static build into dist/
+npm run build      # typecheck + static build into dist/ (only approved art assets)
+npm run assets:check   # validate public/assets against docs/art/ASSET_SPEC.md
+npm run assets:export  # export today's procedural farm as placeholder assets (format test)
 ```
+
+Art: `?art=preview` shows every sprite asset beside the procedural art it replaces;
+`?art=procedural` plays without sprites.
 
 `dist/` is plain static files (relative paths), so it can be served from any
 folder by nginx, the same way as ~/hollow. Not deployed yet.

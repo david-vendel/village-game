@@ -12,7 +12,9 @@ import { crossings, streetOf, streetRange } from '../game/streets';
 import { canDemolish, canUpgrade, crossroadAt, getBuilding, plotAt, type Building, type World } from '../game/world';
 import { drawBackground, drawForeground, drawHaze, drawSideRoad, drawStreetEnds, type View } from './background';
 import { BUILDING_LINE_DIST, distAt, drawOtherGround, eyeOf, standingOn, TREE_LINE_DIST } from './plane';
+import { flushEmissive } from './assets';
 import { BUILDING_ART, type DrawArgs } from './buildings';
+import { drawBuilding } from './sprites';
 import { drawConstruction, drawConstructionBehind, drawConstructionFront, drawDemolition, drawUpgrade } from './construction';
 import { drawWorker } from './farm';
 import { type Figure, figureOf } from './figure';
@@ -145,13 +147,13 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     const a = args(b);
     if (b.demolition && b.demolition.from >= 1) drawDemolition(ctx, b.type, a, b.progress); // one still being built comes down through its stages
     else if (upgrading(b)) drawUpgrade(ctx, b.type, a, b.progress);
-    else if (b.status === 'done') BUILDING_ART[b.type].draw(ctx, a);
+    else if (b.status === 'done') drawBuilding(ctx, b.type, a);
     else drawConstruction(ctx, b.type, a, b.progress);
   }
   // a crossroads' fingerpost also stands on the street its road leads to
   for (const c of crossings(world)) {
     const b = getBuilding(world, c.buildingId);
-    if (b && world.plots[b.plotIndex].x !== c.x && onScreen(c.x)) BUILDING_ART.intersection.draw(ctx, { ...args(b), x: c.x - camX });
+    if (b && world.plots[b.plotIndex].x !== c.x && onScreen(c.x)) drawBuilding(ctx, 'intersection', { ...args(b), x: c.x - camX });
   }
 
   // land in front of the road (farm front fields)
@@ -183,6 +185,8 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   // daylight: tint the land, then put the sky behind it
   const light = lightAt(world);
   tintLand(ctx, v, light);
+  // lights (sprites' emissive layers) shine through the dark
+  flushEmissive(ctx, light.night);
   drawSkyBehind(ctx, v, light);
   drawGrade(ctx, viewW, sv.top, sv.bottom);
   if (sv.showGrid) drawLandGrid(ctx, world, camX, viewW);

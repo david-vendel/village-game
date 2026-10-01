@@ -11,50 +11,59 @@ import { installTuning } from './app/tuning';
 import { installWorkersPanel } from './app/workers';
 import { update } from './game/world';
 import { sizePanelButtons } from './app/panel';
-import { cameraX, HUD_BUTTON, renderFrame, type Toast } from './render';
+import { type ArtMode, cameraX, HUD_BUTTON, loadArt, renderFrame, showArtPreview, type Toast } from './render';
 
-const canvas = document.getElementById('canvas') as HTMLCanvasElement;
-const ctx = canvas.getContext('2d')!;
+// ?art=procedural ignores sprite assets; ?art=preview shows the asset contact sheet instead of the game
+const artParam = new URLSearchParams(location.search).get('art');
+const art: ArtMode = artParam === 'procedural' || artParam === 'preview' ? artParam : 'auto';
+await loadArt({ mode: art, approvedOnly: import.meta.env.PROD });
+if (art === 'preview') showArtPreview();
+else await play();
 
-const saves = await openSaveStore();
-const { world, restored } = await loadGame(saves);
-const autosave = installAutosave(world, saves);
-const screen = createScreen(canvas);
-const toasts: Toast[] = [];
-const notify = (text: string) => {
-  toasts.push({ text, at: world.time });
-  while (toasts.length > 4) toasts.shift();
-};
-const sound = createSound();
-const actions = createActions(world, notify, () => screen.touch, sound);
-const controls = installControls(world, screen, actions);
-const display = installTuning(world, sound, { onNewVillage: () => void autosave.newGame() });
-installWorkersPanel(world);
-if (restored) notify('Welcome back to your village');
+async function play(): Promise<void> {
+  const canvas = document.getElementById('canvas') as HTMLCanvasElement;
+  const ctx = canvas.getContext('2d')!;
 
-let camX = cameraX(world, screen.vp.viewW);
-let last = performance.now();
+  const saves = await openSaveStore();
+  const { world, restored } = await loadGame(saves);
+  const autosave = installAutosave(world, saves);
+  const screen = createScreen(canvas);
+  const toasts: Toast[] = [];
+  const notify = (text: string) => {
+    toasts.push({ text, at: world.time });
+    while (toasts.length > 4) toasts.shift();
+  };
+  const sound = createSound();
+  const actions = createActions(world, notify, () => screen.touch, sound);
+  const controls = installControls(world, screen, actions);
+  const display = installTuning(world, sound, { onNewVillage: () => void autosave.newGame() });
+  installWorkersPanel(world);
+  if (restored) notify('Welcome back to your village');
 
-function frame(now: number): void {
-  const dt = Math.min(0.05, (now - last) / 1000);
-  last = now;
+  let camX = cameraX(world, screen.vp.viewW);
+  let last = performance.now();
 
-  update(world, dt, controls.move());
-  sound.frame(world, dt);
-  autosave.tick(); // every half hour of game time
-  if (world.events.length) autosave.requestSave(); // something was built or finished
-  announceEvents(world, notify);
+  function frame(now: number): void {
+    const dt = Math.min(0.05, (now - last) / 1000);
+    last = now;
 
-  // smooth camera follow
-  const vp = screen.vp;
-  const target = cameraX(world, vp.viewW);
-  camX += (target - camX) * Math.min(1, dt * 4);
-  if (Math.abs(target - camX) > vp.viewW) camX = target;
+    update(world, dt, controls.move());
+    sound.frame(world, dt);
+    autosave.tick(); // every half hour of game time
+    if (world.events.length) autosave.requestSave(); // something was built or finished
+    announceEvents(world, notify);
 
-  sizePanelButtons((HUD_BUTTON * vp.uiScale) / screen.dpr);
+    // smooth camera follow
+    const vp = screen.vp;
+    const target = cameraX(world, vp.viewW);
+    camX += (target - camX) * Math.min(1, dt * 4);
+    if (Math.abs(target - camX) > vp.viewW) camX = target;
 
-  const held = controls.touchHeld();
-  renderFrame(ctx, world, { ...vp, camX, touch: screen.touch, leftHeld: held.left, rightHeld: held.right, toasts, showGrid: display.grid, topView: controls.topView(), topZoom: controls.topZoom() });
+    sizePanelButtons((HUD_BUTTON * vp.uiScale) / screen.dpr);
+
+    const held = controls.touchHeld();
+    renderFrame(ctx, world, { ...vp, camX, touch: screen.touch, leftHeld: held.left, rightHeld: held.right, toasts, showGrid: display.grid, topView: controls.topView(), topZoom: controls.topZoom() });
+    requestAnimationFrame(frame);
+  }
   requestAnimationFrame(frame);
 }
-requestAnimationFrame(frame);

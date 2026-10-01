@@ -7,6 +7,8 @@
 import { BUILDINGS, type BuildingType } from '../game/buildings';
 import { constructionStage } from '../game/world';
 import { BUILDING_ART, type DrawArgs } from './buildings';
+import { withoutEmissive } from './assets';
+import { drawBuilding, drawStageSprites } from './sprites';
 import { pileItems, SITE_SHOWN, siteSlot } from '../game/layout';
 import type { Amounts } from '../game/resources';
 import { circle, clamp01, type Ctx, ellipse, hash, line, rect } from './util';
@@ -44,6 +46,8 @@ export function drawConstruction(ctx: Ctx, type: BuildingType, a: DrawArgs, prog
 
   materials(ctx, a.x, W, a.base, a.onSite ?? {}, a.seed);
   for (const spot of a.laid ?? []) laidDown(ctx, a.x + spot.dx, a.base, spot.amounts, a.seed);
+  // drawn stages (scaffolding and all) where the building's sprites have them
+  if (stage !== 'done' && drawStageSprites(ctx, type, a, stage, t)) return;
 
   // 1. stakes and rope marking the footprint
   const stakes = 6;
@@ -80,7 +84,8 @@ export function drawConstruction(ctx: Ctx, type: BuildingType, a: DrawArgs, prog
     ctx.beginPath();
     ctx.rect(left - 120, top, W + 280, revealH + 40);
     ctx.clip();
-    BUILDING_ART[type].draw(ctx, a);
+    // not lit at night until it's finished: nobody lives there yet
+    withoutEmissive(() => drawBuilding(ctx, type, a));
     ctx.restore();
     // bright edge where masons are working
     ctx.globalAlpha = 0.35;
@@ -108,15 +113,14 @@ export function drawUpgrade(ctx: Ctx, type: BuildingType, a: DrawArgs, progress:
   const W = BUILDINGS[type].width;
   const H = BUILDING_ART[type].height;
   const left = a.x - W / 2;
-  const art = BUILDING_ART[type];
-  art.draw(ctx, { ...a, upgraded: false });
+  drawBuilding(ctx, type, { ...a, upgraded: false });
   if (progress > 0) {
     const revealH = (H + 60) * progress;
     ctx.save();
     ctx.beginPath();
     ctx.rect(left - 120, a.base - revealH, W + 280, revealH + 40);
     ctx.clip();
-    art.draw(ctx, { ...a, upgraded: true });
+    withoutEmissive(() => drawBuilding(ctx, type, { ...a, upgraded: true }));
     ctx.restore();
   }
   materials(ctx, a.x, W, a.base, a.onSite ?? {}, a.seed);
@@ -139,7 +143,7 @@ export function drawDemolition(ctx: Ctx, type: BuildingType, a: DrawArgs, left: 
   ctx.beginPath();
   ctx.rect(x0 - 120, top, W + 280, standing + 40);
   ctx.clip();
-  BUILDING_ART[type].draw(ctx, a);
+  withoutEmissive(() => drawBuilding(ctx, type, a));
   ctx.restore();
   if (left < 1 && standing < H + 60) {
     // the broken top, ragged, with dust

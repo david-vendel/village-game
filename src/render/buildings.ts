@@ -3,9 +3,9 @@
 // roof. The sun is to the left, so right-hand faces are in shadow.
 
 import type { BuildingType } from '../game/buildings';
-import { demoFarm, type FarmState } from '../game/farm';
+import type { FarmState } from '../game/farm';
 import { BAKERY_OVEN_MOUTH_DX, BAKERY_SLOTS, BASKET, MILL_SLOTS, PILE_UNIT, SACK, pileItems, STONECUTTER_DOOR, STONECUTTER_SLOTS, TAVERN_SLOTS, warehouseSlot, WOODCUTTER_DOOR, WOODCUTTER_SLOTS, YARD_ITEMS, type Slot } from '../game/layout';
-import { stockOf, type Amounts, type Stock } from '../game/resources';
+import type { Amounts, Stock } from '../game/resources';
 import type { Worker } from '../game/worker';
 import { breadBasket, doorProgress, drawBackFences, drawBackField, drawFrontField, drawStore, stook } from './farm';
 import { drawArm, drawHead, drawLegs, drawTorso, type Figure, HEAD, outfitOf, SHOULDER } from './figure';
@@ -47,6 +47,34 @@ export interface BuildingArt {
   draw: (ctx: Ctx, a: DrawArgs) => void;
   /** Drawn on the land in front of the road (e.g. the farm's front field). */
   front?: (ctx: Ctx, a: DrawArgs) => void;
+  /**
+   * Art split for sprites (docs/art/ASSET_SPEC.md): `body` is the static picture, with no
+   * people, stock or animation, which a sprite replaces; `overlay` draws the live details over
+   * the body or its sprite; `points` are the body's named points (from the anchor, the centre
+   * of the front at ground level), which the overlay uses without a sprite. `draw` is body
+   * then overlay. Art without the split is replaced whole by a sprite.
+   */
+  body?: (ctx: Ctx, a: DrawArgs) => void;
+  overlay?: (ctx: Ctx, a: DrawArgs, s: Surface) => void;
+  points?: Record<string, [number, number]>;
+  /** The body's light-emitting parts (lit windows) alone, for a sprite's emissive layer. */
+  lights?: (ctx: Ctx, a: DrawArgs) => void;
+}
+
+/** Where a building's live details go: its sprite's points and parts, or the procedural art's own. */
+export interface Surface {
+  /** A named point (ASSET_SPEC §7.1) on screen, or null if the art has none. */
+  at(name: string): [number, number] | null;
+  /** Draw a state part (assets.ts STATE_PARTS) from the sprite; false if there is none, so draw it procedurally. */
+  part(name: string): boolean;
+}
+
+/** The procedural art's surface: its points placed at the building's anchor, and no parts. */
+export function proceduralSurface(a: DrawArgs, points: Record<string, [number, number]> = {}): Surface {
+  return {
+    at: (name) => (points[name] ? [a.x + points[name][0], a.base + points[name][1]] : null),
+    part: () => false,
+  };
 }
 
 // Oblique projection for depth: back edges shift right and up.
@@ -350,18 +378,18 @@ function drawFarmFrontField(ctx: Ctx, a: DrawArgs): void {
   drawFrontField(ctx, a, a.farm, a.seed);
 }
 
-function drawFarm(ctx: Ctx, a: DrawArgs): void {
-  // small cottage with a lean-to barn
+/** Farmhouse points, from the anchor: its door (bottom centre), and where each room's sleeper snores. */
+const FARM_POINTS: Record<string, [number, number]> = { door: [-19, 0], 'sleep:0': [-34, -70], 'sleep:1': [10, -70] };
+
+/** Small cottage with a lean-to barn: the static picture. */
+function farmBody(ctx: Ctx, a: DrawArgs): void {
   const w = 80;
   const d = 40;
   const x0 = a.x - 58;
   stonePlinth(ctx, x0, a.base, w, 10, d);
   block(ctx, x0, a.base - 10, w, 38, d, '#ead9b4');
   timberFrame(ctx, x0, a.base - 10, w, 38, a.seed + 3);
-  // the door stands open while the farmer steps through it
-  const doorOpen = (a.workers ?? []).some((w) => doorProgress(w) > 0 && doorProgress(w) < 1);
-  door(ctx, x0 + 30, a.base, 18, 34, doorOpen ? '#1c140d' : undefined);
-  if (doorOpen) rect(ctx, x0 + 26, a.base - 30, 4, 30, '#6b4a2c'); // the door leaf, swung open
+  door(ctx, x0 + 30, a.base, 18, 34);
   window_(ctx, x0 + 8, a.base - 40, 13, 13, true, a.time, a.seed);
   // upgraded: a second room on the other side of the door, for a second farmer
   if (a.upgraded) window_(ctx, x0 + 59, a.base - 40, 13, 13, true, a.time, a.seed + 1);
@@ -374,14 +402,38 @@ function drawFarm(ctx: Ctx, a: DrawArgs): void {
   line(ctx, bx + 10, a.base - 30, bx + 34, a.base, '#8b6440', 2.5);
   line(ctx, bx + 34, a.base - 30, bx + 10, a.base, '#8b6440', 2.5);
   poly(ctx, [bx - 4, a.base - 38, bx + 50, a.base - 38, bx + 50, a.base - 52, bx - 4, a.base - 58], '#8e4a33');
+}
+
+/** The farmhouse's lit windows, as the body draws them. */
+function farmLights(ctx: Ctx, a: DrawArgs): void {
+  const x0 = a.x - 58;
+  rect(ctx, x0 + 8, a.base - 40, 13, 13, '#f3b75a');
+  if (a.upgraded) rect(ctx, x0 + 59, a.base - 40, 13, 13, '#f3b75a');
+}
+
+/** The farm's live details: the door open while someone steps through, fences, the grain store, sleepers. */
+function farmOverlay(ctx: Ctx, a: DrawArgs, s: Surface): void {
+  const doorOpen = (a.workers ?? []).some((w) => doorProgress(w) > 0 && doorProgress(w) < 1);
+  const d = s.at('door');
+  if (doorOpen && !s.part('doorOpen') && d) {
+    door(ctx, d[0] - 9, d[1], 18, 34, '#1c140d');
+    rect(ctx, d[0] - 13, d[1] - 30, 4, 30, '#6b4a2c'); // the door leaf, swung open
+  }
   // low fences in front of the side plots
   drawBackFences(ctx, a, a.farm);
   // the grain store between the house and the street
   drawStore(ctx, a, a.stock?.grain ?? 0);
   // the farmers asleep inside, each in their own room
   const sleepers = (a.workers ?? []).filter((wk) => wk.task.kind === 'home' && wk.task.activity === 'sleep').length;
-  if (sleepers > 0) drawSnore(ctx, x0 + w * 0.3, a.base - 70, a.time);
-  if (sleepers > 1) drawSnore(ctx, x0 + w * 0.85, a.base - 70, a.time + 1.3);
+  for (let i = 0; i < Math.min(sleepers, 2); i++) {
+    const p = s.at(`sleep:${i}`);
+    if (p) drawSnore(ctx, p[0], p[1], a.time + i * 1.3);
+  }
+}
+
+function drawFarm(ctx: Ctx, a: DrawArgs): void {
+  farmBody(ctx, a);
+  farmOverlay(ctx, a, proceduralSurface(a, FARM_POINTS));
 }
 
 /** Little z's drifting up from a sleeper's window. */
@@ -1066,7 +1118,7 @@ function drawCrossroads(ctx: Ctx, a: DrawArgs): void {
 export const BUILDING_ART: Record<BuildingType, BuildingArt> = {
   warehouse: { height: 100, draw: drawWarehouse },
   house: { height: 140, draw: drawHouse },
-  farm: { height: 120, behind: drawFarmField, draw: drawFarm, front: drawFarmFrontField },
+  farm: { height: 120, behind: drawFarmField, draw: drawFarm, front: drawFarmFrontField, body: farmBody, overlay: farmOverlay, points: FARM_POINTS, lights: farmLights },
   mill: { height: 250, draw: drawMill },
   bakery: { height: 120, draw: drawBakery },
   blacksmith: { height: 150, draw: drawBlacksmith },
@@ -1079,20 +1131,3 @@ export const BUILDING_ART: Record<BuildingType, BuildingArt> = {
   stonecutter: { height: 100, draw: drawStonecutter },
   intersection: { height: 56, draw: drawCrossroads },
 };
-
-const DEMO_FARM = demoFarm();
-/** Menu previews show a half-full store. */
-const DEMO_STOCK = stockOf({ grain: 3, wood: 60, stone: 50, flour: 20, bread: 25 });
-
-/** Small icon-sized preview for the build menu (draws the real art, scaled). */
-export function drawBuildingIcon(ctx: Ctx, type: BuildingType, x: number, base: number, scale: number, time: number): void {
-  ctx.save();
-  ctx.translate(x, base);
-  ctx.scale(scale, scale);
-  const art = BUILDING_ART[type];
-  const args: DrawArgs = { x: 0, base: 0, time, seed: 7, farm: type === 'farm' ? DEMO_FARM : undefined, stock: DEMO_STOCK };
-  if (art.behind) art.behind(ctx, args);
-  art.draw(ctx, args);
-  ctx.restore();
-}
-

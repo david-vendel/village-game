@@ -17,7 +17,9 @@ import { employees } from '../game/people';
 import { laidOut, onSite, upgrading } from '../game/site';
 import { backOf, crossings, groundPoint, mapPoint, SIDE_ROAD_HALF, streetOf, streetRange, type Street, type Vec } from '../game/streets';
 import { getBuilding, type Building, type World } from '../game/world';
-import { BUILDING_ART, type DrawArgs } from './buildings';
+import type { DrawArgs } from './buildings';
+import type { ViewId } from './manifest';
+import { drawBuilding } from './sprites';
 import { drawConstruction, drawDemolition, drawUpgrade } from './construction';
 import { drawWorker, farmerScale } from './farm';
 import { figureOf } from './figure';
@@ -165,14 +167,16 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
 
   // buildings stand on their lots behind their street; one on a street running away from the camera is
   // seen end-on, so it is moved over beside the road rather than standing across it
-  const lot = (b: Building, x: number): Vec => {
+  // (seen that way it shows its roadside view: L on the left of the road, its front facing right)
+  const lot = (b: Building, x: number): { at: Vec; view: ViewId } => {
     const s = world.streets[streetOf(x)];
     const back = backOf(s.dir);
     const across = Math.abs(back.x * eye.dir.x + back.y * eye.dir.y) > 0.5;
-    if (!across) return ground(world, x, BASE_Y);
+    if (!across) return { at: ground(world, x, BASE_Y), view: 'street' };
     const p = mapPoint(world, x);
     const d = SIDE_ROAD_HALF + 10 + BUILDINGS[b.type].width / 2;
-    return { x: p.x + back.x * d, y: p.y + back.y * d };
+    const at = { x: p.x + back.x * d, y: p.y + back.y * d };
+    return { at, view: toEye(eye, at).u < toEye(eye, p).u ? 'roadsideL' : 'roadsideR' };
   };
   for (const b of world.buildings) {
     const x = world.plots[b.plotIndex].x;
@@ -190,10 +194,11 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
       laid: laidOut(b),
       vpX: 0,
     };
-    add(lot(b, x), BUILDINGS[b.type].width, () => {
+    const { at, view } = lot(b, x);
+    add(at, BUILDINGS[b.type].width, () => {
       if (b.demolition && b.demolition.from >= 1) drawDemolition(ctx, b.type, a, b.progress); // one still being built comes down through its stages
-    else if (upgrading(b)) drawUpgrade(ctx, b.type, a, b.progress);
-      else if (b.status === 'done') BUILDING_ART[b.type].draw(ctx, a);
+      else if (upgrading(b)) drawUpgrade(ctx, b.type, a, b.progress);
+      else if (b.status === 'done') drawBuilding(ctx, b.type, a, view);
       else drawConstruction(ctx, b.type, a, b.progress);
     });
   }
@@ -201,7 +206,7 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
   for (const c of crossings(world)) {
     const b = getBuilding(world, c.buildingId);
     if (!b || !elsewhere(c.x) || world.plots[b.plotIndex].x === c.x) continue;
-    add(ground(world, c.x, BASE_Y), 80, () => BUILDING_ART.intersection.draw(ctx, { x: 0, base: 0, time: world.time, seed: b.id * 97 }));
+    add(ground(world, c.x, BASE_Y), 80, () => drawBuilding(ctx, 'intersection', { x: 0, base: 0, time: world.time, seed: b.id * 97 }));
   }
   // every tree, wherever it stands (this street's too: they stand at all depths)
   const felling = beingFelled(world);

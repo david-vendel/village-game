@@ -7,6 +7,8 @@ import { drawScene } from './scene';
 import { drawTopView } from './topview';
 import { drawBuildMenu, drawHud, drawToasts, drawTurnFade, type Toast } from './ui';
 
+export { artMode, loadArt, type ArtMode } from './assets';
+export { showArtPreview } from './preview';
 export { cameraX } from './scene';
 export { STRIDE as HORSE_STRIDE } from './horse';
 export { buildingMenuLayout, hit, HUD_BUTTON, hudLayout, menuLayout, type Rect, type Toast } from './ui';

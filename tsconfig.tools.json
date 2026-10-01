@@ -1,0 +1,9 @@
+{
+  // The Node tools (tools/) and tests/: Node types, no DOM. Part of `npm run typecheck`.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    "types": ["node"]
+  },
+  "include": ["tools", "tests"]
+}

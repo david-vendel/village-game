@@ -95,7 +95,7 @@ Every image of an asset (each view, variant, stage, part and frame) comes as a s
 | --- | --- | --- | --- | --- |
 | `color` | **yes** | Final look under the §4 key, including AO and self-shadowing. **Straight (non-premultiplied) alpha.** | WebP lossy q ≥ 85 with alpha (AVIF allowed) | sRGB |
 | `shadow` | should (buildings, people, rider, trees) | The shadow it casts on the ground under the §4 sun. Black, strength in alpha. Extends beyond the object; the image `size` covers both | WebP/PNG | linear alpha |
-| `emissive` | when it has lights | Light-emitting parts (windows, forge, lanterns, oven mouth) on black. Added at night | WebP | sRGB |
+| `emissive` | when it has lights | Light-emitting parts (windows, forge, lanterns, oven mouth) on black. Added at night (the game turns brightness into alpha on load, so the black adds nothing) | WebP | sRGB |
 | `normal` | should (route B: always) | View-space normals: +x right, +y up, +z towards camera (OpenGL), encoded `n·0.5+0.5` | **lossless** WebP or PNG | linear |
 | `albedo` | optional | Unlit base colour | WebP | sRGB |
 | `ao` | optional | Ambient occlusion, white = open | lossless, 8-bit | linear |
@@ -133,8 +133,17 @@ Asset ids are stable strings. The game maps its state to ids (§11).
   - `emissivePulse`: forge glow flicker, ovens
 
   Parts draw in `z` order relative to the body (`"behind"` or `"front"`).
+  **State parts** are drawn only while the building is in that state, not always. Today:
+  `doorOpen` (`static`), the open door, drawn at its pivot while someone steps through the door.
+  Without it the game draws a dark doorway at the `door` point.
 - **`points`**, used by the renderer: `smoke:*` (chimney tops, where procedural smoke
-  starts), `door` (where people appear/disappear), `sign`, `bell`, `window:*` (optional).
+  starts), `door` (bottom centre of the doorway, on the ground: where people appear/disappear),
+  `sign`, `bell`, `window:*` (optional), `sleep:*` (where a sleeper's z's rise, one per room:
+  the farm has `sleep:0` and `sleep:1`).
+- **What stays procedural** over a sprite: everything that changes with game state is drawn by
+  the game at the sprite's points, not baked in: stored goods (`item` slots), fences of tilled
+  plots, people at windows and doors, sleepers, smoke. A building's sprite is its static
+  picture only.
 - **`behind` / `front`**: extra layers drawn in the background or foreground passes (e.g.
   a farm's yard props). Farm fields are not part of the building (see 7.6).
 
@@ -293,7 +302,11 @@ loads backdrops and the rider up front.
 New game state that should be visible needs a row here and the asset kinds it implies,
 in the same PR.
 
-## 12. Validation (`npm run assets:check`, to be built in WP2)
+## 12. Validation (`npm run assets:check [folder]`)
+
+Implemented in `tools/assets/validate.ts`; `npm test` runs it on `public/assets` and on
+deliberately broken copies (`tests/assets.test.ts`). Look at assets with `?art=preview`
+(`&night=1`, `&zoom=0.45`).
 
 An asset is rejected if:
 - it doesn't match the schema;
@@ -312,10 +325,14 @@ An asset is rejected if:
 - alpha-bleed is missing (halo check).
 
 These get warnings, for review:
+- the transparent margin is wider than 8 px;
+- a building's lowest visible row isn't at the anchor (ground contact);
+- files in the folder the manifest doesn't use;
+- an asset isn't approved yet (it is left out of production builds);
 - `left` facing missing;
 - no `shadow` or `normal` on route-B assets;
 - the colour pass disagrees with the §4 light direction (shading vs normals);
-- palette outside the style bible's ranges.
+- palette outside the style bible's ranges (not checked until WP1's STYLE.md defines them).
 
 ## 13. Versioning
 - `specVersion` is bumped for breaking changes. The game supports the current and previous versions.

@@ -10,7 +10,7 @@
 // layer, not to loosen the rule.
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { dirname, join, relative, resolve } from 'node:path';
+import { dirname, join, relative, resolve, sep } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const SRC = resolve(__dirname, '../src');
@@ -30,17 +30,20 @@ interface Import {
   names: string[];
 }
 
+/** Path relative to src with forward slashes, so the checks also work on Windows. */
+const fromSrc = (p: string) => relative(SRC, p).split(sep).join('/');
+
 function importsOf(file: string): Import[] {
   const text = readFileSync(file, 'utf8');
   const out: Import[] = [];
   const re = /(?:import|export)\s+(?:type\s+)?(?:\{([^}]*)\}|[\w*\s,]+)?\s*from\s+'(\.[^']*)'/g;
   for (const m of text.matchAll(re)) {
-    const target = relative(SRC, resolve(dirname(file), m[2]));
+    const target = fromSrc(resolve(dirname(file), m[2]));
     const names = (m[1] ?? '')
       .split(',')
       .map((n) => n.trim().replace(/^type\s+/, '').split(/\s+as\s+/)[0])
       .filter(Boolean);
-    out.push({ file: relative(SRC, file), target, names });
+    out.push({ file: fromSrc(file), target, names });
   }
   return out;
 }
@@ -88,7 +91,7 @@ describe('layer boundaries', () => {
     const bad = sources(join(SRC, 'game')).filter((f) =>
       /\b(window|document|CanvasRenderingContext2D|HTMLCanvasElement|requestAnimationFrame|localStorage)\b/.test(readFileSync(f, 'utf8')),
     );
-    expect(bad.map((f) => relative(SRC, f))).toEqual([]);
+    expect(bad.map(fromSrc)).toEqual([]);
   });
 
   it('render imports only src/render and src/game', () => {

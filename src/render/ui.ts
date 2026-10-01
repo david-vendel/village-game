@@ -17,7 +17,8 @@ import { employees, jobsOf } from '../game/people';
 import { RESOURCES, type Amounts } from '../game/resources';
 import { backOf, mapPoint, streetOf, streetRange } from '../game/streets';
 import { constructionStage, demolitionYield, getBuilding, type Building, type BuildingOption, type ConstructionStage, type World } from '../game/world';
-import { BUILDING_ART, drawBuildingIcon } from './buildings';
+import { BUILDING_ART } from './buildings';
+import { drawBuildingIcon } from './sprites';
 import type { Ctx } from './util';
 
 const SERIF = 'Georgia, "Times New Roman", serif';

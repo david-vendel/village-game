@@ -1,7 +1,9 @@
 # Architecture
 
-Vite + TypeScript + Canvas 2D. No engine and no image assets: every building, the
-horse, people and the landscape are drawn procedurally in code.
+Vite + TypeScript + Canvas 2D. No engine. Every building, the horse, people and the
+landscape are drawn procedurally in code. Sprite assets (docs/art/ASSET_SPEC.md) replace that
+art piece by piece where `public/assets/manifest.json` has them; the procedural art stays as the
+fallback.
 
 ## Layers
 
@@ -61,6 +63,7 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
 | Change crops, fields, the farmer's look or animation, the sheaf pile | `render/farm.ts` |
 | Change the horse/rider, villagers | `render/horse.ts`, `render/people.ts` |
 | Change construction visuals (scaffolding, stages' look) | `render/construction.ts` |
+| Replace art with sprite assets | put them in `public/assets/` per `docs/art/ASSET_SPEC.md`; check with `npm run assets:check`, look at `?art=preview` |
 | Change the HUD, menu, labels, captions, button positions | `render/ui.ts` (tap areas follow automatically) |
 | Change draw order or camera framing | `render/scene.ts` |
 | Add a building type | `game/buildings.ts` (gameplay data: cost, storage, jobs) **and** `render/buildings.ts` (art) |
@@ -217,9 +220,22 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   them, nearer ones in among this street's people by screen depth.
 - `buildings.ts`: "2D picture of a 3D building" primitives (front face, shaded side face, gable
   roof with thatch/tile/slate, timber framing) and `BUILDING_ART`: per building `draw`, optional
-  `behind`/`front` art, and the drawn `height`.
+  `behind`/`front` art, and the drawn `height`. Art split for sprites also has `body` (the static
+  picture a sprite replaces), `overlay` (live details: open door, stock, sleepers, drawn over the
+  body or its sprite at named points), `points` and `lights` (for the exported emissive layer).
+- `sprites.ts`: `drawBuilding`, which everything that draws a finished building calls: the
+  building's sprite (shadow, colour, parts, smoke, then its `overlay`) when one is decoded, else
+  its procedural `draw`. Stage sprites for construction, roadside views for buildings seen up a
+  side road, and the build menu's previews.
+- `assets.ts`: sprite assets at run time: loads the manifest (`?art=procedural` ignores it;
+  production builds keep only approved assets), decodes images lazily at the tier the current
+  transform needs, draws an image's layers at its anchor, and queues emissive layers, which the
+  scene adds after the night tint. `manifest.ts`: the manifest's types and pure lookups, shared
+  with the asset tools. `preview.ts`: the `?art=preview` contact sheet (each sprite beside the
+  procedural art it replaces; `&night=1`, `&zoom=0.45`).
 - `construction.ts`: generic staged construction for any building: stakes → foundation →
-  timber frame → walls → roof. The finished art is revealed bottom-up behind scaffolding.
+  timber frame → walls → roof. The finished art is revealed bottom-up behind scaffolding, or,
+  for a building with stage sprites, each stage's image fades in over the one before.
 - `grid.ts`: the land-grid debug overlay (tuning panel → "land grid", or `?grid=1`): cells tinted
   by use (building footprint red, field green), plot boundaries dashed.
 - `topview.ts`: the village from above (Tab, or the small map's spot on screen), at its own zoom: the
@@ -283,8 +299,9 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
 
 ## Not done yet / ideas
 
-- Realistic art: planned, not started. See [docs/art/](docs/art/README.md) for the plan, the
-  work packages, and the asset format spec that sprite-based art must follow.
+- Realistic art: in progress. The game side (asset loader, validator, preview) is done; the
+  art itself is not. See [docs/art/](docs/art/README.md) for the plan, the work packages, and the
+  asset format spec that sprite-based art must follow.
 
 - Wood and stone can't be produced yet (no woodcutter or quarry), so the starting warehouse is
   all there is.  New people don't arrive
