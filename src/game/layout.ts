@@ -169,11 +169,15 @@ function pyramid(i: number, rows: readonly number[]): { row: number; col: number
 }
 
 /**
- * Items the storage yard (the `warehouse` building) holds, per resource. Everything
- * it stores lies out in the open where it can be seen, so this is also its
- * capacity: YARD_ITEMS × PILE_UNIT (buildings.ts).
+ * Items a small storage yard (the `warehouse` building, three cells wide)
+ * holds, per resource; a medium or large one (two or three merged) holds
+ * twice or three times as much. Everything it stores lies out in the open
+ * where it can be seen, so this is also its capacity: YARD_ITEMS × PILE_UNIT
+ * (buildings.ts).
  */
-export const YARD_ITEMS = { wood: 30, stone: 30, grain: 10, flour: 10, bread: 10 } as const;
+export const YARD_ITEMS = { wood: 15, stone: 15, grain: 5, flour: 5, bread: 5 } as const;
+/** How many items of each the yard's piles are laid out for: a medium yard's. */
+const YARD_LAID = { wood: 30, stone: 30, grain: 10, flour: 10, bread: 10 } as const;
 
 /**
  * The storage yard's piles: a stone heap on the left, a log pile on the right,
@@ -181,8 +185,14 @@ export const YARD_ITEMS = { wood: 30, stone: 30, grain: 10, flour: 10, bread: 10
  * (right) stacked on the ground and baskets of bread on two shelves at the
  * back. Item i (0 = bottom of the stack).
  */
-export function warehouseSlot(r: 'wood' | 'stone' | 'grain' | 'flour' | 'bread', i: number): Slot {
-  const n = Math.max(0, Math.min(i, YARD_ITEMS[r] - 1));
+export function warehouseSlot(r: 'wood' | 'stone' | 'grain' | 'flour' | 'bread', i: number, size = 2): Slot {
+  // laid out for a medium yard; a small one is squeezed into half the width, a large one spread over half again
+  const s = warehouseSlotMedium(r, i);
+  return { dx: (s.dx * size) / 2, lift: s.lift };
+}
+
+function warehouseSlotMedium(r: 'wood' | 'stone' | 'grain' | 'flour' | 'bread', i: number): Slot {
+  const n = Math.max(0, Math.min(i, YARD_LAID[r] - 1));
   if (r === 'wood') {
     const { row, col } = pyramid(n, [7, 6, 5, 4, 3, 3, 2]);
     return { dx: 41 + col * 7 + row * 3.5, lift: 3.4 + row * 6 };

@@ -17,7 +17,7 @@ import { buildShortfall, putAway, takeFromWarehouses, upgradeShortfall, WAREHOUS
 import { createFarm, DEFAULT_WORK, farmWorkplace, updateCrops, type FarmState } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
 import { BLOCK, CELL_W, FIRST_PLOT_X, PLOT_SPACING, STREET_LENGTH } from './layout';
-import { blockStartX, footprintOf, roadBlocked, siteX, sizeOfBuilding, whyNotHere } from './grid';
+import { alongCell, blockStartX, footprintOf, roadBlocked, siteX, sizeOfBuilding, whyNotHere } from './grid';
 import { clearLand, plantWoods, gatherWorkplace, isGatherHut, updateForest, type Tree } from './nature';
 import { employees, laneY, nameFor, openings, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
 import { builderPositions, builders, createSite, siteWork, siteWorkplace, upgrading, type Site } from './site';
@@ -129,13 +129,13 @@ export interface Rider {
   turnedAt?: number;
 }
 
-/** What can be done to a building from its menu. */
-export type BuildingOption = 'upgrade' | 'demolish';
+/** What can be done to a building from its menu: pulling down just the section the rider is at, of a merged one. */
+export type BuildingOption = 'upgrade' | 'demolishSection' | 'demolish';
 
 /** The menu open where the rider is: what to build there (at world x), or what to do with the building there. */
 export type BuildMenu =
   | { kind: 'build'; x: number; selection: number }
-  | { kind: 'building'; buildingId: number; options: BuildingOption[]; selection: number };
+  | { kind: 'building'; buildingId: number; options: BuildingOption[]; selection: number; x: number };
 
 export interface GameEvent {
   kind: 'placed' | 'completed' | 'upgraded' | 'demolished';
@@ -194,6 +194,7 @@ const STARTING_VILLAGE: Array<[number, BuildingType]> = [
   [1150, 'well'],
   [1300, 'tavern'],
   [1600, 'warehouse'],
+  [1675, 'warehouse'],
   [1900, 'house'],
   [2350, 'farm'],
   [3100, 'chapel'],
@@ -352,7 +353,7 @@ export function placeBuilding(
   if (!instant) b.site = createSite(type, opts.free ? BUILDINGS[type].cost : {});
   world.buildings.push(b);
   if (instant && type === 'farm') b.farm = createFarm({ spots: farmFieldSpots(world, b) });
-  if (instant && type === 'house') b = mergeHouses(world, b);
+  if (instant) b = mergeNeighbours(world, b);
   if (type === 'intersection') crossroadsPlot(world, x)!.buildingId = b.id;
   if (instant && type === 'intersection') openStreet(world, b);
   // the new footprint may cover land neighbouring farms were using; trees standing on it are cut down
@@ -574,7 +575,7 @@ function complete(world: World, b: Building): void {
     return;
   }
   if (b.type === 'farm') b.farm = createFarm({ spots: farmFieldSpots(world, b) });
-  if (b.type === 'house') b = mergeHouses(world, b);
+  b = mergeNeighbours(world, b);
   if (b.type === 'intersection') {
     openStreet(world, b);
     syncFarmFields(world);
@@ -584,31 +585,95 @@ function complete(world: World, b: Building): void {
   world.events.push({ kind: 'completed', buildingId: b.id });
 }
 
+/** Buildings that grow by merging with their own kind beside them: up to three small ones in one (Building.size). */
+export const MERGES: Partial<Record<BuildingType, true>> = { house: true, warehouse: true };
+const MAX_SIZE = 3;
+
+/** Workers at `from` now work at `to`, standing where they stood. */
+function moveStaff(world: World, from: Building, to: Building): void {
+  for (const p of employees(world, from)) {
+    p.job!.buildingId = to.id;
+    p.job!.worker.dx += from.x - to.x;
+  }
+}
+
 /**
- * A small house is finished: it is built onto a finished house it stands
- * right beside, the two one house of their widths together, as long as that
- * is no wider than a large house (three small ones). The older house takes in
- * the newer. Returns the house it is now part of.
+ * A small house or storage yard is finished: it is built onto a finished one
+ * of its kind right beside it, the two one building of their widths together
+ * (medium, then large), no wider than three small ones. The older takes in
+ * the newer, with its store and its workers. Returns the building it is now
+ * part of.
  */
-export function mergeHouses(world: World, b: Building): Building {
+export function mergeNeighbours(world: World, b: Building): Building {
+  if (!MERGES[b.type]) return b;
   for (;;) {
     const fb = footprintOf(b)!;
     const o = world.buildings.find((o) => {
-      if (o === b || o.type !== 'house' || o.status !== 'done' || o.site || streetOf(o.x) !== streetOf(b.x)) return false;
+      if (o === b || o.type !== b.type || o.status !== 'done' || o.site || streetOf(o.x) !== streetOf(b.x)) return false;
       const fo = footprintOf(o)!;
-      return (fo.i1 + 1 === fb.i0 || fb.i1 + 1 === fo.i0) && (o.size ?? 1) + (b.size ?? 1) <= 3;
+      return (fo.i1 + 1 === fb.i0 || fb.i1 + 1 === fo.i0) && (o.size ?? 1) + (b.size ?? 1) <= MAX_SIZE;
     });
     if (!o) return b;
     const fo = footprintOf(o)!;
     const [keep, gone] = o.id < b.id ? [o, b] : [b, o];
     const size = ((o.size ?? 1) + (b.size ?? 1)) as 2 | 3;
+    const oldX = keep.x;
     keep.x = streetStart(streetOf(b.x)) + (Math.min(fb.i0, fo.i0) + (size * BLOCK) / 2) * CELL_W;
     keep.size = size;
     keep.completedAt = world.time;
+    for (const r of RESOURCES) keep.stock[r] += gone.stock[r];
+    for (const p of employees(world, keep)) p.job!.worker.dx += oldX - keep.x;
+    moveStaff(world, gone, keep);
     world.buildings = world.buildings.filter((x) => x !== gone);
     if (world.menu?.kind === 'building' && world.menu.buildingId === gone.id) world.menu = null;
     b = keep;
   }
+}
+
+/**
+ * Pull down the section of three cells of a merged building that world x is
+ * in: the section is split off as a small building of its own and pulled
+ * down; what stands either side of it stands on, as one or two buildings
+ * (a large house losing its middle is two small ones). Its store is shared
+ * out by width. Returns whether it started.
+ */
+export function demolishSection(world: World, b: Building, x: number): boolean {
+  const size = b.size ?? 1;
+  if (size < 2 || whyNotDemolish(world, b)) return false;
+  const f = footprintOf(b)!;
+  const start = streetStart(streetOf(b.x));
+  const k = Math.max(0, Math.min(size - 1, Math.floor((alongCell(x) - f.i0) / BLOCK)));
+  const xOf = (i0: number, n: number) => start + (i0 + (n * BLOCK) / 2) * CELL_W;
+  const share = (n: number) => {
+    const s = stockOf();
+    for (const r of RESOURCES) s[r] = (b.stock[r] * n) / size;
+    return s;
+  };
+  const fresh = (i0: number, n: number): Building => ({
+    id: world.nextId++,
+    type: b.type,
+    x: xOf(i0, n),
+    ...(n > 1 ? { size: n as 2 | 3 } : {}),
+    progress: 1,
+    status: 'done',
+    completedAt: b.completedAt,
+    stock: share(n),
+  });
+  const before = k;
+  const after = size - k - 1;
+  const section = fresh(f.i0 + k * BLOCK, 1);
+  const later = before && after ? fresh(f.i0 + (k + 1) * BLOCK, after) : null;
+  // b stands on (its workers too) as the part before the section, or else as the part after it
+  const [i0, n] = before ? [f.i0, before] : [f.i0 + (k + 1) * BLOCK, after];
+  const oldX = b.x;
+  b.x = xOf(i0, n);
+  b.stock = share(n);
+  if (n > 1) b.size = n as 2 | 3;
+  else delete b.size;
+  for (const p of employees(world, b)) p.job!.worker.dx += oldX - b.x;
+  world.buildings.push(section, ...(later ? [later] : []));
+  world.menu = null;
+  return demolish(world, section);
 }
 
 // --- Streets -------------------------------------------------------------------
@@ -737,8 +802,8 @@ export function openMenu(world: World): boolean {
   const b = buildingAt(world, x);
   if (b) {
     if (!canDemolish(b)) return false;
-    const options: BuildingOption[] = canUpgrade(b) ? ['upgrade', 'demolish'] : ['demolish'];
-    world.menu = { kind: 'building', buildingId: b.id, options, selection: 0 };
+    const options: BuildingOption[] = [...(canUpgrade(b) ? ['upgrade' as const] : []), ...((b.size ?? 1) > 1 ? ['demolishSection' as const] : []), 'demolish'];
+    world.menu = { kind: 'building', buildingId: b.id, options, selection: 0, x };
   } else {
     const fits = BUILDING_TYPES.map((t) => !whyNotBuild(world, t, x));
     if (!fits.includes(true)) return false;

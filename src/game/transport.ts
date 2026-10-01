@@ -23,7 +23,7 @@
 // anything is hired away for a lasting job (the mill's miller) before any
 // more errands (people.ts). Like builders, serfs work day and night.
 
-import { BUILDINGS } from './buildings';
+import { BUILDINGS, storageOf } from './buildings';
 import { putAway, storeSpot, tripLoad, warehouses } from './economy';
 import { STAND_Y, type Spot } from './layout';
 import { employees } from './people';
@@ -102,7 +102,7 @@ const unclaimed = (runs: Underway[], b: Source, r: Resource) =>
   amountAt(b, r) - sum(runs.filter((u) => !u.carrying && u.job.target === b.id && errandResource(u.job.action) === r));
 /** Room left in b's store for r once what is on its way (shipped or supplied) has arrived. */
 const roomLeft = (runs: Underway[], b: Building, r: Resource) =>
-  room(b.stock, BUILDINGS[b.type].storage, r) - sum(runs.filter((u) => u.job.to === b.id && errandResource(u.job.action) === r));
+  room(b.stock, storageOf(b), r) - sum(runs.filter((u) => u.job.to === b.id && errandResource(u.job.action) === r));
 
 /** The nearest place to x with some of r free to take: a building that makes it or a warehouse; at equal distance the maker. */
 function nearestSource(world: World, runs: Underway[], r: Resource, x: number, not: Building): Building | null {
@@ -191,8 +191,8 @@ export function errandWork(world: World, x: number): Pick<Workplace, 'jobSpot' |
    */
   const destination = (job: JobTicket, r: Resource): Building | null => {
     const to = done(world, job.to);
-    if (to && room(to.stock, BUILDINGS[to.type].storage, r) > 0) return to;
-    return warehouses(world).find((w) => room(w.stock, BUILDINGS.warehouse.storage, r) > 0) ?? done(world, job.target) ?? null;
+    if (to && room(to.stock, storageOf(to), r) > 0) return to;
+    return warehouses(world).find((w) => room(w.stock, storageOf(w), r) > 0) ?? done(world, job.target) ?? null;
   };
   return {
     jobSpot(job): Spot | null {
@@ -211,7 +211,7 @@ export function errandWork(world: World, x: number): Pick<Workplace, 'jobSpot' |
       if (!r || !from) return null;
       const to = done(world, job.to);
       // a supply takes only what the store it goes to has room for
-      const fits = job.action === supplyAction(r) && to ? room(to.stock, BUILDINGS[to.type].storage, r) : Infinity;
+      const fits = job.action === supplyAction(r) && to ? room(to.stock, storageOf(to), r) : Infinity;
       const n = Math.min(loadAt(from, r), amountAt(from, r), fits);
       if (n <= 0) return null;
       if (isPile(from)) takeFromPile(world, from, n);
@@ -224,7 +224,7 @@ export function errandWork(world: World, x: number): Pick<Workplace, 'jobSpot' |
     },
     deliver(load, job) {
       const to = destination(job, load.resource);
-      const n = to ? Math.min(load.amount, room(to.stock, BUILDINGS[to.type].storage, load.resource)) : 0;
+      const n = to ? Math.min(load.amount, room(to.stock, storageOf(to), load.resource)) : 0;
       if (to) to.stock[load.resource] += n;
       // it filled up at the last moment: the rest goes to a warehouse with room, else down on the ground here
       const rest = load.amount - n - (n < load.amount ? putAway(world, { resource: load.resource, amount: load.amount - n }, x) : 0);

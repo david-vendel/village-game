@@ -5,7 +5,7 @@
 // that make or use them (transport.ts). Every store keeps each item in its
 // own place (storeSlot), where it is picked up from and put down.
 
-import { BUILDINGS, type BuildingType } from './buildings';
+import { BUILDINGS, type BuildingType, storageOf } from './buildings';
 import { BAKERY_SLOTS, BASKET, MILL_SLOTS, PILE_UNIT, SACK, STONECUTTER_SLOTS, TAVERN_SLOTS, SHEAF_SLOTS, STAND_Y, warehouseSlot, WOODCUTTER_SLOTS, type Slot, type Spot } from './layout';
 import { room, RESOURCES, shortfall, stockOf, type Amounts, type Load, type Resource, type Stock } from './resources';
 import { takeFromPile, type Pile } from './piles';
@@ -127,13 +127,12 @@ export function takeFromWarehouses(world: World, amounts: Amounts, x: number): S
 
 /** Put a load into the warehouse nearest x that has room; returns how much fitted. */
 export function putAway(world: World, load: Load, x: number): number {
-  const capacity = BUILDINGS.warehouse.storage;
   const fits = warehouses(world)
-    .filter((w) => room(w.stock, capacity, load.resource) > 0)
+    .filter((w) => room(w.stock, storageOf(w), load.resource) > 0)
     .sort((a, b) => away(world, a, x) - away(world, b, x));
   let left = load.amount;
   for (const w of fits) {
-    const n = Math.min(left, room(w.stock, capacity, load.resource));
+    const n = Math.min(left, room(w.stock, storageOf(w), load.resource));
     w.stock[load.resource] += n;
     left -= n;
     if (left <= 0) break;
@@ -147,7 +146,7 @@ export function putAway(world: World, load: Load, x: number): number {
  */
 export function storeSlots(b: Building, r: Resource): { unit: number; perTrip: number; slot: (i: number) => Slot } | null {
   const pick = (slots: readonly Slot[]) => (i: number) => slots[Math.max(0, Math.min(i, slots.length - 1))];
-  if (b.type === 'warehouse') return { unit: PILE_UNIT, perTrip: 1, slot: (i) => warehouseSlot(r, i) };
+  if (b.type === 'warehouse') return { unit: PILE_UNIT, perTrip: 1, slot: (i) => warehouseSlot(r, i, b.size ?? 1) };
   if (b.type === 'farm' && r === 'grain') return { unit: 1, perTrip: 2, slot: pick(SHEAF_SLOTS) };
   if (b.type === 'mill' && (r === 'grain' || r === 'flour')) return { unit: SACK, perTrip: 1, slot: pick(MILL_SLOTS[r]) };
   if (b.type === 'bakery' && r === 'flour') return { unit: SACK, perTrip: 1, slot: pick(BAKERY_SLOTS.flour) };

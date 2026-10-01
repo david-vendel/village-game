@@ -6,7 +6,7 @@
 //   in world coordinates, scaled by `k` around their anchor so they stay
 //   readable when zoomed out.
 
-import { BUILDINGS, BUILDING_TYPES, ROLES, type Role } from '../game/buildings';
+import { BUILDINGS, BUILDING_TYPES, ROLES, type Role, storageOf } from '../game/buildings';
 import { clock } from '../game/daynight';
 import { buildShortfall, upgradeShortfall, villageStock } from '../game/economy';
 import { demolitionWork } from '../game/demolition';
@@ -440,7 +440,7 @@ export function buildingMenuLayout(uiW: number, uiH: number, n: number): MenuLay
   };
 }
 
-const OPTION_NAME: Record<BuildingOption, string> = { upgrade: 'Upgrade', demolish: 'Destroy' };
+const OPTION_NAME: Record<BuildingOption, string> = { upgrade: 'Upgrade', demolishSection: 'Destroy this section', demolish: 'Destroy' };
 
 function drawBuildingMenu(ctx: Ctx, world: World, uiW: number, uiH: number): void {
   const menu = world.menu;
@@ -472,16 +472,21 @@ function drawBuildingMenu(ctx: Ctx, world: World, uiW: number, uiH: number): voi
     roundRect(ctx, r.x, r.y, r.w, r.h - 24, 6);
     ctx.clip();
     if (option === 'upgrade' && Object.keys(upgradeShortfall(world, b)).length) ctx.globalAlpha = 0.4;
-    if (option === 'demolish' && whyNotDemolish(world, b)) ctx.globalAlpha = 0.4;
+    if (option !== 'upgrade' && whyNotDemolish(world, b)) ctx.globalAlpha = 0.4;
     const previewH = r.h - 34;
     const scale = Math.min(0.6, (r.w - 8) / (def.width * 1.3), previewH / (BUILDING_ART[b.type].height + 20));
-    if (option === 'demolish') {
-      // the building, faded, with a red cross over it
+    if (option !== 'upgrade') {
+      // the building, faded, with a red cross over it (a small one, for a section)
       ctx.globalAlpha = 0.45;
       drawBuildingIcon(ctx, b.type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time);
       ctx.globalAlpha = 1;
+      const k = option === 'demolishSection' ? 0.55 : 1;
       const cx = r.x + r.w / 2;
       const cy = r.y + (r.h - 24) / 2;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(k, k);
+      ctx.translate(-cx, -cy);
       ctx.strokeStyle = '#c8553d';
       ctx.lineWidth = 5;
       ctx.lineCap = 'round';
@@ -491,6 +496,7 @@ function drawBuildingMenu(ctx: Ctx, world: World, uiW: number, uiH: number): voi
       ctx.moveTo(cx + 18, cy - 18);
       ctx.lineTo(cx - 18, cy + 18);
       ctx.stroke();
+      ctx.restore();
     } else drawBuildingIcon(ctx, b.type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time);
     ctx.restore();
     const label = `${i + 1}. ${OPTION_NAME[option]}`;
@@ -508,14 +514,22 @@ function drawBuildingMenu(ctx: Ctx, world: World, uiW: number, uiH: number): voi
     const time = world.constructionEnabled ? `Builds in ${+(upgrade.buildTime / world.params.buildSpeed).toFixed(1)}s` : 'Builds instantly (construction off)';
     line2 = `Costs ${amounts(upgrade.cost)}` + (short ? ` — need ${amounts(lack)} more` : '') + `   ·   ${time}`;
   } else {
+    // a section is a small one's share of the whole
+    const part = option === 'demolishSection' ? 1 / (b.size ?? 1) : 1;
     const left = demolitionYield(b);
     const rounded: Amounts = {};
-    for (const r of RESOURCES) if (left[r] >= 0.5) rounded[r] = Math.round(left[r]);
-    const secs = +(demolitionWork(b) / world.params.buildSpeed).toFixed(1);
+    for (const r of RESOURCES) if (left[r] * part >= 0.5) rounded[r] = Math.round(left[r] * part);
+    const secs = +((demolitionWork(b) * part) / world.params.buildSpeed).toFixed(1);
     const street = streetFrom(world, b);
     const why = whyNotDemolish(world, b);
-    line1 = world.constructionEnabled ? `Builders pull it down in ${secs}s` : 'Pull it down at once (construction off)';
-    line1 += street ? '; the street it opened goes with it' : '; its workers are let go';
+    if (option === 'demolishSection') {
+      const k = Math.floor((menu.x - (b.x - ((b.size ?? 1) * 75) / 2)) / 75);
+      const middle = k > 0 && k < (b.size ?? 1) - 1;
+      line1 = (world.constructionEnabled ? `Builders pull down the section you are at in ${secs}s` : 'Pull down the section you are at, at once') + (middle ? '; the rest stands as two' : '; the rest stands');
+    } else {
+      line1 = world.constructionEnabled ? `Builders pull it down in ${secs}s` : 'Pull it down at once (construction off)';
+      line1 += street ? '; the street it opened goes with it' : '; its workers are let go';
+    }
     line2 = why ? `Can't: ${why.toLowerCase()}` : Object.keys(rounded).length ? `Leaves ${amounts(rounded)} on the ground for serfs to carry off` : 'Leaves nothing behind';
     short = !!why;
   }
@@ -629,8 +643,9 @@ export function drawBuildingLabel(ctx: Ctx, world: World, b: Building, sx: numbe
   const def = BUILDINGS[b.type];
   const name = b.upgraded && def.upgrade ? def.upgrade.name : def.name;
   const lines = [def.purpose];
-  const stored = RESOURCES.filter((r) => def.storage[r]);
-  if (stored.length) lines.push(`Store: ${stored.map((r) => `${r} ${b.stock[r]}/${def.storage[r]}`).join(' · ')}`);
+  const storage = storageOf(b);
+  const stored = RESOURCES.filter((r) => storage[r]);
+  if (stored.length) lines.push(`Store: ${stored.map((r) => `${r} ${Math.round(b.stock[r])}/${storage[r]}`).join(' · ')}`);
   for (const role of ROLES) {
     const slots = jobsOf(b)[role] ?? 0;
     if (!slots) continue;

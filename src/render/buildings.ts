@@ -472,19 +472,23 @@ function drawSnore(ctx: Ctx, x: number, y: number, time: number): void {
 function drawWarehouse(ctx: Ctx, a: DrawArgs): void {
   // an open storage yard: everything it holds lies out in plain sight, each
   // item in its own place (game/layout.ts warehouseSlot), where builders take
-  // it from and carriers put it down
+  // it from and carriers put it down; small, medium or large (one, two or
+  // three merged), its yard and shed as wide, its piles spread to match
+  const size = Math.max(1, Math.round((a.width ?? 75) / 75));
+  const k = size / 2;
   const stock = a.stock;
-  const items = (r: keyof typeof YARD_ITEMS) => Math.min(YARD_ITEMS[r], pileItems(stock?.[r] ?? 0));
+  const items = (r: keyof typeof YARD_ITEMS) => Math.min(YARD_ITEMS[r] * size, pileItems(stock?.[r] ?? 0));
+  const slot = (r: keyof typeof YARD_ITEMS, i: number) => warehouseSlot(r, i, size);
   // trodden earth and a wattle fence round the back of the yard
   ctx.globalAlpha = 0.35;
-  ellipse(ctx, a.x, a.base + 1, 90, 5, '#7a6446');
+  ellipse(ctx, a.x, a.base + 1, 90 * k, 5, '#7a6446');
   ctx.globalAlpha = 1;
-  for (let px = a.x - 84; px <= a.x + 84; px += 14) rect(ctx, px - 1.5, a.base - 26, 3, 26, '#6b4f33');
-  for (const y of [a.base - 22, a.base - 14, a.base - 7]) line(ctx, a.x - 86, y, a.x + 86, y, '#8a6a44', 2);
+  for (let px = a.x - 84 * k; px <= a.x + 84 * k + 0.1; px += (168 * k) / Math.max(2, Math.round(12 * k))) rect(ctx, px - 1.5, a.base - 26, 3, 26, '#6b4f33');
+  for (const y of [a.base - 22, a.base - 14, a.base - 7]) line(ctx, a.x - 86 * k, y, a.x + 86 * k, y, '#8a6a44', 2);
 
   // the open-fronted shed for what must stay dry
-  const xl = a.x - 32;
-  const xr = a.x + 34;
+  const xl = a.x - 32 * Math.max(0.75, k);
+  const xr = a.x + 34 * Math.max(0.75, k);
   rect(ctx, xl, a.base - 72, xr - xl, 72, '#6b4f33');
   for (let px = xl + 5; px < xr; px += 6) line(ctx, px, a.base - 72, px, a.base, '#5a412a', 1);
   for (const lift of [50, 62]) {
@@ -496,18 +500,18 @@ function drawWarehouse(ctx: Ctx, a: DrawArgs): void {
   // bread in baskets on the shelves, the last basket part-full
   const bread = stock?.bread ?? 0;
   for (let i = 0; i < items('bread'); i++) {
-    const s = warehouseSlot('bread', i);
+    const s = slot('bread', i);
     breadBasket(ctx, a.x + s.dx, a.base - s.lift, 0.75, Math.ceil((Math.min(PILE_UNIT, bread - i * PILE_UNIT) / PILE_UNIT) * 5));
   }
   // grain in stooks of sheaves, as it comes from the farms
   for (let i = 0; i < items('grain'); i++) {
-    const s = warehouseSlot('grain', i);
+    const s = slot('grain', i);
     stook(ctx, a.x + s.dx, a.base - s.lift, 0.55);
   }
   // sacks of flour stacked on the ground
   for (const [r, body, tie] of [['flour', '#efe9da', '#b8ad94']] as const) {
     for (let i = 0; i < items(r); i++) {
-      const s = warehouseSlot(r, i);
+      const s = slot(r, i);
       ellipse(ctx, a.x + s.dx, a.base - 5 - s.lift, 4, 5.5, body);
       line(ctx, a.x + s.dx - 2, a.base - 9.5 - s.lift, a.x + s.dx + 2, a.base - 9.5 - s.lift, tie, 1);
     }
@@ -517,14 +521,14 @@ function drawWarehouse(ctx: Ctx, a: DrawArgs): void {
 
   // the stone heap and the log pile out in the open
   for (let i = 0; i < items('stone'); i++) {
-    const s = warehouseSlot('stone', i);
+    const s = slot('stone', i);
     const bx = a.x + s.dx - 3.25;
     const by = a.base - s.lift - 2.5;
     rect(ctx, bx, by, 6.5, 5, shade('#aaa398', -hash(a.seed, i) * 0.15));
     rect(ctx, bx, by, 6.5, 1.5, '#c4beb3');
   }
   for (let i = 0; i < items('wood'); i++) {
-    const s = warehouseSlot('wood', i);
+    const s = slot('wood', i);
     ellipse(ctx, a.x + s.dx, a.base - s.lift, 3.4, 3.2, '#8b6440');
     ellipse(ctx, a.x + s.dx, a.base - s.lift, 2.2, 2, '#c9a577');
   }

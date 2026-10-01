@@ -28,7 +28,7 @@ import { clearLand, type Tree } from './nature';
 import type { Pile } from './piles';
 import { cellKey, cellName, cellsOf, footprintOf } from './grid';
 import { streetOf } from './streets';
-import { createWorld, goneStreet, layStreet, type Building, type Rider, type World } from './world';
+import { createWorld, goneStreet, layStreet, MERGES, type Building, type Rider, type World } from './world';
 
 export const SAVE_VERSION = 19;
 
@@ -269,7 +269,7 @@ function building(v: unknown, path: string): Building {
     stock: stock(b.stock, `${path}.stock`),
   };
   if (b.upgraded !== undefined && bool(b.upgraded, `${path}.upgraded`)) out.upgraded = true;
-  if (b.size !== undefined && out.type === 'house') out.size = oneOf(b.size, [2, 3] as const, `${path}.size`);
+  if (b.size !== undefined && MERGES[out.type]) out.size = oneOf(b.size, [2, 3] as const, `${path}.size`);
   if (b.junction !== undefined && bool(b.junction, `${path}.junction`) && out.type === 'intersection') out.junction = true;
   if (b.site !== undefined) out.site = site(b.site, `${path}.site`, out.type);
   if (b.farm !== undefined) out.farm = farm(b.farm, `${path}.farm`);

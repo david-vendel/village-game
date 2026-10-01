@@ -11,6 +11,7 @@ import {
   confirmMenu,
   crossroadAt,
   demolish,
+  demolishSection,
   whyNotBuild,
   whyNotDemolish,
   getBuilding,
@@ -93,6 +94,18 @@ export function createActions(world: World, notify: Notify, _isTouch: () => bool
         const b = getBuilding(world, menu.buildingId);
         if (!b) return closeMenu(world);
         const name = BUILDINGS[b.type].name;
+        if (menu.options[menu.selection] === 'demolishSection') {
+          const why = whyNotDemolish(world, b);
+          if (why) {
+            sound.ui('denied');
+            notify(`The ${name} can't be pulled down: ${why.toLowerCase()}`);
+            return;
+          }
+          demolishSection(world, b, menu.x);
+          sound.ui('toggle');
+          notify(`Builders will pull down that section of the ${name}`);
+          return;
+        }
         if (menu.options[menu.selection] === 'demolish') {
           const why = whyNotDemolish(world, b);
           if (why) {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { cellKey, cellName, cellsOf, fieldCell, footprintOf, landUse, rowName, whyNotHere } from './grid';
 import { FIELD_CELLS } from './land';
 import { LOT_ROW } from './layout';
-import { createWorld, placeBuilding, whyNotBuild, type Building, type World } from './world';
+import { createWorld, demolishSection, placeBuilding, whyNotBuild, type Building, type World } from './world';
 
 const emptyWorld = () => createWorld({ village: false });
 
@@ -88,6 +88,25 @@ describe('land grid', () => {
     expect(a.size).toBe(3);
     placeBuilding(w, a.x + 150, 'house', { instant: true, free: true });
     expect(w.buildings).toHaveLength(2); // a fourth stays a small house of its own
+  });
+
+  it('pulling down the middle of a large house leaves two small ones; an end, a medium one', () => {
+    const w = emptyWorld();
+    w.constructionEnabled = false;
+    const a = placeBuilding(w, 1000, 'house', { instant: true, free: true })!;
+    placeBuilding(w, 1075, 'house', { instant: true, free: true });
+    placeBuilding(w, 1150, 'house', { instant: true, free: true });
+    expect(a.size).toBe(3);
+    demolishSection(w, a, 1075);
+    const houses = w.buildings.filter((b) => b.type === 'house' && b.status === 'done');
+    expect(houses.map((b) => b.size ?? 1)).toEqual([1, 1]);
+    const yard = placeBuilding(w, 2000, 'warehouse', { instant: true, free: true })!;
+    placeBuilding(w, 2075, 'warehouse', { instant: true, free: true });
+    expect(yard.size).toBe(2);
+    yard.stock.wood = 200;
+    demolishSection(w, yard, 2075);
+    expect(yard.size).toBeUndefined();
+    expect(yard.stock.wood).toBeCloseTo(100);
   });
 
   it('a field keeps its crop when the fields around it are re-laid', () => {

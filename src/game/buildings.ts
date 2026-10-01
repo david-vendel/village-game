@@ -95,7 +95,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     type: 'warehouse',
     name: 'Storage yard',
     purpose: "Open yard with the village's wood, stone, grain, flour and bread in piles. Builders fetch from here.",
-    width: 150,
+    width: 75,
     buildTime: 14,
     cost: { wood: 60, stone: 40 },
     // everything lies out in the open, in its place in a pile (layout.ts warehouseSlot)
@@ -255,3 +255,10 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
 };
 
 export const BUILDING_TYPES = Object.keys(BUILDINGS) as BuildingType[];
+
+/** What a building's store holds, and how much of each: a merged one (Building.size) holds as much as all its parts. */
+export function storageOf(b: { type: BuildingType; size?: number }): Amounts {
+  const out: Amounts = {};
+  for (const [r, n] of Object.entries(BUILDINGS[b.type].storage)) out[r as keyof Amounts] = (n ?? 0) * (b.size ?? 1);
+  return out;
+}

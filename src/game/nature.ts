@@ -19,7 +19,7 @@
 // carry it to a warehouse (transport.ts, BuildingDef.ships). With the store
 // full they wait by the door. The rest of the day is the generic routine.
 
-import { BUILDINGS } from './buildings';
+import { storageOf } from './buildings';
 import { putAway, storeSpot } from './economy';
 import { behindRoad, CELL_W, CHOP_SPOT, PILE_UNIT, QUARRIES, QUARRY_SPOTS, QUARRY_W, QUARRY_Y, STAND_Y, STONECUTTER_DOOR, WOODCUTTER_DOOR, yAt } from './layout';
 import { room, type Load } from './resources';
@@ -208,7 +208,7 @@ export function isGatherHut(type: Building['type']): type is GatherHut {
 export function gatherWorkplace(world: World, b: Building & { type: GatherHut }): Workplace {
   const x = b.x;
   const { resource, action, seconds, door } = GATHER[b.type];
-  const capacity = BUILDINGS[b.type].storage;
+  const capacity = storageOf(b);
   const tree = (id: number) => world.trees.find((t) => t.id === id && t.state === 'grown');
   const spot = (job: JobTicket) => {
     if (action === 'chop') {

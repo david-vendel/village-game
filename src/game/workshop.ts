@@ -12,7 +12,7 @@
 // someone is already bringing it. Serfs bring the rest and take what is made
 // away. The rest of the day is the generic worker routine.
 
-import { BUILDINGS, type Recipe } from './buildings';
+import { type Recipe, storageOf } from './buildings';
 import { putAway, storeSpot } from './economy';
 import { room, type Load } from './resources';
 import { errandResource, errandWork, fetchFor } from './transport';
@@ -24,7 +24,7 @@ const PICK_UP_TIME = 0.4;
 
 export function workshopWorkplace(world: World, b: Building, recipe: Recipe): Workplace {
   const x = b.x;
-  const capacity = BUILDINGS[b.type].storage;
+  const capacity = storageOf(b);
   const { from, to, batch, per, seconds, verb, door, at } = recipe;
   const errand = errandWork(world, x);
   const isErrand = (job: JobTicket) => errandResource(job.action) !== null;
