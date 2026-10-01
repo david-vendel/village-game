@@ -222,7 +222,8 @@ export function drawWorker(ctx: Ctx, f: Worker, fig: Figure, x: number, y: numbe
 
   // bending over while working
   const job = task.kind === 'job' ? task : null;
-  const action = job?.job.action;
+  // pulling down is hammering too
+  const action = job?.job.action === 'demolish' ? 'build' : job?.job.action;
   const atOven = !!job?.carried && !job.indoors;
   const bend = !job
     ? 0
