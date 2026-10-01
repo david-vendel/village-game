@@ -1,0 +1,12 @@
+{
+  "id": "building.farm",
+  "views": ["street", "roadsideL", "roadsideR"],
+  "samples": 128,
+  "emissive_samples": 32,
+  "source": {
+    "method": "render3d",
+    "models": [{ "name": "Blender", "version": "4.5 LTS", "licence": "GPL-3.0 (tool; output is ours)" }],
+    "author": "tools/building-gen (procedural, route P)",
+    "notes": "13th-14th c. Central European farmstead: fieldstone footing, oak frame, limewashed wattle-and-daub, thatch; lean-to barn."
+  }
+}
