@@ -22,7 +22,7 @@ import { employees, laneY, nameFor, openings, release, staffBuildings, updateStr
 import { builderPositions, builders, createSite, siteWork, siteWorkplace, upgrading, type Site } from './site';
 import { dropOnGround, PILE_GAP, type Pile } from './piles';
 import { RESOURCES, stockOf, type Amounts, type Stock } from './resources';
-import { CROSS_PLOT, mainStreet, newStreet, onQuarryLand, STREET_BAND_HALF, STREET_END_RUN, plotPoint, plotX, PLOTS_PER_STREET, route, streetOf, streetRange, streetsAt, turnFacing, type Junction, type Street, type Vec } from './streets';
+import { CROSS_PLOT, lotOnQuarry, mainStreet, newStreet, plotPoint, roadOnQuarry, plotX, PLOTS_PER_STREET, route, streetOf, streetRange, streetsAt, turnFacing, type Junction, type Street, type Vec } from './streets';
 import { eatAtTaverns } from './tavern';
 import { serfPositions, transportHub, transportWorkplace } from './transport';
 import { createWorker, currentJob, offDuty, updateWorker, type Nav, type Worker, type Workplace } from './worker';
@@ -76,7 +76,7 @@ export interface Plot {
   x: number;
   /** What stands on it; a crossroads stands on a plot of each of its two streets. */
   buildingId: number | null;
-  /** Past the end of its street (which ended short where it met another): no plot. */
+  /** No plot: past the end of its street (which ended short where it met another), or its lot is on a quarry's land. */
   off?: true;
 }
 
@@ -192,7 +192,7 @@ export { PLOTS_PER_STREET };
 function layPlots(world: World, s: Street): void {
   for (let k = 0; k < PLOTS_PER_STREET; k++) {
     const plot: Plot = { index: world.plots.length, street: s.index, x: plotX(s.index, k), buildingId: null };
-    if (k < s.lo || k > s.hi) plot.off = true;
+    if (k < s.lo || k > s.hi || lotOnQuarry(s, k)) plot.off = true;
     world.plots.push(plot);
   }
 }
@@ -453,8 +453,8 @@ export function layStreet(world: World, b: Building): Street {
   for (const step of [-1, 1]) {
     for (let k = CROSS_PLOT + step; k >= 0 && k < PLOTS_PER_STREET; k += step) {
       const meet = streetsAt(world, street.dir, plotPoint(street, k));
-      // it stops short of the rocks, and of a street along the same line
-      if (meet.along || onQuarryLand(plotPoint(street, k), Math.max(STREET_BAND_HALF, STREET_END_RUN))) break;
+      // it stops short of a street along the same line, and of a quarry in its way (one beside it is no matter)
+      if (meet.along || roadOnQuarry(street, k, step as 1 | -1)) break;
       if (meet.crossing) {
         const plot = plotOf(world, meet.crossing.street, meet.crossing.k);
         const there = getBuilding(world, plot.buildingId);

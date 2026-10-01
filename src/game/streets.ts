@@ -27,7 +27,8 @@
 // the buildings stand, lie to its left (`backOf`), and a new street runs off
 // into what lay behind the old one.
 
-import { behindRoad, FIRST_PLOT_X, PLOT_SPACING, QUARRIES, quarryLand, STREET_BAND_HALF, STREET_LENGTH } from './layout';
+import { BUILDINGS } from './buildings';
+import { behindRoad, FIELD_ROWS, FIRST_PLOT_X, GROUND_Y, PLOT_SPACING, ROAD_BOTTOM, QUARRIES, quarryLand, STREET_BAND_HALF, STREET_LENGTH } from './layout';
 import type { World } from './world';
 
 /** Distance in x between the starts of neighbouring streets (more than a street's length). */
@@ -130,6 +131,46 @@ export function fromStreet(world: World, i: number, p: Vec): { x: number; d: num
   const dy = p.y - s.origin.y;
   const b = backOf(s.dir);
   return { x: streetStart(i) + dx * s.dir.x + dy * s.dir.y, d: dx * b.x + dy * b.y };
+}
+
+/**
+ * Whether the stretch of street s from t0 to t1 along it (px from its start),
+ * d0..d1 behind its road (negative: in front), takes any of a quarry's land.
+ */
+function onQuarry(s: Street, t0: number, t1: number, d0: number, d1: number): boolean {
+  const b = backOf(s.dir);
+  const pts = [t0, t1].flatMap((t) => [d0, d1].map((d) => ({ x: s.origin.x + s.dir.x * t + b.x * d, y: s.origin.y + s.dir.y * t + b.y * d })));
+  const x0 = Math.min(...pts.map((p) => p.x));
+  const x1 = Math.max(...pts.map((p) => p.x));
+  const y0 = Math.min(...pts.map((p) => p.y));
+  const y1 = Math.max(...pts.map((p) => p.y));
+  return QUARRIES.some((q) => {
+    const r = quarryLand(q);
+    return x0 < r.x1 && x1 > r.x0 && y0 < r.y1 && y1 > r.y0;
+  });
+}
+
+/** How far behind the middle of the road the road's edges are (negative: its near edge, in front). */
+const ROAD_ACROSS = { near: behindRoad(ROAD_BOTTOM), far: behindRoad(GROUND_Y + 6) };
+/** The lot behind the road a building stands on: as deep as the building row, as wide as the widest building. */
+const LOT_ACROSS = { near: behindRoad(FIELD_ROWS.back[0].near), far: behindRoad(FIELD_ROWS.back[0].far) };
+const LOT_HALF_W = Math.max(...Object.values(BUILDINGS).map((d) => d.width)) / 2;
+
+/**
+ * Whether laying street s on to plot k (coming from the plot before it, `step`
+ * the way it is being laid) would run its road over a quarry's land, the road
+ * past the plot to the street's end included. A quarry beside the road is no
+ * matter: only the lots on it can't be built on (lotOnQuarry).
+ */
+export function roadOnQuarry(s: Street, k: number, step: 1 | -1): boolean {
+  const t = plotX(s.index, k) - streetStart(s.index);
+  return onQuarry(s, t - step * PLOT_SPACING, t + step * STREET_END, ROAD_ACROSS.near, ROAD_ACROSS.far);
+}
+
+/** Whether plot k of street s has its lot (behind the road) on a quarry's land, so nothing can be built there. */
+export function lotOnQuarry(s: Street, k: number): boolean {
+  const t = plotX(s.index, k) - streetStart(s.index);
+  return onQuarry(s, t - LOT_HALF_W, t + LOT_HALF_W, LOT_ACROSS.near, LOT_ACROSS.far);
 }
 
 /** How far a street runs past its last plot, and so how clear of the rocks it stops. */

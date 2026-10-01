@@ -11,7 +11,7 @@ import { BUILDINGS } from './buildings';
 import { fieldSpots, footprintHalfCells, setFieldSpots, type FieldSpot } from './farm';
 import { employees } from './people';
 import { CELL_W, FIELD_REACH, FIELD_ROWS, GRID_X0, type FieldZone } from './layout';
-import { crossings, STREET_BAND_HALF } from './streets';
+import { crossings, groundPoint, onQuarryLand, STREET_BAND_HALF } from './streets';
 import type { Building, World } from './world';
 
 export type CellUse =
@@ -100,8 +100,11 @@ function ownerGrid(world: World): { built: Array<number | null>; owner: Record<F
   const farms = world.buildings.filter((b) => b.type === 'farm');
   const owner: Record<FieldZone, Array<number | null>> = { back: [], front: [] };
   const road = roadCells(world, built.length);
+  // no field is sown on a quarry's land, which a street may now run beside
+  const rocky = (zone: FieldZone, k: number) =>
+    FIELD_ROWS[zone].some((r) => [r.far, r.near].some((y) => onQuarryLand(groundPoint(world, cellX(k) + CELL_W / 2, y))));
   for (const zone of ['back', 'front'] as const) {
-    owner[zone] = built.map((id, k) => ((zone === 'back' && id !== null) || road[k] ? null : farmFor(world, farms, zone, k, built)?.id ?? null));
+    owner[zone] = built.map((id, k) => ((zone === 'back' && id !== null) || road[k] || rocky(zone, k) ? null : farmFor(world, farms, zone, k, built)?.id ?? null));
   }
   return { built, owner };
 }
