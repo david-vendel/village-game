@@ -71,12 +71,34 @@ shadows, construction stages and animation frames for free. What's new in 2026 i
 | **A. Photo or prompt → 2D image directly** | Restyle photos, or generate at the spec camera with style references | Medium. Drifts between images. Light direction and perspective have to be policed | Weak. Every frame or stage is a new generation | Low per asset | Use for **backdrops, ground, crops, items** |
 | **B. Photo or prompt → 3D → render (AoE2 method)** | TRELLIS.2 or splatting → Blender cleanup → scripted render with fixed camera and light | **High by construction** | **Strong.** Stages come from cutting the model, animation from rigs. Exact anchors | Medium. Needs a render harness | Use for **buildings, people, horse, props** |
 | **C. Video model → frames** | Wan 2.2 with pose control → loop extraction → matting | Low to medium | Good for organic motion, poor for exact sync points | Medium | Fallback for **missing motions** |
-| **B + polish** | B, then a light diffusion pass guided by depth and normals to add photographic detail and unify style | High, if the silhouette is locked | Same as B | +20% | **Default for hero assets** |
+| **B + polish** | B, then a light diffusion pass guided by depth and normals to add photographic detail and unify style | High, if the silhouette is locked | Same as B | +20% | Optional finish for hero assets |
+| **P. Procedural 3D (code builds the building)** | A program lays out the architecture (footing, timber frame, infill, roof) element by element in Blender, with photo-scanned CC0 materials, then the same render harness as B | **Perfect by construction** | **Strongest.** Stages are the real build order; seeds give variety; upgrades and extra views are rules | High once (a generator), then near zero per asset. No GPU, no model licences | **Primary for buildings and props** (decided 2026-10-01) |
 
-**Recommendation:** a hybrid, anchored on B.
-- B (with the optional polish pass) for everything that stands, moves or changes state.
-- A for backdrops, ground and small static items.
-- C only for gaps.
+**Recommendation** (updated 2026-10-01): procedural first, AI to fill gaps.
+- **P** for buildings, props and their construction stages: procedural modelling of
+  buildings (Wonka et al. 2003, *Instant Architecture*; Müller et al. 2006, *Procedural
+  Modeling of Buildings*), done with Blender Python, with CC0 scanned materials (Poly Haven,
+  ambientCG).
+- **People and the horse:** rigged humans from MPFB (MakeHuman for Blender, CC0 output)
+  plus free motion capture (e.g. CMU). B (AI image→3D) only where no model exists.
+- **A** for backdrops, ground and small static items. C only for missing motions.
+- The B-route polish pass stays optional, for pushing renders towards the painterly
+  reference style.
+
+**Why P fits this game best.**
+- The game simulates construction: builders carry wood and stone to a site and build it in
+  chunks. A generator knows the real build order, so each stage image is an actual partial
+  building, not a cut-away.
+- The game already varies buildings by seed. A generator does the same with real geometry.
+- It's code: versioned, testable and reproducible, which suits agents.
+- It needs neither a GPU nor licensed models.
+- The same models could later be used for real-time 3D.
+
+**Level of detail rule for P.** Model what is visible at game scale: foundation and corner
+stones, every beam, steps, window frames, roof courses, rafters during construction. Leave
+smaller detail (individual bricks inside a wall, plaster grain, straws) to textures and
+displacement. At `@2x` a brick is about 10 × 3 px, so modelling each one would only cost
+render time. The generator still *records* every course as data, for stage timing and costs.
 
 All of it goes through one asset format (ASSET_SPEC.md), so the game doesn't care how
 an asset was made.
@@ -194,13 +216,29 @@ Each package is independent unless it says otherwise. Each has a definition of d
 - *Done when:* a test cube house and a test mannequin go in, valid assets come out, and they
   appear in the game.
 
-**WP4 Building pipeline: pilot, then all**
-- Pilot: the **farm**, including the *Large farm* variant, construction stages and the
-  side-road view.
-- Concept image (from a real farmstead photo or the style anchors) → TRELLIS.2 → Blender cleanup
-  (scale, origin, door/chimney empties, separate parts such as mill sails) → harness → polish
-  pass → review.
-- Then the other 13 buildings.
+**WP4 Building pipeline (procedural, route P): pilot, then all**
+- Code lives in `tools/building-gen/` and has two layers, mirroring the game's own split:
+  - **`core/` (pure Python, no Blender):** architecture rules that turn a building spec and a
+    seed into an ordered list of **elements**. Each element has a kind (footing stone, sill
+    beam, post, brace, wattle panel, daub, rafter, batten, thatch course, …), dimensions, a
+    transform, a material, a construction stage and an order within it. Unit-tested:
+    proportions, structural sanity (posts carry the plates; braces triangulate; roof pitch
+    suits the material, e.g. 45–55° for thatch), the footprint matching
+    `BUILDINGS[type].width`, and stage order following `ConstructionStage`.
+  - **`blender/`:** turns elements into meshes with materials (instancing repeated parts),
+    adds weathering (irregularity, sag, dirt, moss masks driven by seed), places named points
+    (door, chimney/smoke), and renders through the WP3 harness into the ASSET_SPEC format.
+- **Pilot: the farm.** Medieval Central European farmstead:
+  - fieldstone footing and an oak post-and-beam frame (sill, posts, girts, braces, wall
+    plates, tie beams);
+  - wattle-and-daub infill, limewashed;
+  - steep thatched roof, a chimney, shuttered windows, a plank door, a lean-to barn;
+  - the yard spots in `layout.ts` (`HOME`, `STORE`, `SHEAF_SLOTS`) kept clear and plausible.
+
+  Outputs: the `street` view; the **Large farm** variant (an extra bay with a second room and
+  window, as in the game); all 5 construction stages from the real build order; the
+  `roadsideL`/`roadsideR` views.
+- Then the other 13 buildings, sharing the element library (frames, roofs, stone work).
 - *Done when:* each passes the gates and the user approves it in game at zoom 1 and 0.45, by day and by night.
 
 **WP5 People**
@@ -286,7 +324,11 @@ Sources: [TRELLIS.2 model card](https://huggingface.co/microsoft/TRELLIS.2-4B), 
 Other notes:
 - The pipeline lives in `tools/art-pipeline/`. Large sources (references, .blend files, meshes)
   stay out of git (LFS or local storage); only packed outputs go in `public/assets/`.
-- **This EC2 box is not for generation.** It runs the game, the validator and small Blender renders.
+- **This EC2 box can't run the pipeline at all.** It's aarch64 (Blender publishes Linux builds
+  only for x86-64), has 2 vCPUs, ~1.8 GB free RAM and ~1 GB free disk, and serves live sites.
+  Rendering needs a separate **x86-64 machine**: ≥ 8 cores, ≥ 16 GB RAM, ≥ 60 GB disk; a GPU is
+  optional for route P (faster Cycles) and required for the AI routes. Use the user's own PC,
+  or a separate cloud instance that is stopped when idle.
 - Rough scale: about 1–3k rendered frames in total. The expensive part is human review,
   hence the automated gates.
 
