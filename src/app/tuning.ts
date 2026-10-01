@@ -126,7 +126,11 @@ export function installTuning(world: World, sound: Sound, opts: { onNewVillage: 
     setUrlParam('grid', box.checked ? 1 : null);
     box.blur();
   });
-  toggle.append('land grid', box);
+  // G flips it too, through the checkbox so the box and the URL keep up
+  window.addEventListener('keydown', (e) => {
+    if (e.key.toLowerCase() === 'g' && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) box.click();
+  });
+  toggle.append('land grid (G)', box);
   content.append(toggle);
 
   // the game autosaves; this is the way back to a fresh start
