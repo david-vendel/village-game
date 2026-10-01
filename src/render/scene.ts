@@ -3,6 +3,7 @@
 // world-anchored labels. Screen UI (HUD, menu,
 // touch buttons) is drawn separately by main.ts in its own coordinate space.
 
+import { BUILDINGS } from '../game/buildings';
 import { chapelBell } from '../game/daynight';
 import { employees } from '../game/people';
 import { GROUND_PILE_Y } from '../game/piles';
@@ -14,7 +15,7 @@ import { drawBackground, drawForeground, drawHaze, drawSideRoad, drawStreetEnds,
 import { BUILDING_LINE_DIST, distAt, drawOtherGround, eyeOf, standingOn, TREE_LINE_DIST } from './plane';
 import { flushEmissive } from './assets';
 import { constructionStage } from '../game/world';
-import { type Building3d, draw3d, has3d } from './world3d';
+import { type Building3d, draw3d, has3d, height3d } from './world3d';
 import { BUILDING_ART, type DrawArgs } from './buildings';
 import { drawBuilding } from './sprites';
 import { drawConstruction, drawConstructionBehind, drawConstructionFront, drawDemolition, drawSitePiles, drawUpgrade } from './construction';
@@ -60,6 +61,11 @@ export interface SceneView {
   turnLabel: string;
   /** Overlay the land grid (debug view). */
   showGrid: boolean;
+  /**
+   * The mouse in scene coordinates (null: not over the scene). Buildings show their info box
+   * only under the mouse; undefined (touch screens) shows it for the building at the rider.
+   */
+  hover?: { x: number; y: number } | null;
 }
 
 export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
@@ -219,15 +225,37 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     else if (b.completedAt !== null) drawCompletionEffect(ctx, sx, BASE, BUILDING_ART[b.type].height, world.time - b.completedAt, b.id);
   }
   const plot = plotAt(world, world.rider.x);
-  if (plot && !world.menu) {
-    const sx = plot.x - camX;
-    const b = getBuilding(world, plot.buildingId);
-    if (!b) drawPlotPrompt(ctx, sx, BASE, world.time, sv.promptLabel, k);
-    else if (b.status === 'done' && !b.site) {
-      const turn = crossroadAt(world) ? sv.turnLabel : null;
-      drawBuildingLabel(ctx, world, b, sx, BASE - BUILDING_ART[b.type].height - 18, k, viewW, canUpgrade(b) ? sv.upgradeLabel : canDemolish(b) ? sv.destroyLabel : null, turn);
+  const atRider = plot ? getBuilding(world, plot.buildingId) : null;
+  if (plot && !atRider && !world.menu) drawPlotPrompt(ctx, plot.x - camX, BASE, world.time, sv.promptLabel, k);
+  // a building's info box: the one under the mouse (on touch screens, the one at the rider)
+  const shown = sv.hover === undefined ? atRider : sv.hover ? buildingAt(world, camX, sv.hover) : null;
+  if (shown && shown.status === 'done' && !shown.site && !world.menu) {
+    const here = shown === atRider;
+    const turn = here && crossroadAt(world) ? sv.turnLabel : null;
+    const hint = !here ? null : canUpgrade(shown) ? sv.upgradeLabel : canDemolish(shown) ? sv.destroyLabel : null;
+    const sx = world.plots[shown.plotIndex].x - camX;
+    const height = has3d(shown.type) ? height3d(shown.type) : BUILDING_ART[shown.type].height;
+    drawBuildingLabel(ctx, world, shown, sx, BASE - height - 30, k * 0.8, viewW, hint, turn);
+  }
+}
+
+/** The finished building of this street under a point of the scene (its footprint, up to its drawn height). */
+function buildingAt(world: World, camX: number, p: { x: number; y: number }): Building | null {
+  let best: Building | null = null;
+  let bestD = Infinity;
+  for (const b of world.buildings) {
+    if (b.status !== 'done' || b.type === 'intersection') continue;
+    const sx = world.plots[b.plotIndex].x - camX;
+    const half = BUILDINGS[b.type].width / 2;
+    const height = has3d(b.type) ? height3d(b.type) : BUILDING_ART[b.type].height;
+    if (Math.abs(p.x - sx) > half || p.y > BASE + 6 || p.y < BASE - height - 10) continue;
+    const d = Math.abs(p.x - sx);
+    if (d < bestD) {
+      best = b;
+      bestD = d;
     }
   }
+  return best;
 }
 
 /** A little stake with a pennant marks each free building plot. */

@@ -40,6 +40,8 @@ export interface FrameView {
   /** Show the village from above instead of from the street, at its own zoom. */
   topView: boolean;
   topZoom: number;
+  /** The mouse over the canvas (canvas pixels), or null. */
+  hover?: { x: number; y: number } | null;
   /** Frames per second and the slowest frame (ms) lately, shown when given (unless ?fps=0). */
   fps?: { fps: number; worstMs: number };
 }
@@ -65,6 +67,8 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
     destroyLabel: v.touch ? 'Tap the hammer to destroy' : 'Press ↓ or Space to destroy',
     turnLabel: v.touch ? 'Tap ▲ or ▼ to turn onto the crossing street' : 'Press W / ↑ or S / ↓ to turn onto the crossing street',
     showGrid: v.showGrid,
+    // touch screens have no hover: undefined shows the info box of the building at the rider instead
+    hover: v.touch ? undefined : v.hover ? { x: v.hover.x / v.worldScale, y: (v.hover.y - v.offsetY) / v.worldScale } : null,
   });
   }
 

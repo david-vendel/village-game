@@ -43,6 +43,18 @@ export function has3d(type: BuildingType): boolean {
   return enabled && !!GENERATORS[type];
 }
 
+const heights = new Map<BuildingType, number>();
+
+/** How tall a 3D building stands (world units, its highest piece in any look), for labels above it. */
+export function height3d(type: BuildingType): number {
+  let h = heights.get(type);
+  if (h === undefined) {
+    h = Math.max(...GENERATORS[type]!.elements(7).map((e) => (e.shape === 'roof' || e.shape === 'leanto' || e.shape === 'gable' ? e.params.maxZ : e.at[2] + e.size[2] / 2))) * U;
+    heights.set(type, h);
+  }
+  return h;
+}
+
 // --- materials ---------------------------------------------------------------------
 
 interface Look {

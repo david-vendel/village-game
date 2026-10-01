@@ -43,14 +43,13 @@ async function play(): Promise<void> {
   if (restored) notify('Welcome back to your village');
 
   let camX = cameraX(world, screen.vp.viewW);
-  // frame rate over the last second, and the slowest frame in it (shown unless ?fps=0)
-  const showFps = new URLSearchParams(location.search).get('fps') !== '0';
+  // frame rate over the last second, and the slowest frame in it (the panel's "frame rate" toggle)
   const frameTimes: number[] = [];
   let fps: { fps: number; worstMs: number } | undefined;
   let last = performance.now();
 
   function frame(now: number): void {
-    if (showFps) {
+    if (display.fps) {
       frameTimes.push(now - last);
       let sum = frameTimes.reduce((s, t) => s + t, 0);
       while (sum > 1000 && frameTimes.length > 1) sum -= frameTimes.shift()!;
@@ -74,7 +73,7 @@ async function play(): Promise<void> {
     sizePanelButtons((HUD_BUTTON * vp.uiScale) / screen.dpr);
 
     const held = controls.touchHeld();
-    renderFrame(ctx, world, { ...vp, camX, touch: screen.touch, leftHeld: held.left, rightHeld: held.right, toasts, showGrid: display.grid, topView: controls.topView(), topZoom: controls.topZoom(), fps });
+    renderFrame(ctx, world, { ...vp, camX, touch: screen.touch, leftHeld: held.left, rightHeld: held.right, toasts, showGrid: display.grid, topView: controls.topView(), topZoom: controls.topZoom(), hover: controls.hover(), fps: display.fps ? fps : undefined });
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);

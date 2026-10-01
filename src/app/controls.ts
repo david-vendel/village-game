@@ -18,6 +18,8 @@ export interface Controls {
   topView(): boolean;
   /** The view from above has its own zoom, apart from the street view's. */
   topZoom(): number;
+  /** Where the mouse is over the canvas (canvas pixels), or null when it's elsewhere or there is no mouse. */
+  hover(): { x: number; y: number } | null;
 }
 
 const GAME_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'Enter', 'Escape', 'Tab', 'w', 'a', 's', 'd']);
@@ -200,6 +202,12 @@ export function installControls(world: World, screen: Screen, actions: Actions):
     pointers.delete(e.pointerId);
     if (p?.role === 'pinch') startPinchIfReady();
   }
+  // the mouse over the canvas, pressed or not: buildings show their info box under it
+  let mouse: { x: number; y: number } | null = null;
+  canvas.addEventListener('pointermove', (e) => {
+    if (e.pointerType === 'mouse') mouse = { x: e.clientX * screen.dpr, y: e.clientY * screen.dpr };
+  });
+  canvas.addEventListener('pointerleave', () => (mouse = null));
   canvas.addEventListener('pointerup', endPointer);
   canvas.addEventListener('pointercancel', endPointer);
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
@@ -234,6 +242,7 @@ export function installControls(world: World, screen: Screen, actions: Actions):
   }
 
   return {
+    hover: () => mouse,
     move: () =>
       topView && !world.menu
         ? moveOnMap()

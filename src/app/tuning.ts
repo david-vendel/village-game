@@ -53,6 +53,8 @@ function setUrlParam(name: string, v: number | null): void {
 export interface DisplayOptions {
   /** Overlay the land grid (URL: grid=1). */
   grid: boolean;
+  /** Show the frame rate (on unless URL: fps=0). */
+  fps: boolean;
 }
 
 export function installTuning(world: World, sound: Sound, opts: { onNewVillage: () => void }): DisplayOptions {
@@ -114,7 +116,7 @@ export function installTuning(world: World, sound: Sound, opts: { onNewVillage: 
     content.append(label, input);
   }
 
-  const display: DisplayOptions = { grid: params.get('grid') === '1' };
+  const display: DisplayOptions = { grid: params.get('grid') === '1', fps: params.get('fps') !== '0' };
   const toggle = document.createElement('label');
   toggle.style.cssText = 'display:flex;gap:6px;justify-content:flex-end;align-items:center;margin-top:6px;cursor:pointer';
   const box = document.createElement('input');
@@ -132,6 +134,20 @@ export function installTuning(world: World, sound: Sound, opts: { onNewVillage: 
   });
   toggle.append('land grid (G)', box);
   content.append(toggle);
+
+  const fpsToggle = document.createElement('label');
+  fpsToggle.style.cssText = toggle.style.cssText;
+  const fpsBox = document.createElement('input');
+  fpsBox.type = 'checkbox';
+  fpsBox.checked = display.fps;
+  fpsBox.style.cssText = box.style.cssText;
+  fpsBox.addEventListener('change', () => {
+    display.fps = fpsBox.checked;
+    setUrlParam('fps', fpsBox.checked ? null : 0);
+    fpsBox.blur();
+  });
+  fpsToggle.append('frame rate', fpsBox);
+  content.append(fpsToggle);
 
   // the game autosaves; this is the way back to a fresh start
   const reset = document.createElement('button');
