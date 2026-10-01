@@ -41,8 +41,8 @@ touch). Portrait phones start zoomed out, with the street lifted above the butto
 
 ## Streets
 
-A **Crossroads** (10 wood) cuts a road across the street. Crossroads go only every 30 cells
-(on the main street, the blocks starting at cells 31, 61, 91, …), so the streets make a grid
+A **Crossroads** (10 wood) cuts a road across the street. Crossroads go only every 27 cells,
+nine blocks apart (on the main street, the blocks starting at cells 28, 55, 82, …), so the streets make a grid
 of squares, and the rocky hills lie inside the squares, clear of every road. A wooden
 signpost marks every place a crossroads can go; nothing else can be built there, and pressing
 Space there offers the crossroads. Once it is built, ride up to it

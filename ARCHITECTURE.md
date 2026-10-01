@@ -168,9 +168,9 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   Workers walk at real ground speed: depth y is turned into ground px for every step (`worker.ts`).
 - `streets.ts`: the street network. A crossroads (the `intersection` building, 10 wood) opens a
   new street across its own at right angles. Crossroads go only where their road runs down a line
-  of the road grid (`ROAD_GRID` in `layout.ts`, `onRoadGrid` in `grid.ts`): squares 30 cells
-  across, with roads down the columns 30n + 2 (the block starting at cell 30n + 1 of the main
-  street) and the rows 30n, so every street lies on it. Each such place not built on yet
+  of the road grid (`ROAD_GRID` in `layout.ts`, `onRoadGrid` in `grid.ts`): squares 27 cells
+  (nine blocks) across, with roads down the columns 27n + 2 (the block starting at cell 27n + 1
+  of the main street) and the rows 27n, so every street lies on it. Each such place not built on yet
   (`crossroadsPlaces` in `grid.ts`) is kept for it: a signpost stands there, no other building
   goes over the land its road would take (`keptLand`) and no field is sown there, so the build
   menu opened there offers just the crossroads. It opens a new street, crossing it at the new street's middle plot

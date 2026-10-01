@@ -46,8 +46,8 @@ describe('land grid', () => {
     expect(whyNotBuild(w, 'farm', a.x + 25)).toMatch(/in the way/);
     expect(whyNotHere(w, 'farm', QUARRIES[0].x)).toBeNull(); // the rocks start behind the lots
     // a crossroads: right up to its road, but not on it
-    const x = w.plots[25].x; // cell 92: crossroads go every 30 cells
-    expect(whyNotBuild(w, 'intersection', w.plots[24].x)).toMatch(/every 30 cells/);
+    const x = w.plots[22].x; // cell 83: crossroads go every 27 cells
+    expect(whyNotBuild(w, 'intersection', w.plots[21].x)).toMatch(/every 27 cells/);
     placeBuilding(w, x, 'intersection', { instant: true, free: true });
     expect(whyNotBuild(w, 'farm', x + 30)).toMatch(/road/);
     expect(whyNotBuild(w, 'farm', x + 112.5)).toBeNull();
@@ -101,11 +101,11 @@ describe('land grid', () => {
     demolishSection(w, a, 1075);
     const houses = w.buildings.filter((b) => b.type === 'house' && b.status === 'done');
     expect(houses.map((b) => b.size ?? 1)).toEqual([1, 1]);
-    const yard = placeBuilding(w, 2000, 'warehouse', { instant: true, free: true })!;
-    placeBuilding(w, 2075, 'warehouse', { instant: true, free: true });
+    const yard = placeBuilding(w, 2150, 'warehouse', { instant: true, free: true })!;
+    placeBuilding(w, 2225, 'warehouse', { instant: true, free: true });
     expect(yard.size).toBe(2);
     yard.stock.wood = 200;
-    demolishSection(w, yard, 2075);
+    demolishSection(w, yard, 2225);
     expect(yard.size).toBeUndefined();
     expect(yard.stock.wood).toBeCloseTo(100);
   });

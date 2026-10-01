@@ -3,23 +3,23 @@
 # field is sown there, and the menu Space opens there offers just the crossroads.
 new village
 map E28:-C100
-ride s0:62
+ride s0:83
 menu
-expect cannot build house at s0:61 kept for a crossroads
-expect cannot build farm at s0:88 kept for a crossroads
+expect cannot build house at s0:82 kept for a crossroads
+expect cannot build farm at s0:79 kept for a crossroads
 # right up to it is fine
 ride s0:85
 menu
-ride s0:92
+ride s0:83
 menu
 build crossroads here
-expect at s0:91 crossroads constructing
+expect at s0:82 crossroads constructing
 run until built
 expect streets 2
-# its street has places of its own, every 30 cells along it
+# its street has places of its own, every 27 cells along it
 streets
-map AH80:-C100
+map AE70:-C100
 ride #last
 turn up
-ride +30
+ride +27
 menu

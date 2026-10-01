@@ -277,11 +277,12 @@ export const CHOP_SPOT = { dx: -11, y: TREE_Y + 4 };
 // --- The road grid ----------------------------------------------------------------
 // Every street keeps to one grid of squares ROAD_GRID cells across: crossroads
 // can only be built where their road runs down a line of it (grid.ts
-// onRoadGrid), so every road does. The lines are the columns 30n + 2 (the middle
-// of the block of three cells starting at cell 30n + 1 of the main street) and
-// the rows 30n (the main street's row, A, and every 30th from it).
+// onRoadGrid), so every road does: nine blocks of three cells apart. The lines
+// are the columns 27n + 2 (the middle of the block of three cells starting at
+// cell 27n + 1 of the main street) and the rows 27n (the main street's row, A,
+// and every 27th from it).
 
-export const ROAD_GRID = 30;
+export const ROAD_GRID = 27;
 /** The column and row of the road grid's lines through the origin (map cells). */
 export const ROAD_GRID_COL = 2;
 export const ROAD_GRID_ROW = 0;

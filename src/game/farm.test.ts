@@ -152,7 +152,7 @@ describe('farms in the world', () => {
     expect(b.farm).toBeUndefined();
     tick(w, 1);
     expect(employees(w, b).every((p) => p.job!.role === 'builder')).toBe(true);
-    const done = placeBuilding(w, 662.5, 'farm', { instant: true, free: true })!;
+    const done = placeBuilding(w, 787.5, 'farm', { instant: true, free: true })!;
     tick(w, 1);
     // the village's one farmer works the starting farm: a seeker takes the job, for life
     const [farmer] = employees(w, done);
@@ -187,7 +187,7 @@ describe('farms in the world', () => {
   it('a finished mill takes a serf as its miller before any more errands', () => {
     const w = createWorld();
     w.buildings.find((b) => b.type === 'warehouse')!.stock.grain = 40;
-    const mill = placeBuilding(w, 2662.5, 'mill', { instant: true, free: true })!;
+    const mill = placeBuilding(w, 2587.5, 'mill', { instant: true, free: true })!;
     for (let t = 0; t < 200 && villageStock(w).flour === 0; t += 1 / 30) update(w, 1 / 30, { left: false, right: false });
     const [miller] = employees(w, mill);
     expect(miller.profession).toBe('miller');

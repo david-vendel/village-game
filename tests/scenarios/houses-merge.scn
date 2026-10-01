@@ -27,13 +27,12 @@ map ids
 
 # With builders: three houses built side by side merge as each one is finished.
 new village
-build house at s0:79
+build house at s0:85
 build house next
 build house next
-expect at s0:79 house constructing
+expect at s0:85 house constructing
 run until built
-expect at s0:79 house size 3 done
-expect at s0:85 house size 1 done
+expect at s0:85 house size 3 done
 map ids D60:-C99
 
 # Pulling down a section, what is left merges with a small house beside it,

@@ -3,9 +3,9 @@
 new empty
 free on
 construction off
-build farm at s0:49
+build farm at s0:43
 build farm next
-build crossroads at s0:61
+build crossroads at s0:55
 expect streets 2
 streets
 ride #last
@@ -14,7 +14,7 @@ expect rider s1
 ride +5
 build farm here
 expect at s1:136 farm done
-expect fields at s0:49 24
+expect fields at s0:43 24
 expect fields at s1:136 24
 list
 map

@@ -65,32 +65,30 @@
     = | road  + crossing  Y kept for a crossroads  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
 # With builders: three houses built side by side merge as each one is finished.
 > new village
-> build house at s0:79
-  #81 house at s0:79-81, constructing
+> build house at s0:85
+  #81 house at s0:85-87, constructing
 > build house next
-  #82 house at s0:82-84, constructing
+  #82 house at s0:88-90, constructing
 > build house next
-  #83 house at s0:85-87, constructing
-> expect at s0:79 house constructing
-  ok: #81 house at s0:79-81, constructing
+  #83 house at s0:91-93, constructing
+> expect at s0:85 house constructing
+  ok: #81 house at s0:85-87, constructing
 > run until built
-  all built after 41.2s
-> expect at s0:79 house size 3 done
-  ok: #7 house×3 at s0:76-84, done
-> expect at s0:85 house size 1 done
-  ok: #83 house at s0:85-87, done
+  all built after 49.9s
+> expect at s0:85 house size 3 done
+  ok: #81 house×3 at s0:85-93, done
 > map ids D60:-C99
       60        70        80        90
        |  |  |  |  |  |  |  |  |  |  |  |  |  
-    D CYYYDDDDDD......EEEEEEEEEIII..fYYYFFFFFF
-    C CYYYDDDDDD......EEEEEEEEEIII...YYYFFFFFF
+    D ....DDDDDD......EEE...YYYIIIIIIIIIFFFFFF
+    C ....DDDDDD......EEE...YYYIIIIIIIIIFFFFFF
     B ========================================
     A ============@===========================
    -A ========================================
    -B .................................fffffff
-   -C ..................................fffff.
+   -C ...................................ffff.
   
-    A=#1 house  B=#3 well  C=#4 tavern  D=#5 warehouse  E=#7 house  F=#8 farm  G=#9 chapel  H=#10 house  I=#83 house
+    A=#1 house  B=#3 tavern  C=#4 well  D=#5 warehouse  E=#7 house  F=#8 farm  G=#9 chapel  H=#10 house  I=#81 house
     = | road  + crossing  Y kept for a crossroads  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
 # Pulling down a section, what is left merges with a small house beside it,
 # as a new one built there would.

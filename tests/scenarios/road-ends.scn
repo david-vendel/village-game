@@ -3,25 +3,25 @@
 new empty
 free on
 construction off
-build crossroads at s0:31
+build crossroads at s0:28
 ride #last
 turn up
-ride +30
+ride +27
 build crossroads here
 ride #last
 turn up
-ride +30
+ride +27
 build crossroads here
 # the third street runs south at column 2, past the main street's west end
 streets
-map AH0:-F40
+map AE0:-F36
 
 # The rocks lie inside squares of the road grid: a street running past them
 # runs on beside them.
 new empty
 free on
 construction off
-build crossroads at s0:61
-build crossroads at s0:91
+build crossroads at s0:55
+build crossroads at s0:82
 streets
-map O55:-C95
+map O50:-C90

@@ -58,6 +58,8 @@ describe('placement', () => {
     const w = createWorld();
     expect(w.buildings.length).toBeGreaterThan(3);
     expect(w.buildings.every((b) => b.status === 'done')).toBe(true);
+    // every one of them found room (none on a place kept for a crossroads)
+    for (const t of ['house', 'well', 'tavern', 'warehouse', 'farm', 'chapel'] as const) expect(w.buildings.some((b) => b.type === t), t).toBe(true);
     expect(w.events).toHaveLength(0);
   });
 
@@ -91,7 +93,7 @@ describe('build menu', () => {
 
   it('selection wraps and is remembered after cancelling', () => {
     const w = emptyWorld();
-    w.rider.x = w.plots[5].x - 25; // where a crossroads can go too (the last entry)
+    w.rider.x = w.plots[4].x - 25; // where a crossroads can go (the last entry)
     openMenu(w);
     moveMenu(w, -1);
     expect(w.menu!.selection).toBe(BUILDING_TYPES.length - 1);
@@ -133,13 +135,13 @@ describe('construction', () => {
   it('with construction disabled buildings appear finished instantly', () => {
     const w = emptyWorld();
     setConstructionEnabled(w, false);
-    const b = placeBuilding(w, 662.5, 'chapel', { free: true })!;
+    const b = placeBuilding(w, 787.5, 'chapel', { free: true })!;
     expect(b.status).toBe('done');
   });
 
   it('disabling construction finishes buildings in progress', () => {
     const w = emptyWorld();
-    const b = placeBuilding(w, 662.5, 'chapel', { free: true })!;
+    const b = placeBuilding(w, 787.5, 'chapel', { free: true })!;
     runFor(w, 1);
     setConstructionEnabled(w, false);
     expect(b.status).toBe('done');
@@ -181,8 +183,8 @@ describe('streets', () => {
   it('builders reach a site two streets away, turning at each crossroads only once', () => {
     const w = createWorld();
     w.buildings.find((b) => b.type === 'warehouse')!.stock.wood = 300;
-    placeBuilding(w, 2312.5, 'intersection', { instant: true }); // cell 92, on the road grid
-    placeBuilding(w, plotX(1, 48), 'intersection', { instant: true }); // 30 cells up the new street
+    placeBuilding(w, 2087.5, 'intersection', { instant: true }); // cell 83, on the road grid
+    placeBuilding(w, plotX(1, 47), 'intersection', { instant: true }); // 27 cells up the new street
     const h = placeBuilding(w, plotX(2, 42) - 25, 'house')!;
     runFor(w, 90, { left: false, right: false });
     expect(h.status).toBe('done');

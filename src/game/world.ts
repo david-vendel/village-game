@@ -16,7 +16,7 @@ import { timeOfDay } from './daynight';
 import { buildShortfall, putAway, takeFromWarehouses, upgradeShortfall, WAREHOUSE_START } from './economy';
 import { createFarm, DEFAULT_WORK, farmWorkplace, updateCrops, type FarmState } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
-import { BLOCK, CELL_W, FIRST_PLOT_X, PLOT_SPACING, STREET_LENGTH } from './layout';
+import { BLOCK, CELL_W, FIRST_PLOT_X, PLOT_SPACING, ROAD_GRID, STREET_LENGTH } from './layout';
 import { alongCell, blockStartX, footprintOf, onRoadGrid, roadBlocked, roadInWay, siteX, sizeOfBuilding, whyNotHere } from './grid';
 import { clearLand, plantWoods, gatherWorkplace, isGatherHut, updateForest, type Tree } from './nature';
 import { employees, laneY, nameFor, openings, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
@@ -192,8 +192,8 @@ export function rand(world: World): number {
 const STARTING_VILLAGE: Array<[number, BuildingType]> = [
   [925, 'house'],
   [1000, 'house'],
-  [1150, 'well'],
-  [1300, 'tavern'],
+  [1100, 'tavern'],
+  [1325, 'well'],
   [1600, 'warehouse'],
   [1675, 'warehouse'],
   [1900, 'house'],
@@ -321,7 +321,7 @@ export function whyNotBuild(world: World, type: BuildingType, x: number): string
   const at = placeAt(world, type, x);
   if (at === null) return 'No room for a road here';
   if (type === 'intersection' && crossroadsPlot(world, at)?.buildingId != null) return 'There is a crossroads here already';
-  if (type === 'intersection' && !onRoadGrid(world, at)) return 'Crossroads go only every 30 cells';
+  if (type === 'intersection' && !onRoadGrid(world, at)) return `Crossroads go only every ${ROAD_GRID} cells`;
   const why = whyNotHere(world, type, at);
   if (why || type !== 'intersection') return why;
   // its road would run onto another road, and not meet it at a crossroads

@@ -309,8 +309,8 @@ const onLine = (n: number, at: number) => (((n - at) % ROAD_GRID) + ROAD_GRID) %
 /**
  * Whether a crossroads can stand at world x (a crossroads place on its street):
  * where the road it opens, across its street, runs down a line of the road
- * grid (layout.ts ROAD_GRID): a column 30n + 2 for a road running north–south,
- * a row 30n for one running east–west.
+ * grid (layout.ts ROAD_GRID): a column 27n + 2 for a road running north–south,
+ * a row 27n for one running east–west.
  */
 export function onRoadGrid(world: World, x: number): boolean {
   const s = world.streets[streetOf(x)];
