@@ -64,7 +64,8 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
 
   // screen UI, unaffected by zoom
   ctx.setTransform(v.uiScale, 0, 0, v.uiScale, 0, 0);
-  drawTurnFade(ctx, world, v.uiW, v.uiH);
+  // from above a turn is just a turn: the map doesn't change, so no fade
+  if (!v.topView) drawTurnFade(ctx, world, v.uiW, v.uiH);
   const plot = plotAt(world, world.rider.x);
   const here = getBuilding(world, plot?.buildingId ?? null);
   drawHud(ctx, world, v.uiW, v.uiH, {
