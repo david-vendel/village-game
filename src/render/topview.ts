@@ -7,6 +7,7 @@ import { BUILDINGS, type BuildingType } from '../game/buildings';
 import { CELL_W, FIELD_ROWS, FRONT_FIELD, GROUND_Y, QUARRIES, quarryLand, ROAD_BOTTOM, STREET_BAND_HALF, behindRoad, type FieldZone } from '../game/layout';
 import { cellX, footprint, landGrid, type CellUse } from '../game/land';
 import { treeGrowth } from '../game/nature';
+import { GROUND_PILE_Y } from '../game/piles';
 import type { Load } from '../game/resources';
 import { backOf, groundPoint, mapPoint, streetOf, streetPoint, streetRange, type Vec } from '../game/streets';
 import { getBuilding, type World } from '../game/world';
@@ -219,6 +220,13 @@ export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zo
     const d = (world.streets[streetOf(x)] ?? world.streets[0]).dir;
     return Math.atan2(-d.y * facing, d.x * facing);
   };
+  // what lies on the ground by the road: a little heap, bigger the more there is
+  for (const pile of world.piles) {
+    const p = groundPoint(world, pile.x, GROUND_PILE_Y);
+    const r = Math.max(1.5, (5 + Math.min(10, Math.sqrt(pile.amount))) * S);
+    circle(ctx, sx(p), sy(p), r + Math.max(0.6, S), 'rgba(40,28,16,0.45)');
+    circle(ctx, sx(p), sy(p), r, RESOURCE_COLOUR[pile.resource]);
+  }
   for (const p of world.people) {
     const o = outfitOf(figureOf(p));
     const b = p.job && getBuilding(world, p.job.buildingId);

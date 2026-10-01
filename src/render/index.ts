@@ -2,14 +2,14 @@
 // frame; everything about how things look — draw order, art, HUD, menus — is
 // decided in src/render. Rendering only reads game state, never changes it.
 
-import { canUpgrade, crossroadAt, getBuilding, plotAt, type World } from '../game/world';
+import { canDemolish, crossroadAt, getBuilding, plotAt, type World } from '../game/world';
 import { drawScene } from './scene';
 import { drawTopView } from './topview';
 import { drawBuildMenu, drawHud, drawToasts, drawTurnFade, type Toast } from './ui';
 
 export { cameraX } from './scene';
 export { STRIDE as HORSE_STRIDE } from './horse';
-export { hit, HUD_BUTTON, hudLayout, menuLayout, type Rect, type Toast } from './ui';
+export { buildingMenuLayout, hit, HUD_BUTTON, hudLayout, menuLayout, type Rect, type Toast } from './ui';
 
 /** Everything the renderer needs besides the world: where the camera is and how the screen is scaled. */
 export interface FrameView {
@@ -56,7 +56,8 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
     bottom: v.bottom,
     labelScale: Math.max(1, Math.min(3, v.uiScale / v.worldScale)),
     promptLabel: v.touch ? 'Tap the hammer to build' : 'Press ↓ or Space to build',
-    upgradeLabel: v.touch ? 'Tap the hammer to upgrade' : 'Press ↓ or Space to upgrade',
+    upgradeLabel: v.touch ? 'Tap the hammer to upgrade or destroy' : 'Press ↓ or Space to upgrade or destroy',
+    destroyLabel: v.touch ? 'Tap the hammer to destroy' : 'Press ↓ or Space to destroy',
     turnLabel: v.touch ? 'Tap ▲ or ▼ to turn onto the crossing street' : 'Press W / ↑ or S / ↓ to turn onto the crossing street',
     showGrid: v.showGrid,
   });
@@ -72,7 +73,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
     touch: v.touch,
     leftHeld: v.leftHeld,
     rightHeld: v.rightHeld,
-    canBuild: (!!plot && plot.buildingId === null) || (!!here && canUpgrade(here)),
+    canBuild: (!!plot && plot.buildingId === null) || (!!here && canDemolish(here)),
     canTurn: !world.menu && !!crossroadAt(world),
     topView: v.topView,
   });

@@ -15,7 +15,7 @@ import { WOOD_REACH } from '../game/nature';
 import { employees, jobsOf } from '../game/people';
 import { RESOURCES, type Amounts } from '../game/resources';
 import { backOf, mapPoint, streetOf, streetRange } from '../game/streets';
-import { constructionStage, type Building, type ConstructionStage, type World } from '../game/world';
+import { constructionStage, demolitionYield, getBuilding, type Building, type BuildingOption, type ConstructionStage, type World } from '../game/world';
 import { BUILDING_ART, drawBuildingIcon } from './buildings';
 import type { Ctx } from './util';
 
@@ -201,8 +201,8 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
   const L = hudLayout(uiW, uiH);
   text(ctx, 'Village Crown', 16, 34, 24, GOLD, 'left', true);
   const lines = st.touch
-    ? ['Hold the arrows to ride, hammer to build or upgrade', 'Pinch or tap - + to zoom']
-    : ['A D / ← → ride   S / ↓ / Space build/upgrade   W / S turn at a crossroads   Tab view from above   C construction   M sound', 'In the menu: WASD choose, Space build, Esc / Q close   - + zoom'];
+    ? ['Hold the arrows to ride, hammer to build, upgrade or destroy', 'Pinch or tap - + to zoom']
+    : ['A D / ← → ride   S / ↓ / Space build, upgrade or destroy   W / S turn at a crossroads   Tab view from above   G grid   C construction   M sound', 'In the menu: WASD choose, Space confirm, Esc / Q close   - + zoom'];
   const maxW = L.map.x - 28;
   let y = 54;
   for (const s of lines) {
@@ -412,7 +412,113 @@ export function menuLayout(uiW: number, uiH: number): MenuLayout {
   };
 }
 
+/** The menu at a building: a card for each thing that can be done to it, what it means, and Cancel / do it. */
+export function buildingMenuLayout(uiW: number, uiH: number, n: number): MenuLayout {
+  const cardW = 150;
+  const cardH = 108;
+  const pw = Math.min(uiW - 24, Math.max(340, n * cardW + 24));
+  const w = Math.min(cardW, (pw - 24) / n);
+  const ph = 44 + cardH + 60 + 58;
+  const px = (uiW - pw) / 2;
+  const py = Math.max(12, uiH - ph - 12);
+  const cards = Array.from({ length: n }, (_, i) => ({ x: uiW / 2 - (n * w) / 2 + i * w + 3, y: py + 44, w: w - 6, h: cardH }));
+  const bw = Math.min(150, (pw - 36) / 2);
+  const by = py + ph - 50;
+  return {
+    panel: { x: px, y: py, w: pw, h: ph },
+    cards,
+    build: { x: uiW / 2 + 6, y: by, w: bw, h: 38 },
+    cancel: { x: uiW / 2 - 6 - bw, y: by, w: bw, h: 38 },
+    titleY: py + 30,
+    infoY: py + 44 + cardH + 24,
+  };
+}
+
+const OPTION_NAME: Record<BuildingOption, string> = { upgrade: 'Upgrade', demolish: 'Destroy' };
+
+function drawBuildingMenu(ctx: Ctx, world: World, uiW: number, uiH: number): void {
+  const menu = world.menu;
+  if (menu?.kind !== 'building') return;
+  const b = getBuilding(world, menu.buildingId);
+  if (!b) return;
+  const def = BUILDINGS[b.type];
+  const upgrade = def.upgrade;
+  const M = buildingMenuLayout(uiW, uiH, menu.options.length);
+
+  ctx.fillStyle = 'rgba(20,14,8,0.35)';
+  ctx.fillRect(0, 0, uiW, uiH);
+  panel(ctx, M.panel.x, M.panel.y, M.panel.w, M.panel.h, 0.9);
+  const title = `The ${b.upgraded && upgrade ? upgrade.name : def.name}`;
+  text(ctx, title, uiW / 2, M.titleY, 17, GOLD, 'center', true);
+
+  menu.options.forEach((option, i) => {
+    const r = M.cards[i];
+    const sel = i === menu.selection;
+    ctx.save();
+    ctx.fillStyle = sel ? 'rgba(232,200,114,0.22)' : 'rgba(255,240,210,0.06)';
+    roundRect(ctx, r.x, r.y, r.w, r.h, 6);
+    ctx.fill();
+    if (sel) {
+      ctx.strokeStyle = GOLD;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    roundRect(ctx, r.x, r.y, r.w, r.h - 24, 6);
+    ctx.clip();
+    if (option === 'upgrade' && Object.keys(upgradeShortfall(world, b)).length) ctx.globalAlpha = 0.4;
+    const previewH = r.h - 34;
+    const scale = Math.min(0.6, (r.w - 8) / (def.width * 1.3), previewH / (BUILDING_ART[b.type].height + 20));
+    if (option === 'demolish') {
+      // the building, faded, with a red cross over it
+      ctx.globalAlpha = 0.45;
+      drawBuildingIcon(ctx, b.type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time);
+      ctx.globalAlpha = 1;
+      const cx = r.x + r.w / 2;
+      const cy = r.y + (r.h - 24) / 2;
+      ctx.strokeStyle = '#c8553d';
+      ctx.lineWidth = 5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(cx - 18, cy - 18);
+      ctx.lineTo(cx + 18, cy + 18);
+      ctx.moveTo(cx + 18, cy - 18);
+      ctx.lineTo(cx - 18, cy + 18);
+      ctx.stroke();
+    } else drawBuildingIcon(ctx, b.type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time);
+    ctx.restore();
+    const label = `${i + 1}. ${OPTION_NAME[option]}`;
+    text(ctx, label, r.x + r.w / 2, r.y + r.h - 8, fitSize(ctx, label, 12, r.w - 6, sel), sel ? GOLD : '#f3ead8', 'center', sel);
+  });
+
+  const option = menu.options[menu.selection];
+  let line1: string;
+  let line2: string;
+  let short = false;
+  if (option === 'upgrade' && upgrade) {
+    const lack = upgradeShortfall(world, b);
+    short = Object.keys(lack).length > 0;
+    line1 = `Make it a ${upgrade.name}`;
+    const time = world.constructionEnabled ? `Builds in ${+(upgrade.buildTime / world.params.buildSpeed).toFixed(1)}s` : 'Builds instantly (construction off)';
+    line2 = `Costs ${amounts(upgrade.cost)}` + (short ? ` — need ${amounts(lack)} more` : '') + `   ·   ${time}`;
+  } else {
+    const left = demolitionYield(b);
+    const rounded: Amounts = {};
+    for (const r of RESOURCES) if (left[r] >= 0.5) rounded[r] = Math.round(left[r]);
+    line1 = 'Pull it down; its workers are let go';
+    line2 = Object.keys(rounded).length ? `Leaves ${amounts(rounded)} on the ground for serfs to carry off` : 'Leaves nothing behind';
+  }
+  text(ctx, line1, uiW / 2, M.infoY, fitSize(ctx, line1, 14, M.panel.w - 24), '#f3ead8', 'center');
+  text(ctx, line2, uiW / 2, M.infoY + 20, fitSize(ctx, line2, 12, M.panel.w - 24), short ? '#e89a7a' : '#cbbfa4', 'center');
+
+  button(ctx, M.cancel, false);
+  text(ctx, 'Cancel', M.cancel.x + M.cancel.w / 2, M.cancel.y + 25, 15, '#f3ead8', 'center', true);
+  button(ctx, M.build, true);
+  const act = OPTION_NAME[option];
+  text(ctx, act, M.build.x + M.build.w / 2, M.build.y + 25, fitSize(ctx, act, 15, M.build.w - 12, true), GOLD, 'center', true);
+}
+
 export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number): void {
+  if (world.menu?.kind === 'building') return drawBuildingMenu(ctx, world, uiW, uiH);
   if (!world.menu) return;
   const M = menuLayout(uiW, uiH);
 

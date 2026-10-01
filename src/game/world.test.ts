@@ -65,7 +65,7 @@ describe('placement', () => {
 });
 
 describe('build menu', () => {
-  it('opens only at an empty plot and places the selected type', () => {
+  it('builds at an empty plot, and offers what can be done to a building', () => {
     const w = emptyWorld();
     placeBuilding(w, 10, 'warehouse', { instant: true, free: true })!.stock = stockOf({ wood: 300, stone: 300 });
     w.rider.x = w.plots[2].x + 10;
@@ -74,7 +74,8 @@ describe('build menu', () => {
     const b = confirmMenu(w);
     expect(b?.type).toBe(BUILDING_TYPES[2]);
     expect(w.menu).toBeNull();
-    expect(openMenu(w)).toBe(false); // plot now occupied
+    expect(openMenu(w)).toBe(true); // plot now occupied: its building's menu
+    expect(w.menu?.kind).toBe('building');
   });
 
   it('does not open between plots', () => {

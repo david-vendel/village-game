@@ -5,10 +5,11 @@
 
 import { chapelBell } from '../game/daynight';
 import { employees } from '../game/people';
+import { GROUND_PILE_Y } from '../game/piles';
 import type { Worker } from '../game/worker';
 import { laidOut, onSite, upgrading } from '../game/site';
 import { crossings, streetOf, streetRange } from '../game/streets';
-import { canUpgrade, crossroadAt, getBuilding, plotAt, type Building, type World } from '../game/world';
+import { canDemolish, canUpgrade, crossroadAt, getBuilding, plotAt, type Building, type World } from '../game/world';
 import { drawBackground, drawForeground, drawHaze, drawSideRoad, drawStreetEnds, type View } from './background';
 import { BUILDING_LINE_DIST, distAt, drawOtherGround, eyeOf, standingOn, TREE_LINE_DIST } from './plane';
 import { BUILDING_ART, type DrawArgs } from './buildings';
@@ -20,6 +21,7 @@ import { groundX } from './ground';
 import { drawSkyBehind, lightAt, tintLand } from './sky';
 import { drawRider } from './horse';
 import { drawVillager, walker } from './people';
+import { drawGroundPile } from './piles';
 import { drawBuildingLabel, drawCompletionEffect, drawPlotGlow, drawPlotPrompt, drawProgress } from './ui';
 import { type Ctx, GROUND_Y, rect, ROAD_Y, VIEW_H } from './util';
 
@@ -46,8 +48,10 @@ export interface SceneView {
   labelScale: number;
   /** Text of the "build here" prompt (differs for touch vs keyboard). */
   promptLabel: string;
-  /** How to upgrade the building the rider is at, e.g. "Press ↓ or Space to upgrade". */
+  /** How to open the menu of a building that can be upgraded, e.g. "Press ↓ or Space to upgrade or destroy". */
   upgradeLabel: string;
+  /** How to open the menu of a building that can only be pulled down. */
+  destroyLabel: string;
   /** How to turn at a crossroads onto the street crossing this one. */
   turnLabel: string;
   /** Overlay the land grid (debug view). */
@@ -164,6 +168,10 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     ...strollers
       .filter((who) => onScreen(who.stroll.x))
       .map((who) => ({ y: who.stroll.y, draw: () => drawVillager(ctx, walker(who), onGround(who.stroll.x, who.stroll.y), who.stroll.y, world.time) })),
+    // what lies on the ground by the road on this street
+    ...world.piles
+      .filter((p) => streetOf(p.x) === street && onScreen(p.x))
+      .map((p) => ({ y: GROUND_PILE_Y, draw: () => drawGroundPile(ctx, p, onGround(p.x, GROUND_PILE_Y), GROUND_PILE_Y) })),
     { y: ROAD_Y, draw: () => drawRider(ctx, world.rider, onGround(world.rider.x, ROAD_Y), ROAD_Y, world.time) },
     // nearer things (trees in front, the other streets where they run past this one): sorted in by where they stand on screen
     ...elsewhere.filter((o) => o.z < BUILDING_LINE_DIST),
@@ -192,7 +200,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     if (!b) drawPlotPrompt(ctx, sx, BASE, world.time, sv.promptLabel, k);
     else if (b.status === 'done' && !b.site) {
       const turn = crossroadAt(world) ? sv.turnLabel : null;
-      drawBuildingLabel(ctx, world, b, sx, BASE - BUILDING_ART[b.type].height - 18, k, viewW, canUpgrade(b) ? sv.upgradeLabel : null, turn);
+      drawBuildingLabel(ctx, world, b, sx, BASE - BUILDING_ART[b.type].height - 18, k, viewW, canUpgrade(b) ? sv.upgradeLabel : canDemolish(b) ? sv.destroyLabel : null, turn);
     }
   }
 }

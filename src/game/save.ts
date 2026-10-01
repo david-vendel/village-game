@@ -2,7 +2,7 @@
 // src/game; where the data is kept (IndexedDB) is up to src/app/persistence.ts.
 //
 // What is saved is the simulation's own state: time, buildings (with their
-// stores and farm fields), people (with their jobs and where they are in their
+// stores and farm fields), what lies on the ground (piles), people (with their jobs and where they are in their
 // working day), animals, the village stockpile, rider, RNG and id counter, and
 // which crossroads opened which street, in order (the streets' places and plots follow from it).
 // What is not:
@@ -27,9 +27,11 @@ import { employees, laneY, nameFor, openings, type Animal, type Job, type Look, 
 import { RESOURCES, type Load, type Resource, type Stock } from './resources';
 import type { Worker, WorkerTask } from './worker';
 import { clearLand, createForest, type Tree } from './nature';
+import type { Pile } from './piles';
+import { streetOf } from './streets';
 import { createWorld, layStreet, WORLD_WIDTH, type Building, type Rider, type World } from './world';
 
-export const SAVE_VERSION = 14;
+export const SAVE_VERSION = 15;
 
 /** How often (s) the village used to collect goods from stores (until v9); old migrations need it. */
 const OLD_COLLECT_EVERY = 30;
@@ -44,6 +46,7 @@ export type SavedWorld = Pick<
   | 'people'
   | 'animals'
   | 'trees'
+  | 'piles'
   | 'constructionEnabled'
   | 'lastSelection'
   | 'nextId'
@@ -351,6 +354,12 @@ const MIGRATIONS: Record<number, (world: unknown) => unknown> = {
     }
     return world;
   },
+  // v15: things can lie on the ground by the road (piles.ts); nothing did before
+  14: (world) => {
+    const w = typeof world === 'object' && world !== null ? (world as Raw) : undefined;
+    if (w) w.piles = [];
+    return world;
+  },
 };
 
 /** Snapshot the world. The result shares nothing with the live world. */
@@ -363,6 +372,7 @@ export function saveWorld(world: World): SaveData {
     people: world.people,
     animals: world.animals,
     trees: world.trees,
+    piles: world.piles,
     constructionEnabled: world.constructionEnabled,
     lastSelection: world.lastSelection,
     nextId: world.nextId,
@@ -437,7 +447,9 @@ function build(saved: SavedWorld): World {
     ids.add(b.id);
     plot.buildingId = b.id;
   }
-  const maxId = Math.max(0, ...[...world.buildings, ...world.people, ...world.animals, ...world.trees].map((x) => x.id));
+  // what lies on the ground lies on a street that is there
+  world.piles = world.piles.filter((p) => p.amount > 1e-9 && !!world.streets[streetOf(p.x)]);
+  const maxId = Math.max(0, ...[...world.buildings, ...world.people, ...world.animals, ...world.trees, ...world.piles].map((x) => x.id));
   world.nextId = Math.max(world.nextId, maxId + 1);
   // a construction site record belongs to buildings under construction, or
   // being upgraded, only; an upgrade only to buildings that have one
@@ -524,6 +536,7 @@ function savedWorld(v: unknown): SavedWorld {
     people: arr(w.people, 'people').map((x, i) => person(x, `people[${i}]`)),
     animals: arr(w.animals, 'animals').map((x, i) => animal(x, `animals[${i}]`)),
     trees: arr(w.trees, 'trees').map((x, i) => tree(x, `trees[${i}]`)),
+    piles: arr(w.piles, 'piles').map((x, i) => pile(x, `piles[${i}]`)),
     constructionEnabled: bool(w.constructionEnabled, 'constructionEnabled'),
     lastSelection: oneOf(w.lastSelection, BUILDING_TYPES.map((_, i) => i), 'lastSelection'),
     nextId: int(w.nextId, 'nextId'),
@@ -604,6 +617,11 @@ function person(v: unknown, path: string): Person {
 function tree(v: unknown, path: string): Tree {
   const t = obj(v, path);
   return { id: int(t.id, `${path}.id`), x: num(t.x, `${path}.x`), y: num(t.y, `${path}.y`), state: oneOf(t.state, ['growing', 'grown', 'stump'] as const, `${path}.state`), age: num(t.age, `${path}.age`) };
+}
+
+function pile(v: unknown, path: string): Pile {
+  const p = obj(v, path);
+  return { id: int(p.id, `${path}.id`), x: num(p.x, `${path}.x`), resource: oneOf<Resource>(p.resource, RESOURCES, `${path}.resource`), amount: Math.max(0, num(p.amount, `${path}.amount`)) };
 }
 
 function animal(v: unknown, path: string): Animal {

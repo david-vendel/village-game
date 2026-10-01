@@ -5,7 +5,7 @@
 
 import { streetOf } from '../game/streets';
 import type { MoveInput, World } from '../game/world';
-import { hit, hudLayout, menuLayout } from '../render';
+import { buildingMenuLayout, hit, hudLayout, menuLayout } from '../render';
 import type { Actions } from './actions';
 import type { Screen } from './screen';
 
@@ -95,7 +95,7 @@ export function installControls(world: World, screen: Screen, actions: Actions):
       else if (key === 'ArrowRight' || key === 'd') actions.moveSelection(1);
       else if (key === 'ArrowUp' || key === 'w') moveMenuRow(-1);
       else if (key === 'ArrowDown' || key === 's') moveMenuRow(1);
-      else if (key === 'Enter' || key === ' ') actions.build();
+      else if (key === 'Enter' || key === ' ') actions.confirm();
       else if (key === 'Escape' || key === 'q') actions.closeBuildMenu();
       else if (/^[1-9]$/.test(key)) actions.select(Number(key) - 1);
       return;
@@ -112,6 +112,8 @@ export function installControls(world: World, screen: Screen, actions: Actions):
   /** Move the menu selection to the card straight above/below (the grid's shape comes from the drawn layout). */
   function moveMenuRow(delta: -1 | 1): void {
     if (!world.menu) return;
+    // a building's menu is a single row
+    if (world.menu.kind === 'building') return actions.moveSelection(delta);
     const { cards } = menuLayout(screen.vp.uiW, screen.vp.uiH);
     const cur = cards[world.menu.selection];
     const rows = [...new Set(cards.map((c) => c.y))].sort((a, b) => a - b);
@@ -155,12 +157,12 @@ export function installControls(world: World, screen: Screen, actions: Actions):
     let role: Role = 'none';
 
     if (world.menu) {
-      const M = menuLayout(uiW, uiH);
+      const M = world.menu.kind === 'build' ? menuLayout(uiW, uiH) : buildingMenuLayout(uiW, uiH, world.menu.options.length);
       const card = M.cards.findIndex((r) => hit(r, ux, uy));
       if (card >= 0) {
-        if (card === world.menu.selection) actions.build();
+        if (card === world.menu.selection) actions.confirm();
         else actions.select(card);
-      } else if (hit(M.build, ux, uy)) actions.build();
+      } else if (hit(M.build, ux, uy)) actions.confirm();
       else if (hit(M.cancel, ux, uy) || !hit(M.panel, ux, uy)) actions.closeBuildMenu();
     } else {
       const L = hudLayout(uiW, uiH);

@@ -6,14 +6,13 @@ import { BUILDING_TYPES, BUILDINGS } from '../game/buildings';
 import { buildShortfall, upgradeShortfall } from '../game/economy';
 import { RESOURCES, type Amounts } from '../game/resources';
 import {
-  canUpgrade,
   closeMenu,
   confirmMenu,
   crossroadAt,
+  demolish,
   getBuilding,
   moveMenu,
   openMenu,
-  plotAt,
   selectMenu,
   setConstructionEnabled,
   turnAtCrossroads,
@@ -29,11 +28,13 @@ export type Notify = (text: string) => void;
 export interface Actions {
   toggleConstruction(): void;
   toggleSound(): void;
+  /** The menu at the plot the rider is at: build on an empty plot; upgrade or pull down a building. */
   openBuildMenu(): void;
   closeBuildMenu(): void;
   moveSelection(delta: number): void;
   select(index: number): void;
-  build(): void;
+  /** Do what is chosen in the open menu. */
+  confirm(): void;
   /** Whether the rider is at a crossroads, where ↑/↓ turn instead. */
   atCrossroads(): boolean;
   /** Turn onto the street crossing this one: up (away from the viewer) or down (towards them). */
@@ -59,20 +60,7 @@ export function createActions(world: World, notify: Notify, isTouch: () => boole
         sound.ui('menuOpen');
         return;
       }
-      // at a building that can be upgraded, the same key upgrades it
-      const b = getBuilding(world, plotAt(world, world.rider.x)?.buildingId ?? null);
-      const upgrade = b && BUILDINGS[b.type].upgrade;
-      if (b && upgrade && canUpgrade(b)) {
-        const lack = upgradeShortfall(world, b);
-        if (Object.keys(lack).length) {
-          sound.ui('denied');
-          notify(`Not enough for a ${upgrade.name}: need ${needText(lack)}`);
-          return;
-        }
-        upgradeBuilding(world, b);
-        sound.ui('toggle');
-        notify(b.upgraded ? `${upgrade.name} built` : `Upgrading the ${BUILDINGS[b.type].name} to a ${upgrade.name}`);
-      } else if (isTouch()) {
+      if (isTouch()) {
         sound.ui('denied');
         notify('Ride to a pennant to build');
       }
@@ -98,7 +86,32 @@ export function createActions(world: World, notify: Notify, isTouch: () => boole
     turnToward(v) {
       if (turnToward(world, v)) sound.ui('menuMove');
     },
-    build() {
+    confirm() {
+      const menu = world.menu;
+      if (menu?.kind === 'building') {
+        const b = getBuilding(world, menu.buildingId);
+        if (!b) return closeMenu(world);
+        const name = BUILDINGS[b.type].name;
+        if (menu.options[menu.selection] === 'demolish') {
+          demolish(world, b);
+          sound.ui('toggle');
+          notify(`The ${name} is pulled down; serfs will carry off what is left`);
+          return;
+        }
+        const upgrade = BUILDINGS[b.type].upgrade!;
+        // the menu stays open when the village can't pay
+        const lack = upgradeShortfall(world, b);
+        if (Object.keys(lack).length) {
+          sound.ui('denied');
+          notify(`Not enough for a ${upgrade.name}: need ${needText(lack)}`);
+          return;
+        }
+        closeMenu(world);
+        upgradeBuilding(world, b);
+        sound.ui('toggle');
+        notify(b.upgraded ? `${upgrade.name} built` : `Upgrading the ${name} to a ${upgrade.name}`);
+        return;
+      }
       if (!world.menu) return;
       // the menu stays open when the village can't pay, so another choice is one key away
       const type = BUILDING_TYPES[world.menu.selection];

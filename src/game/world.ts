@@ -20,7 +20,8 @@ import { FIRST_PLOT_X, PLOT_SPACING, STREET_LENGTH } from './layout';
 import { clearLand, plantWoods, gatherWorkplace, isGatherHut, updateForest, type Tree } from './nature';
 import { employees, laneY, nameFor, openings, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
 import { builderPositions, builders, createSite, siteWork, siteWorkplace, upgrading, type Site } from './site';
-import { RESOURCES, stockOf, type Stock } from './resources';
+import { dropOnGround, PILE_GAP, type Pile } from './piles';
+import { RESOURCES, stockOf, type Amounts, type Stock } from './resources';
 import { CROSS_PLOT, mainStreet, newStreet, onQuarryLand, STREET_BAND_HALF, STREET_END_RUN, plotPoint, plotX, PLOTS_PER_STREET, route, streetOf, streetRange, streetsAt, turnFacing, type Junction, type Street, type Vec } from './streets';
 import { eatAtTaverns } from './tavern';
 import { serfPositions, transportHub, transportWorkplace } from './transport';
@@ -112,13 +113,16 @@ export interface Rider {
   turnedAt?: number;
 }
 
-export interface BuildMenu {
-  plotIndex: number;
-  selection: number;
-}
+/** What can be done to a building from its menu. */
+export type BuildingOption = 'upgrade' | 'demolish';
+
+/** The menu open at the plot the rider is at: what to build on an empty plot, or what to do with the building on it. */
+export type BuildMenu =
+  | { kind: 'build'; plotIndex: number; selection: number }
+  | { kind: 'building'; plotIndex: number; buildingId: number; options: BuildingOption[]; selection: number };
 
 export interface GameEvent {
-  kind: 'placed' | 'completed' | 'upgraded';
+  kind: 'placed' | 'completed' | 'upgraded' | 'demolished';
   buildingId: number;
 }
 
@@ -137,6 +141,8 @@ export interface World {
   animals: Animal[];
   /** The woods behind the street (nature.ts). */
   trees: Tree[];
+  /** Things lying on the ground by the road, waiting to be carried off (piles.ts). */
+  piles: Pile[];
   constructionEnabled: boolean;
   params: WorldParams;
   menu: BuildMenu | null;
@@ -205,6 +211,7 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
     people: [],
     animals: [],
     trees: [],
+    piles: [],
     constructionEnabled: true,
     params: { ...DEFAULT_PARAMS },
     menu: null,
@@ -333,6 +340,51 @@ export function upgradeBuilding(world: World, b: Building): boolean {
     complete(world, b);
   }
   return true;
+}
+
+/** Whether a building can be pulled down: anything but a crossroads (the streets run through it). */
+export function canDemolish(b: Building): boolean {
+  return b.type !== 'intersection';
+}
+
+/** What pulling a building down leaves lying: its materials (built in or brought to its site) and its store. */
+export function demolitionYield(b: Building): Stock {
+  const left = stockOf();
+  const add = (a: Amounts) => {
+    for (const r of RESOURCES) left[r] += a[r] ?? 0;
+  };
+  const def = BUILDINGS[b.type];
+  if (b.status === 'done') add(def.cost);
+  if (b.upgraded && def.upgrade) add(def.upgrade.cost);
+  if (b.site) add(b.site.delivered);
+  add(b.stock);
+  return left;
+}
+
+/**
+ * Pull a building down. Its materials (what it cost, or what was brought to
+ * its site so far) and everything in its store are left lying on the ground
+ * in front of its plot, for serfs to carry off (piles.ts); its workers put
+ * down whatever they carry and are let go. Returns what was left lying.
+ */
+export function demolish(world: World, b: Building): Stock {
+  if (!canDemolish(b)) return stockOf();
+  const x = world.plots[b.plotIndex].x;
+  const left = demolitionYield(b);
+  for (const p of employees(world, b)) {
+    const w = p.job!.worker;
+    if (w.carrying) dropOnGround(world, x + w.dx, w.carrying);
+    release(world, p);
+  }
+  world.buildings = world.buildings.filter((o) => o !== b);
+  world.plots[b.plotIndex].buildingId = null;
+  if (world.menu?.plotIndex === b.plotIndex) world.menu = null;
+  const kinds = RESOURCES.filter((r) => left[r] > 1e-9);
+  kinds.forEach((r, i) => dropOnGround(world, x + (i - (kinds.length - 1) / 2) * PILE_GAP, { resource: r, amount: left[r] }));
+  // its land is free again for the neighbouring farms' fields
+  syncFarmFields(world);
+  world.events.push({ kind: 'demolished', buildingId: b.id });
+  return left;
 }
 
 /**
@@ -493,35 +545,47 @@ function turnOnto(world: World, c: { x: number }, facing: 1 | -1): boolean {
 
 // --- Build menu ------------------------------------------------------------
 
-/** Open the build menu if the rider stands at an empty plot. Returns whether it opened. */
+/**
+ * Open the menu at the plot the rider stands at: what to build on an empty
+ * plot; on a building, upgrade it (when it can be) or pull it down. Returns
+ * whether a menu opened.
+ */
 export function openMenu(world: World): boolean {
   const plot = plotAt(world, world.rider.x);
-  if (!plot || plot.buildingId !== null) return false;
-  world.menu = { plotIndex: plot.index, selection: world.lastSelection };
+  if (!plot) return false;
+  const b = getBuilding(world, plot.buildingId);
+  if (plot.buildingId === null) world.menu = { kind: 'build', plotIndex: plot.index, selection: world.lastSelection };
+  else if (b && canDemolish(b)) {
+    const options: BuildingOption[] = canUpgrade(b) ? ['upgrade', 'demolish'] : ['demolish'];
+    world.menu = { kind: 'building', plotIndex: plot.index, buildingId: b.id, options, selection: 0 };
+  } else return false;
   world.rider.vx = 0;
   return true;
 }
 
+const menuSize = (menu: BuildMenu) => (menu.kind === 'build' ? BUILDING_TYPES.length : menu.options.length);
+
 export function moveMenu(world: World, delta: number): void {
   if (!world.menu) return;
-  const n = BUILDING_TYPES.length;
+  const n = menuSize(world.menu);
   world.menu.selection = (((world.menu.selection + delta) % n) + n) % n;
 }
 
 export function selectMenu(world: World, index: number): void {
-  if (!world.menu || index < 0 || index >= BUILDING_TYPES.length) return;
+  if (!world.menu || index < 0 || index >= menuSize(world.menu)) return;
   world.menu.selection = index;
 }
 
+/** Build what is chosen in the build menu. */
 export function confirmMenu(world: World): Building | null {
-  if (!world.menu) return null;
+  if (world.menu?.kind !== 'build') return null;
   const { plotIndex, selection } = world.menu;
   closeMenu(world);
   return placeBuilding(world, plotIndex, BUILDING_TYPES[selection]);
 }
 
 export function closeMenu(world: World): void {
-  if (world.menu) world.lastSelection = world.menu.selection;
+  if (world.menu?.kind === 'build') world.lastSelection = world.menu.selection;
   world.menu = null;
 }
 
