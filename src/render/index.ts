@@ -2,7 +2,7 @@
 // frame; everything about how things look — draw order, art, HUD, menus — is
 // decided in src/render. Rendering only reads game state, never changes it.
 
-import { buildingAt, canDemolish, crossroadAt, type World } from '../game/world';
+import { buildingAt, canDemolish, crossroadAt, roomToBuild, type World } from '../game/world';
 import { drawScene } from './scene';
 import { drawTopView } from './topview';
 import { drawBuildMenu, drawHud, drawToasts, drawTurnFade, type Toast } from './ui';
@@ -74,7 +74,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
     touch: v.touch,
     leftHeld: v.leftHeld,
     rightHeld: v.rightHeld,
-    canBuild: !here || canDemolish(here),
+    canBuild: here ? canDemolish(here) : roomToBuild(world, world.rider.x),
     canTurn: !world.menu && !!crossroadAt(world),
     topView: v.topView,
   });

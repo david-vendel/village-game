@@ -10,7 +10,7 @@ import type { Worker } from '../game/worker';
 import { laidOut, onSite, upgrading } from '../game/site';
 import { crossings, streetOf, streetRange } from '../game/streets';
 import { BUILDING_TYPES } from '../game/buildings';
-import { buildingAt, canDemolish, canUpgrade, crossroadAt, getBuilding, type Building, type World } from '../game/world';
+import { buildingAt, canDemolish, canUpgrade, crossroadAt, getBuilding, roomToBuild, type Building, type World } from '../game/world';
 import { drawBackground, drawForeground, drawHaze, drawSideRoad, drawStreetEnds, type View } from './background';
 import { BUILDING_LINE_DIST, distAt, drawOtherGround, eyeOf, standingOn, TREE_LINE_DIST } from './plane';
 import { flushEmissive } from './assets';
@@ -199,9 +199,9 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   if (!world.menu) {
     const b = buildingAt(world, world.rider.x);
     const sx = (b?.x ?? world.rider.x) - camX;
-    // anywhere free, once the rider stops, they can build
+    // anywhere something fits, once the rider stops, they can build
     if (!b) {
-      if (Math.abs(world.rider.vx) < 5) drawPlotPrompt(ctx, sx, BASE, world.time, sv.promptLabel, k);
+      if (Math.abs(world.rider.vx) < 5 && roomToBuild(world, world.rider.x)) drawPlotPrompt(ctx, sx, BASE, world.time, sv.promptLabel, k);
     } else if (b.status === 'done' && !b.site) {
       const turn = crossroadAt(world) ? sv.turnLabel : null;
       drawBuildingLabel(ctx, world, b, sx, BASE - BUILDING_ART[b.type].height - 18, k, viewW, canUpgrade(b) ? sv.upgradeLabel : canDemolish(b) ? sv.destroyLabel : null, turn);
