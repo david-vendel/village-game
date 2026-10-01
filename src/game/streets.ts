@@ -165,23 +165,28 @@ const near = (a: number, b: number) => Math.abs(a - b) < 1e-6;
 
 /**
  * What a new street finds at map point p, from the streets already there: one
- * running along the same line through p (it must stop short), or one crossing
- * its way there (the plot of that street at p).
+ * running along the same line through p (it must stop short), one crossing
+ * its way there (the plot of that street at p), or the end of a road crossing
+ * its way past its last plot, where there is no plot to meet at (`blocked`:
+ * it must stop short of that too).
  */
-export function streetsAt(world: World, dir: Vec, p: Vec): { along: boolean; crossing: { street: number; k: number } | null } {
+export function streetsAt(world: World, dir: Vec, p: Vec): { along: boolean; crossing: { street: number; k: number } | null; blocked: boolean } {
   let crossing: { street: number; k: number } | null = null;
+  let blocked = false;
   for (const s of world.streets) {
     if (s.gone) continue;
-    // how far along s the point is, and whether it is on its line at all
+    // how far along s the point is, and whether it is on its line, where its road runs
     const t = (p.x - s.origin.x) * s.dir.x + (p.y - s.origin.y) * s.dir.y;
     const off = (p.x - s.origin.x) * -s.dir.y + (p.y - s.origin.y) * s.dir.x;
     if (!near(off, 0)) continue;
+    const { min, max } = streetRange(world, s.index);
+    if (t + streetStart(s.index) < min || t + streetStart(s.index) > max) continue;
+    if (near(Math.abs(s.dir.x * dir.x + s.dir.y * dir.y), 1)) return { along: true, crossing: null, blocked: false };
     const k = (t - FIRST_PLOT_X) / PLOT_SPACING;
-    if (!near(k, Math.round(k)) || Math.round(k) < s.lo || Math.round(k) > s.hi) continue;
-    if (near(Math.abs(s.dir.x * dir.x + s.dir.y * dir.y), 1)) return { along: true, crossing: null };
-    crossing = { street: s.index, k: Math.round(k) };
+    if (near(k, Math.round(k)) && Math.round(k) >= s.lo && Math.round(k) <= s.hi) crossing = { street: s.index, k: Math.round(k) };
+    else blocked = true;
   }
-  return { along: false, crossing };
+  return { along: false, crossing, blocked };
 }
 
 /** Every crossroads, seen from both of its streets: world x here, and the same spot on the other street. */

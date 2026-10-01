@@ -35,3 +35,20 @@ run until built
 expect at s0:79 house size 3 done
 expect at s0:85 house size 1 done
 map ids D60:-C99
+
+# Pulling down a section, what is left merges with a small house beside it,
+# as a new one built there would.
+new empty
+free on
+construction off
+build house at s0:40
+build house next
+build house next
+build house next
+expect at s0:49 house size 1
+demolish section at s0:43
+run 1s
+expect count house 2
+expect at s0:40 house size 1
+expect at s0:46 house size 2
+map ids

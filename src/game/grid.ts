@@ -258,3 +258,21 @@ export function roadBlocked(world: World, s: Street, t0: number, t1: number): bo
   }
   return false;
 }
+
+/**
+ * Whether street s's road, from t0 to t1 along it (px from its start), would
+ * run onto the road of another street (where it isn't laid yet: s is new).
+ */
+export function roadInWay(world: World, s: Street, t0: number, t1: number): boolean {
+  const land = baseLand(world);
+  const i0 = Math.floor(Math.min(t0, t1) / CELL_W + 1e-6);
+  const i1 = Math.ceil(Math.max(t0, t1) / CELL_W - 1e-6) - 1;
+  for (let i = i0; i <= i1; i++) {
+    for (let j = -1; j <= 1; j++) {
+      const cell = streetCell(s, i, j);
+      const use = land.get(cellKey(cell.c, cell.r));
+      if (use?.kind === 'road' && use.street !== s.index) return true;
+    }
+  }
+  return false;
+}

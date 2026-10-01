@@ -174,7 +174,9 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   laid out plot by plot both ways (`layStreet` in `world.ts`); meeting a street that crosses its way
   it joins it if that plot is free (a crossroads is made there, `Building.junction`, and it runs on
   across) and ends one plot short otherwise, and it ends one plot short of a street along the same
-  line. Plots past a street's ends are `off`. So streets close into loops. `Junction`s are where
+  line. A road runs on past a street's last plot, so a street ends as many plots shorter again as
+  keeps that end off any road it doesn't meet, with a cell of grass between (`planStreet`); a
+  crossroads whose road can't keep off one that way can't be built. Plots past a street's ends are `off`. So streets close into loops. `Junction`s are where
   streets meet; `route` is the shortest way between two x's through them (to the corner, then on
   from the same spot on the next street; `worker.ts` walks it) and `streetDist` the walking distance
   every "nearest" is measured by. Each street is seen from its right-hand side, so its lots lie to
@@ -192,7 +194,8 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   place where it fits on free cells (`whyNotHere`). Crossroads stand on the plots, one per block,
   so their roads take a block and streets meet at a plot of each. Houses come small (3), medium
   (6) and large (9): a small house finished right beside a house becomes part of it
-  (`mergeHouses` in `world.ts`, `Building.size`).
+  (`mergeNeighbours` in `world.ts`, `Building.size`), and so does what is left of a merged one
+  when a section of it is pulled down.
 - `land.ts`: the farms' fields on the grid. A farm works the free cells nearest to it, up to
   `FIELD_REACH` cells to either side and `FIELD_CELLS` in all (more once upgraded). Building over a
   field, or a new road, re-lays the fields (`syncFarmFields`): fields keep their crops where their

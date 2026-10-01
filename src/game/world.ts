@@ -17,7 +17,7 @@ import { buildShortfall, putAway, takeFromWarehouses, upgradeShortfall, WAREHOUS
 import { createFarm, DEFAULT_WORK, farmWorkplace, updateCrops, type FarmState } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
 import { BLOCK, CELL_W, FIRST_PLOT_X, PLOT_SPACING, STREET_LENGTH } from './layout';
-import { alongCell, blockStartX, footprintOf, roadBlocked, siteX, sizeOfBuilding, whyNotHere } from './grid';
+import { alongCell, blockStartX, footprintOf, roadBlocked, roadInWay, siteX, sizeOfBuilding, whyNotHere } from './grid';
 import { clearLand, plantWoods, gatherWorkplace, isGatherHut, updateForest, type Tree } from './nature';
 import { employees, laneY, nameFor, openings, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
 import { builderPositions, builders, createSite, siteWork, siteWorkplace, upgrading, type Site } from './site';
@@ -321,7 +321,10 @@ export function whyNotBuild(world: World, type: BuildingType, x: number): string
   const at = placeAt(world, type, x);
   if (at === null) return 'No room for a road here';
   if (type === 'intersection' && crossroadsPlot(world, at)?.buildingId != null) return 'There is a crossroads here already';
-  return whyNotHere(world, type, at);
+  const why = whyNotHere(world, type, at);
+  if (why || type !== 'intersection') return why;
+  // its road would run onto another road, and not meet it at a crossroads
+  return planStreet(world, -1, at).clear ? null : 'Another road is too close';
 }
 
 export function placeBuilding(
@@ -635,7 +638,8 @@ export function mergeNeighbours(world: World, b: Building): Building {
  * Pull down the section of three cells of a merged building that world x is
  * in: the section is split off as a small building of its own and pulled
  * down; what stands either side of it stands on, as one or two buildings
- * (a large house losing its middle is two small ones). Its store is shared
+ * (a large house losing its middle is two small ones), each merging with one
+ * of its kind beside it where they fit (mergeNeighbours). Its store is shared
  * out by width. Returns whether it started.
  */
 export function demolishSection(world: World, b: Building, x: number): boolean {
@@ -674,30 +678,43 @@ export function demolishSection(world: World, b: Building, x: number): boolean {
   for (const p of employees(world, b)) p.job!.worker.dx += oldX - b.x;
   world.buildings.push(section, ...(later ? [later] : []));
   world.menu = null;
-  return demolish(world, section);
+  if (!demolish(world, section)) return false;
+  // what stands on either side may now be built onto a small one of its kind beside it, as a new one would be
+  mergeNeighbours(world, b);
+  if (later) mergeNeighbours(world, later);
+  return true;
 }
 
 // --- Streets -------------------------------------------------------------------
 
 /**
- * Lay out the street a finished crossroads opens (streets.ts): from its
- * crossroads plot, plot by plot both ways, up to a street's length. Where it
- * comes to a street crossing its way it joins it if that street's plot there
- * is free (a crossroads is made there, and it runs on across) and ends one
- * plot short of it otherwise; it ends one plot short of a street running along
- * the same line. Loading a save lays the streets out again this way, in order
- * (the crossroads made where streets met are saved, so they are found again).
+ * Where the street a crossroads at world x would open runs (streets.ts): from
+ * its crossroads plot, plot by plot both ways, up to a street's length. Where
+ * it comes to a street crossing its way it joins it if that street's plot
+ * there is free (a crossroads is made there, and it runs on across) and ends
+ * one plot short of it otherwise; it ends one plot short of a street running
+ * along the same line, and of the end of a road crossing its way past its last
+ * plot. Its road runs on past its last plot (STREET_END_RUN), so it ends as
+ * many plots shorter again as that needs to keep off any road it doesn't meet,
+ * with a cell of grass between;
+ * `clear` is false if even its crossroads plot is too close for that (it can't
+ * be built there: whyNotBuild). Changes nothing.
  */
-export function layStreet(world: World, b: Building): Street {
-  const at = b.x;
-  const street = newStreet(world, b.id, at);
-  const joins: Array<{ k: number; plot: Plot }> = [];
+export function planStreet(world: World, from: number, at: number): { street: Street; joins: Array<{ k: number; plot: Plot }>; clear: boolean } {
+  const street = newStreet(world, from, at);
+  let joins: Array<{ k: number; plot: Plot }> = [];
+  let clear = true;
+  const stubInWay = (end: number, step: number) => {
+    const t = plotX(street.index, end) - streetStart(street.index);
+    // (a cell of grass short of it, so the end doesn't look like a turning)
+    return roadInWay(world, street, t + step * 1.5 * CELL_W, t + step * (STREET_END_RUN + CELL_W));
+  };
   for (const step of [-1, 1]) {
     for (let k = CROSS_PLOT + step; k >= 0 && k < PLOTS_PER_STREET; k += step) {
       const meet = streetsAt(world, street.dir, plotPoint(street, k));
       // it stops short of a street along the same line, and of a quarry or a building in its way (a quarry beside it is no matter)
       const t = plotX(street.index, k) - streetStart(street.index);
-      if (meet.along || roadBlocked(world, street, t - step * PLOT_SPACING, t + step * STREET_END_RUN)) break;
+      if (meet.along || meet.blocked || roadBlocked(world, street, t - step * PLOT_SPACING, t + step * STREET_END_RUN)) break;
       if (meet.crossing) {
         const plot = plotOf(world, meet.crossing.street, meet.crossing.k);
         const there = getBuilding(world, plot.buildingId);
@@ -707,7 +724,26 @@ export function layStreet(world: World, b: Building): Street {
       if (step < 0) street.lo = k;
       else street.hi = k;
     }
+    // back off, plot by plot, until the road past the end doesn't run onto a road it doesn't meet
+    for (let end = step < 0 ? street.lo : street.hi; stubInWay(end, step); end = step < 0 ? ++street.lo : --street.hi) {
+      if (end === CROSS_PLOT) {
+        clear = false;
+        break;
+      }
+    }
   }
+  joins = joins.filter(({ k }) => k >= street.lo && k <= street.hi);
+  return { street, joins, clear };
+}
+
+/**
+ * Lay out the street a finished crossroads opens (planStreet). Loading a save
+ * lays the streets out again this way, in order (the crossroads made where
+ * streets met are saved, so they are found again).
+ */
+export function layStreet(world: World, b: Building): Street {
+  const at = b.x;
+  const { street, joins } = planStreet(world, b.id, at);
   world.streets.push(street);
   layPlots(world, street);
   plotOf(world, street.index, CROSS_PLOT).buildingId = b.id;

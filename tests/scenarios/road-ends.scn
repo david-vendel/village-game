@@ -1,0 +1,27 @@
+# A road runs on past a street's last plot. A new street never runs over
+# another road's end without a crossroads: it ends short of it instead.
+new empty
+free on
+construction off
+build crossroads at s0:40
+ride #last
+turn up
+ride +30
+build crossroads here
+ride #last
+turn up
+ride +30
+build crossroads here
+# the third street runs south past the main street's west end, and stops short of it
+streets
+map L0:-C20
+
+# A crossroads whose road would cross another road where it can't meet it
+# (here: the rocks stop the new street, but its road's end would still run over
+# the main street) can't be built.
+new empty
+free on
+construction off
+build crossroads at s0:79
+build crossroads at s1:127
+expect cannot build crossroads at s2:142 another road is too close
