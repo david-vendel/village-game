@@ -25,6 +25,8 @@ const ZOOM_STEP = 1.2;
 
 type Role = 'left' | 'right' | 'pinch' | 'none';
 
+/** Two taps of left or right this close together (ms), the second held, make the horse gallop. */
+const DOUBLE_TAP_MS = 300;
 const VIEW_KEY = 'village-game:view';
 const TOP_ZOOM_KEY = 'village-game:top-zoom';
 const stored = (key: string): string | null => {
@@ -66,6 +68,10 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
 
   // --- Keyboard -----------------------------------------------------------------
 
+  /** The last tap of left or right, and which of them is being sprinted (tapped twice and held). */
+  let lastTap: { way: 'left' | 'right'; at: number } | null = null;
+  let sprinting: 'left' | 'right' | null = null;
+
   // Everything is reachable with the left hand alone: WASD mirrors the arrows,
   // Space confirms. Letters are lower-cased so Shift / Caps Lock don't matter.
   const keyOf = (e: KeyboardEvent) => (e.key.length === 1 ? e.key.toLowerCase() : e.key);
@@ -75,6 +81,13 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
     if (GAME_KEYS.has(key)) e.preventDefault();
     keys.add(key);
     if (e.repeat) return;
+    // a second tap of left or right, quickly after the first, and held: a gallop
+    const way = key === 'ArrowLeft' || key === 'a' ? 'left' : key === 'ArrowRight' || key === 'd' ? 'right' : null;
+    if (way) {
+      const now = performance.now();
+      if (lastTap?.way === way && now - lastTap.at < DOUBLE_TAP_MS) sprinting = way;
+      lastTap = { way, at: now };
+    }
 
     if (key === 'Tab') {
       setTopView(!topView);
@@ -107,7 +120,11 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
     if (actions.atCrossroads() && (key === 'ArrowDown' || key === 's')) return actions.turn('down');
     if (key === 'ArrowDown' || key === 's' || key === ' ' || key === 'Enter' || key === 'b') actions.openBuildMenu();
   });
-  window.addEventListener('keyup', (e) => keys.delete(keyOf(e)));
+  window.addEventListener('keyup', (e) => {
+    keys.delete(keyOf(e));
+    if (sprinting === 'left' && !keyLeft()) sprinting = null;
+    if (sprinting === 'right' && !keyRight()) sprinting = null;
+  });
 
   /** Move the menu selection to the card straight above/below (the grid's shape comes from the drawn layout). */
   function moveMenuRow(delta: -1 | 1): void {
@@ -235,10 +252,10 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
   }
 
   return {
-    move: () =>
-      topView && !world.menu
-        ? moveOnMap()
-        : { left: keyLeft() || held('left'), right: keyRight() || held('right') },
+    move: () => {
+      const m = topView && !world.menu ? moveOnMap() : { left: keyLeft() || held('left'), right: keyRight() || held('right') };
+      return { ...m, sprint: sprinting !== null && m[sprinting] };
+    },
     touchHeld: () => ({ left: held('left'), right: held('right') }),
     topView: () => topView,
     topZoom: () => topZoom,

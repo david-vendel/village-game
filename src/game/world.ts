@@ -40,6 +40,9 @@ export const INTERACT_RANGE = 40;
 export const RIDER_MAX_SPEED = 240; // px/s
 export const RIDER_ACCEL = 600; // px/s²
 export const RIDER_DECEL = 740; // px/s²
+/** Sprinting, the horse gallops this many times as fast, and picks up speed this much quicker. */
+export const SPRINT_SPEED = 1.75;
+export const SPRINT_ACCEL = 1.3;
 
 /** Live-tunable knobs (the tuning panel edits these; defaults are the constants above). */
 export interface WorldParams {
@@ -172,6 +175,8 @@ export interface World {
 export interface MoveInput {
   left: boolean;
   right: boolean;
+  /** Galloping: the way being ridden was tapped twice and is held (app/controls.ts). */
+  sprint?: boolean;
 }
 
 /** Deterministic RNG (mulberry32) stored in world state so tests are reproducible. */
@@ -858,9 +863,12 @@ function updateRider(world: World, dt: number, input: MoveInput): void {
   const r = world.rider;
   const p = world.params;
   const dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+  const sprint = dir !== 0 && !!input.sprint;
+  const top = p.riderMaxSpeed * (sprint ? SPRINT_SPEED : 1);
   if (dir !== 0) {
-    r.vx += dir * p.riderAccel * dt;
-    r.vx = Math.max(-p.riderMaxSpeed, Math.min(p.riderMaxSpeed, r.vx));
+    r.vx += dir * p.riderAccel * (sprint ? SPRINT_ACCEL : 1) * dt;
+    // past the top speed (the sprint let go of) it eases back down rather than stopping short
+    if (Math.abs(r.vx) > top) r.vx = Math.sign(r.vx) * Math.max(top, Math.abs(r.vx) - p.riderDecel * dt);
   } else {
     const dv = p.riderDecel * dt;
     r.vx = Math.abs(r.vx) <= dv ? 0 : r.vx - Math.sign(r.vx) * dv;

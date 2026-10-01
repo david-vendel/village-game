@@ -10,7 +10,7 @@ import { drawBuildMenu, drawHud, drawToasts, drawTurnFade, type Toast } from './
 export { artMode, loadArt, type ArtMode } from './assets';
 export { showArtPreview } from './preview';
 export { cameraX } from './scene';
-export { STRIDE as HORSE_STRIDE } from './horse';
+export { galloping, STRIDE as HORSE_STRIDE, strideAt } from './horse';
 export { buildingMenuLayout, hit, HUD_BUTTON, hudLayout, menuLayout, type Rect, type Toast } from './ui';
 
 /** Everything the renderer needs besides the world: where the camera is and how the screen is scaled. */
