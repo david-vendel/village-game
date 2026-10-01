@@ -555,14 +555,18 @@ export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number):
     }
     roundRect(ctx, r.x, r.y, r.w, r.h - 24, 6);
     ctx.clip();
-    // what the village can't afford, or what doesn't fit here, is shown faded
-    if (Object.keys(buildShortfall(world, type)).length || whyNotBuild(world, type, menuX)) ctx.globalAlpha = 0.4;
+    // what doesn't fit here is greyed out; what the village can't afford is shown faded
+    const fits = !whyNotBuild(world, type, menuX);
+    if (!fits) {
+      ctx.filter = 'grayscale(1)';
+      ctx.globalAlpha = 0.3;
+    } else if (Object.keys(buildShortfall(world, type)).length) ctx.globalAlpha = 0.4;
     const previewH = r.h - 34;
     const scale = Math.min(0.6, (r.w - 8) / (def.width * 1.3), previewH / (BUILDING_ART[type].height + 20));
     drawBuildingIcon(ctx, type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time);
     ctx.restore();
     const label = `${i + 1}. ${def.name}`;
-    text(ctx, label, r.x + r.w / 2, r.y + r.h - 8, fitSize(ctx, label, 12, r.w - 6, sel), sel ? GOLD : '#f3ead8', 'center', sel);
+    text(ctx, label, r.x + r.w / 2, r.y + r.h - 8, fitSize(ctx, label, 12, r.w - 6, sel), !fits ? '#8a8378' : sel ? GOLD : '#f3ead8', 'center', sel);
   });
 
   const def = BUILDINGS[BUILDING_TYPES[world.menu.selection]];

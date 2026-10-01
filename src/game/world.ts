@@ -685,10 +685,14 @@ function turnOnto(world: World, c: { x: number }, facing: 1 | -1): boolean {
 
 // --- Build menu ------------------------------------------------------------
 
+/** Whether anything at all could be built where the rider wants it (world x). */
+export const roomToBuild = (world: World, x: number) => BUILDING_TYPES.some((t) => !whyNotBuild(world, t, x));
+
 /**
  * Open the menu where the rider is: on a building, upgrade it (when it can
- * be) or pull it down; anywhere else, what to build there. Returns whether a
- * menu opened.
+ * be) or pull it down; anywhere else, what to build there, if anything fits
+ * (the choice starts on the last one built, or else the first that fits).
+ * Returns whether a menu opened.
  */
 export function openMenu(world: World): boolean {
   const x = world.rider.x;
@@ -697,8 +701,11 @@ export function openMenu(world: World): boolean {
     if (!canDemolish(b)) return false;
     const options: BuildingOption[] = canUpgrade(b) ? ['upgrade', 'demolish'] : ['demolish'];
     world.menu = { kind: 'building', buildingId: b.id, options, selection: 0 };
-  } else if (closing(world, streetOf(x))) return false;
-  else world.menu = { kind: 'build', x, selection: world.lastSelection };
+  } else {
+    const fits = BUILDING_TYPES.map((t) => !whyNotBuild(world, t, x));
+    if (!fits.includes(true)) return false;
+    world.menu = { kind: 'build', x, selection: fits[world.lastSelection] ? world.lastSelection : fits.indexOf(true) };
+  }
   world.rider.vx = 0;
   return true;
 }
