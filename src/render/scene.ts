@@ -10,13 +10,13 @@ import type { Worker } from '../game/worker';
 import { laidOut, onSite, upgrading } from '../game/site';
 import { crossings, streetOf, streetRange } from '../game/streets';
 import { BUILDING_TYPES } from '../game/buildings';
-import { blockStartX, sizeOfBuilding } from '../game/grid';
+import { blockStartX, crossroadsPlaces, sizeOfBuilding } from '../game/grid';
 import { CELL_W } from '../game/layout';
 import { buildingAt, canDemolish, canUpgrade, crossroadAt, getBuilding, roomToBuild, type Building, type World } from '../game/world';
 import { drawBackground, drawForeground, drawHaze, drawSideRoad, drawStreetEnds, type View } from './background';
 import { BUILDING_LINE_DIST, distAt, drawOtherGround, eyeOf, standingOn, TREE_LINE_DIST } from './plane';
 import { flushEmissive } from './assets';
-import { BUILDING_ART, type DrawArgs } from './buildings';
+import { BUILDING_ART, drawCrossroadsSign, type DrawArgs } from './buildings';
 import { drawBuilding } from './sprites';
 import { drawConstruction, drawConstructionBehind, drawConstructionFront, drawDemolition, drawUpgrade } from './construction';
 import { drawWorker } from './farm';
@@ -150,6 +150,8 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     else if (b.status === 'done') drawBuilding(ctx, b.type, a);
     else drawConstruction(ctx, b.type, a, b.progress);
   }
+  // where a crossroads can be built on this street, a signpost
+  for (const x of crossroadsPlaces(world)) if (streetOf(x) === street && onScreen(x)) drawCrossroadsSign(ctx, x - camX, BASE, world.time);
   // a crossroads' fingerpost also stands on the street its road leads to
   for (const c of crossings(world)) {
     const b = getBuilding(world, c.buildingId);

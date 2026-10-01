@@ -9,7 +9,7 @@
 import type { BuildingType } from '../game/buildings';
 import { clock } from '../game/daynight';
 import { villageStock } from '../game/economy';
-import { baseLand, cellKey, cellName, cellOf, cellsOf, fieldCell, footprintAt as footprintOfType, footprintOf, roadCells, sizeOfBuilding, type Cell } from '../game/grid';
+import { baseLand, cellKey, cellName, cellOf, cellsOf, fieldCell, footprintAt as footprintOfType, footprintOf, keptLand, roadCells, sizeOfBuilding, type Cell } from '../game/grid';
 import { FIELD_CELLS, FIELD_REACH } from '../game/land';
 import { BLOCK, CELL_W, QUARRIES, quarryLand, ROAD_GRID, ROAD_GRID_COL, ROAD_GRID_ROW } from '../game/layout';
 import { treePoint } from '../game/nature';
@@ -128,6 +128,11 @@ export function renderMap(world: World, opts: MapOptions = {}): string {
       put(cellOf(treePoint(world, t)), t.state === 'grown' ? '^' : "'", false);
     }
   }
+  // places kept for a crossroads, where a signpost stands
+  for (const k of keptLand(world)) {
+    const [c, r] = k.split(',').map(Number);
+    put({ c, r }, 'Y', false);
+  }
   for (const b of world.buildings) {
     const label = labels.get(b.id)!;
     for (const { cell, glyph } of farmFields(world, b)) put(cell, opts.ids ? label.toLowerCase() : glyph);
@@ -162,7 +167,7 @@ export function renderMap(world: World, opts: MapOptions = {}): string {
     : [...(Object.keys(GLYPH) as BuildingType[])].filter((t) => used.has(t)).map((t) => `${GLYPH[t]} ${t}`);
   lines.push('');
   lines.push(`  ${legend.join('  ')}`);
-  lines.push(`  = | road  + crossing  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe${opts.trees ? "  ^ tree  ' sapling" : ''}  (lower case: being built)`);
+  lines.push(`  = | road  + crossing  Y kept for a crossroads  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe${opts.trees ? "  ^ tree  ' sapling" : ''}  (lower case: being built)`);
   return lines.join('\n');
 }
 

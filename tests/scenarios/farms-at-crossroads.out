@@ -65,7 +65,7 @@
    -F ...................|||.......
   
     F farm  I intersection
-    = | road  + crossing  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
+    = | road  + crossing  Y kept for a crossroads  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
 > map ids
               50        60        7
        |  |  |  |  |  |  |  |  |  |
@@ -95,4 +95,4 @@
    -F ...................|||.......
   
     A=#1 farm  B=#2 farm  C=#3 intersection  D=#63 farm
-    = | road  + crossing  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
+    = | road  + crossing  Y kept for a crossroads  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)

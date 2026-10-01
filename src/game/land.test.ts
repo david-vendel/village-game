@@ -44,7 +44,7 @@ describe('land grid', () => {
     // right beside it is fine, half over it is not
     expect(whyNotBuild(w, 'farm', a.x + 150)).toBeNull();
     expect(whyNotBuild(w, 'farm', a.x + 25)).toMatch(/in the way/);
-    expect(whyNotHere(w, 'farm', 1640)).toBeNull(); // the rocks start behind the lots
+    expect(whyNotHere(w, 'farm', QUARRIES[0].x)).toBeNull(); // the rocks start behind the lots
     // a crossroads: right up to its road, but not on it
     const x = w.plots[25].x; // cell 92: crossroads go every 30 cells
     expect(whyNotBuild(w, 'intersection', w.plots[24].x)).toMatch(/every 30 cells/);

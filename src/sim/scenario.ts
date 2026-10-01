@@ -16,6 +16,7 @@
 //   turn up|down                       turn at the crossroads the rider is at
 //   run 30s | run 2d | run until built [max 3d]
 //   map [ids] [trees] [B30:-C60]       the land from above; ids: which building is which
+//   menu                               what the menu Space opens at the rider offers
 //   list | streets | status            buildings, streets, time / stock / people
 //   expect count house 1               how many there are of a type
 //   expect at s0:40 house size 3 done  what stands at a cell (any of: <type> size N done constructing upgraded)
@@ -298,6 +299,17 @@ export function runScenario(script: string, opts: ScenarioOptions = {}): Scenari
           const r = w.find((x) => x.includes(':'));
           if (r) o.region = region(r) ?? fail(`not a region: "${r}" (like B30:-C60)`);
           say(renderMap(world, o));
+          break;
+        }
+        case 'menu': {
+          // what the build menu offers where the rider is, as Space would open it
+          if (!openMenu(world)) {
+            say('no menu opens here');
+            break;
+          }
+          const m = world.menu!;
+          say(m.kind === 'build' ? `build menu: ${BUILDING_TYPES.filter((_, i) => m.fits[i]).join(', ')}; chosen: ${BUILDING_TYPES[m.selection]}` : `building menu: ${m.options.join(', ')}`);
+          world.menu = null;
           break;
         }
         case 'list':

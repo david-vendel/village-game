@@ -1137,6 +1137,40 @@ function drawCrossroads(ctx: Ctx, a: DrawArgs): void {
   poly(ctx, [px - 4, top, px + 4, top, px, top - 5], '#5a3f28');
 }
 
+/**
+ * Where a crossroads can be built (game/grid.ts crossroadsPlaces): a signpost
+ * on the grass at the middle of the place, its boards fresh and bare, pointing
+ * both ways along the street and one into the land, where the new road would
+ * run; two pegs mark where the road's edges would be. Nothing else can be built
+ * here. x is the middle of the place, base the building line.
+ */
+export function drawCrossroadsSign(ctx: Ctx, x: number, base: number, time: number): void {
+  const BOARD = '#d8b77a';
+  const EDGE = '#8a6a42';
+  const top = base - 58;
+  // pegs at the road's edges, each with a strip of rag tied on, stirring in the wind
+  for (const dx of [-37, 37]) {
+    rect(ctx, x + dx - 1.5, base - 13, 3, 13, '#7a5634');
+    const flap = Math.sin(time * 2.4 + dx) * 1.5;
+    poly(ctx, [x + dx + 1.5, base - 13, x + dx + 8, base - 12 + flap, x + dx + 1.5, base - 9], '#c8513a');
+  }
+  // the post
+  ellipse(ctx, x + 2, base + 1, 8, 2.2, 'rgba(40,28,16,0.3)');
+  rect(ctx, x - 2.5, top, 5, base - top, '#6b4c30');
+  rect(ctx, x + 1, top, 1.5, base - top, '#4f3622');
+  // a board pointing right, along the street
+  poly(ctx, [x - 2, top + 6, x + 22, top + 6, x + 29, top + 11, x + 22, top + 16, x - 2, top + 16], BOARD);
+  rect(ctx, x + 3, top + 10.5, 15, 1, EDGE);
+  // one pointing left, the other way
+  poly(ctx, [x + 2, top + 19, x - 22, top + 19, x - 29, top + 24, x - 22, top + 29, x + 2, top + 29], shade(BOARD, -0.06));
+  rect(ctx, x - 18, top + 23.5, 15, 1, EDGE);
+  // one pointing into the land, foreshortened: where the road would run off
+  poly(ctx, [x - 3, top + 33, x + 12, top + 31.5, x + 16, top + 35.5, x + 12, top + 39.5, x - 3, top + 38], shade(BOARD, -0.18));
+  rect(ctx, x + 1, top + 35, 9, 1, EDGE);
+  // cap
+  poly(ctx, [x - 4.5, top, x + 4.5, top, x, top - 6], '#5a3f28');
+}
+
 export const BUILDING_ART: Record<BuildingType, BuildingArt> = {
   warehouse: { height: 100, draw: drawWarehouse },
   house: { height: 140, draw: drawHouse },

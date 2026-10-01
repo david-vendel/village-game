@@ -170,7 +170,10 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   new street across its own at right angles. Crossroads go only where their road runs down a line
   of the road grid (`ROAD_GRID` in `layout.ts`, `onRoadGrid` in `grid.ts`): squares 30 cells
   across, with roads down the columns 30n + 2 (the block starting at cell 30n + 1 of the main
-  street) and the rows 30n, so every street lies on it. It opens a new street, crossing it at the new street's middle plot
+  street) and the rows 30n, so every street lies on it. Each such place not built on yet
+  (`crossroadsPlaces` in `grid.ts`) is kept for it: a signpost stands there, no other building
+  goes over the land its road would take (`keptLand`) and no field is sown there, so the build
+  menu opened there offers just the crossroads. It opens a new street, crossing it at the new street's middle plot
   (`CROSS_PLOT`). Each street is still a line with its own stretch of world x (street i starts at
   i × `STREET_STRIDE`, plot k of street i is `plots[i × PLOTS_PER_STREET + k]`), so one x says where
   anything is. On the map all streets lie on one 250 px grid, so they meet at plots: a new street is
@@ -222,7 +225,7 @@ same state, and the same geometry (`grid.ts` `landUse`, `footprintOf`, `fieldCel
 renderer draws, so a layout that is right in text is right on screen.
 - `textmap.ts`: `renderMap`, the land grid from above, north up, one character per cell (roads
   `=` `|`, crossings `+`, rocks `#`, a letter per building type, upper case standing and lower
-  case being built, fields `,` `_` `"` `*` by state, the rider `@`; `ids` mode gives each building
+  case being built, fields `,` `_` `"` `*` by state, places kept for a crossroads `Y`, the rider `@`; `ids` mode gives each building
   its own letter and its fields the lower case, to show which is which, e.g. merged houses);
   `listBuildings`, `listStreets`, `summary`; and `checkInvariants`, the rules every world keeps
   (no two buildings on a cell, nothing on a road or the rocks, buildings start at a cell 3n + 1,
@@ -256,7 +259,9 @@ renderer draws, so a layout that is right in text is right on screen.
   the camera, smaller and nearer the horizon with distance. A building on a street running away from
   the camera stands beside that road. Things further off than this street's woods are drawn before
   them, nearer ones in among this street's people by screen depth.
-- `buildings.ts`: "2D picture of a 3D building" primitives (front face, shaded side face, gable
+- `buildings.ts`: the signpost where a crossroads can be built (`drawCrossroadsSign`, drawn on
+  this street by `scene.ts`, on the others by `plane.ts`, from above by `topview.ts`), and
+  "2D picture of a 3D building" primitives (front face, shaded side face, gable
   roof with thatch/tile/slate, timber framing) and `BUILDING_ART`: per building `draw`, optional
   `behind`/`front` art, and the drawn `height`. Art split for sprites also has `body` (the static
   picture a sprite replaces), `overlay` (live details: open door, stock, sleepers, drawn over the

@@ -29,7 +29,7 @@
    -A ==================
   
     A=#1 house  B=#4 house
-    = | road  + crossing  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
+    = | road  + crossing  Y kept for a crossroads  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
 # Pulling down the middle section of a large house leaves two small ones.
 > new empty
 > free on
@@ -62,7 +62,7 @@
    -A ===============
   
     A=#1 house  B=#5 house
-    = | road  + crossing  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
+    = | road  + crossing  Y kept for a crossroads  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
 # With builders: three houses built side by side merge as each one is finished.
 > new village
 > build house at s0:79
@@ -82,16 +82,16 @@
 > map ids D60:-C99
       60        70        80        90
        |  |  |  |  |  |  |  |  |  |  |  |  |  
-    D C...DDDDDD......EEEEEEEEEIII...fffFFFFFF
-    C C...DDDDDD......EEEEEEEEEIII...fffFFFFFF
+    D CYYYDDDDDD......EEEEEEEEEIII..fYYYFFFFFF
+    C CYYYDDDDDD......EEEEEEEEEIII...YYYFFFFFF
     B ========================================
     A ============@===========================
    -A ========================================
-   -B ..................................ffffff
-   -C ........................................
+   -B .................................fffffff
+   -C ..................................fffff.
   
     A=#1 house  B=#3 well  C=#4 tavern  D=#5 warehouse  E=#7 house  F=#8 farm  G=#9 chapel  H=#10 house  I=#83 house
-    = | road  + crossing  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
+    = | road  + crossing  Y kept for a crossroads  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
 # Pulling down a section, what is left merges with a small house beside it,
 # as a new one built there would.
 > new empty
@@ -129,4 +129,4 @@
    -A ==================
   
     A=#1 house  B=#4 house
-    = | road  + crossing  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
+    = | road  + crossing  Y kept for a crossroads  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)

@@ -65,9 +65,9 @@
     E .|||...........................|||.......
     D .|||...........................|||.......
     C .|||...........................|||.......
-    B .|||......=====================+++=======
-    A .|||......=====================+++=======
-   -A .|||......=====================+++=======
+    B .|||YYY...=====================+++=======
+    A .|||YYY...=====================+++=======
+   -A .|||YYY...=====================+++=======
    -B .|||...........................|||.......
    -C .|||...........................|||.......
    -D .|||...........................|||.......
@@ -75,7 +75,7 @@
    -F .|||...........................|||.......
   
     I intersection
-    = | road  + crossing  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
+    = | road  + crossing  Y kept for a crossroads  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
 # The rocks lie inside squares of the road grid: a street running past them
 # runs on beside them.
 > new empty
@@ -114,4 +114,4 @@
    -C ......|||...........................|||..
   
     I intersection
-    = | road  + crossing  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
+    = | road  + crossing  Y kept for a crossroads  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)

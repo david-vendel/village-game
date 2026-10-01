@@ -12,13 +12,13 @@
 // scaled by distance.
 
 import { BUILDINGS } from '../game/buildings';
-import { sizeOfBuilding } from '../game/grid';
+import { crossroadsPlaces, sizeOfBuilding } from '../game/grid';
 import { BASE_Y, CELL_W, EYE_DIST, FIELD_ROWS, QUARRIES, quarryLand, ROAD_FAR_Y, ROAD_NEAR_Y, STREET_LINE_Y, TREE_Y } from '../game/layout';
 import { employees } from '../game/people';
 import { laidOut, onSite, upgrading } from '../game/site';
 import { backOf, crossings, groundPoint, mapPoint, SIDE_ROAD_HALF, streetOf, streetRange, type Street, type Vec } from '../game/streets';
 import { getBuilding, type Building, type World } from '../game/world';
-import type { DrawArgs } from './buildings';
+import { drawCrossroadsSign, type DrawArgs } from './buildings';
 import type { ViewId } from './manifest';
 import { drawBuilding } from './sprites';
 import { drawConstruction, drawDemolition, drawUpgrade } from './construction';
@@ -210,6 +210,8 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
     if (!b || !elsewhere(c.x) || b.x === c.x) continue;
     add(ground(world, c.x, BASE_Y), 80, () => drawBuilding(ctx, 'intersection', { x: 0, base: 0, time: world.time, seed: b.id * 97 }));
   }
+  // and a signpost where a crossroads can be built
+  for (const x of crossroadsPlaces(world)) if (elsewhere(x)) add(ground(world, x, BASE_Y), 80, () => drawCrossroadsSign(ctx, 0, 0, world.time));
   // every tree, wherever it stands (this street's too: they stand at all depths)
   const felling = beingFelled(world);
   for (const t of world.trees) add(ground(world, t.x, t.y), 60, () => drawTreeAt(ctx, world, t, 0, 0, 1, felling));

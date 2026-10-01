@@ -151,6 +151,8 @@ interface Known {
   fields: unknown[];
   base: Land;
   full: Land | null;
+  /** The cells kept free for crossroads not built yet (crossroadsPlaces). */
+  kept: Set<string> | null;
 }
 const known = new WeakMap<World, Known>();
 
@@ -161,7 +163,7 @@ function knownFor(world: World): Known {
   const sig = signature(world);
   let k = known.get(world);
   if (!k || k.sig !== sig) {
-    k = { sig, fields: [], base: makeBase(world), full: null };
+    k = { sig, fields: [], base: makeBase(world), full: null, kept: null };
     known.set(world, k);
   }
   return k;
@@ -229,15 +231,39 @@ export function whyNotHere(world: World, type: BuildingType, x: number): string 
     return land.get(cellKey(cell.c, cell.r));
   };
   const nameOf = (id: number) => BUILDINGS[world.buildings.find((b) => b.id === id)?.type ?? 'house'].name;
+  const kept = type === 'intersection' ? null : keptLand(world);
   for (let i = f.i0; i <= f.i1; i++) {
     for (let j = f.j0; j <= f.j1; j++) {
       const use = at(i, j);
       if (use?.kind === 'quarry') return 'The rocks are in the way';
       if (use?.kind === 'road') return 'A road is in the way';
       if (use?.kind === 'building') return `The ${nameOf(use.buildingId)} is in the way`;
+      const cell = streetCell(s, i, j);
+      if (kept?.has(cellKey(cell.c, cell.r))) return 'This place is kept for a crossroads';
     }
   }
   return null;
+}
+
+/**
+ * The places where a crossroads can still be built (world x of each): every
+ * plot on the road grid (onRoadGrid) with no crossroads on it yet, where its
+ * road would have free land. Each is
+ * marked by a signpost, and kept free: nothing else can be built over the
+ * land its road would take (whyNotHere).
+ */
+export function crossroadsPlaces(world: World): number[] {
+  return world.plots.filter((p) => !p.off && p.buildingId === null && onRoadGrid(world, p.x) && !whyNotHere(world, 'intersection', p.x)).map((p) => p.x);
+}
+
+/** The cells kept free for crossroads not built yet: each place's three-by-three block of lots. */
+export function keptLand(world: World): Set<string> {
+  const k = knownFor(world);
+  if (!k.kept) {
+    k.kept = new Set();
+    for (const x of crossroadsPlaces(world)) for (const c of cellsOf(world, footprintAt('intersection', x))) k.kept.add(cellKey(c.c, c.r));
+  }
+  return k.kept;
 }
 
 /**

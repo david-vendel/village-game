@@ -5,7 +5,7 @@
 
 import { BUILDINGS, type BuildingType } from '../game/buildings';
 import { CELL_W, FIELD_ROWS, QUARRIES, quarryLand, ROAD_HALF, rowFar, rowNear, type FieldZone } from '../game/layout';
-import { cellName, footprintOf, landUse, type LandUse } from '../game/grid';
+import { cellName, crossroadsPlaces, footprintOf, landUse, type LandUse } from '../game/grid';
 import { LINE_ALPHA, lineLevel, showLevel } from './grid';
 import { treeGrowth } from '../game/nature';
 import { GROUND_PILE_Y } from '../game/piles';
@@ -186,6 +186,14 @@ export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zo
   for (const b of world.buildings) {
     if (b.type !== 'intersection') continue;
     const p = lot(b.x - 44, rowNear(3));
+    circle(ctx, sx(p), sy(p), Math.max(1.5, 4 * S), '#6b4c30');
+  }
+
+  // where a crossroads can be built: its signpost, with a board pointing into the land
+  for (const x of crossroadsPlaces(world)) {
+    const p = lot(x, rowNear(3));
+    const q = lot(x, rowNear(5));
+    line(ctx, sx(p), sy(p), sx(p) + (sx(q) - sx(p)) * 0.35, sy(p) + (sy(q) - sy(p)) * 0.35, '#d8b77a', Math.max(1, 3 * S));
     circle(ctx, sx(p), sy(p), Math.max(1.5, 4 * S), '#6b4c30');
   }
 

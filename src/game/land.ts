@@ -3,12 +3,13 @@
 // and in the two rows in front of the road (layout.ts FIELD_ROW_J), up to
 // FIELD_REACH cells to either side. A cell between two farms goes to the
 // nearer one. Each farm keeps its nearest FIELD_CELLS of them (more once
-// upgraded, for its second farmer). Fields give way: when something is built
+// upgraded, for its second farmer), never on a place kept for a crossroads.
+// Fields give way: when something is built
 // on one, or a road runs over it, the farm gets the next nearest free cell
 // instead (syncFarmFields).
 
 import { setFieldSpots, type FieldSpot } from './farm';
-import { baseLand, cellKey, footprintOf, streetCell } from './grid';
+import { baseLand, cellKey, footprintOf, keptLand, streetCell } from './grid';
 import { employees } from './people';
 import { CELL_W, FIELD_ROW_J, type FieldZone } from './layout';
 import { streetOf } from './streets';
@@ -22,6 +23,8 @@ export const FIELD_CELLS = { base: 24, upgraded: 40 };
 /** Each farm's fields from the land as it is now: which cells, as field spots around the farm. */
 function allFields(world: World): Map<number, FieldSpot[]> {
   const land = baseLand(world);
+  // nor on a place kept for a crossroads (its signpost stands on grass)
+  const kept = keptLand(world);
   const farms = world.buildings.filter((b) => b.type === 'farm' && b.status === 'done');
   /** cell → the nearest farm's claim on it */
   const claims = new Map<string, { farm: Building; spot: FieldSpot; d: number }>();
@@ -35,7 +38,7 @@ function allFields(world: World): Map<number, FieldSpot[]> {
         for (let i = f.i0 - FIELD_REACH; i <= f.i1 + FIELD_REACH; i++) {
           const c = streetCell(s, i, j);
           const key = cellKey(c.c, c.r);
-          if (land.has(key)) continue;
+          if (land.has(key) || kept.has(key)) continue;
           const d = Math.hypot(i + 0.5 - mid.i, j + 0.5 - mid.j);
           const had = claims.get(key);
           if (had && (had.d < d || (had.d === d && had.farm.id < farm.id))) continue;

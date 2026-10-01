@@ -43,7 +43,9 @@ touch). Portrait phones start zoomed out, with the street lifted above the butto
 
 A **Crossroads** (10 wood) cuts a road across the street. Crossroads go only every 30 cells
 (on the main street, the blocks starting at cells 31, 61, 91, …), so the streets make a grid
-of squares, and the rocky hills lie inside the squares, clear of every road. Once it is built, ride up to it
+of squares, and the rocky hills lie inside the squares, clear of every road. A wooden
+signpost marks every place a crossroads can go; nothing else can be built there, and pressing
+Space there offers the crossroads. Once it is built, ride up to it
 and press ↑ or ↓ to turn onto the new street, which runs off at right angles with its own
 plots and woods. A crossroads on that street opens another, so the village grows into a
 net of streets. A new street joins any street it runs into where that street's plot is
