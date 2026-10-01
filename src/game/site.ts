@@ -33,6 +33,8 @@ import type { Building, World } from './world';
 
 /** Builders a site employs at once. */
 export const BUILDERS_PER_SITE = 5;
+/** Most builders pulling a building down at once. */
+export const DEMOLITION_CREW = 3;
 /** How much one builder carries per trip. */
 export const LOAD_SIZE = 10;
 /** Seconds of labour per build job; a building needs its buildTime of labour in all. */
@@ -151,8 +153,12 @@ function underway(world: World, b: Building): { carried: Stock; fetching: Stock 
  * build with, a load on the pile, a load still to fetch from somewhere that has it.
  */
 export function builderPositions(world: World, b: Building): number {
-  // pulling down: one at each work spot
-  if (b.status === 'demolishing') return b.progress > 0 ? Math.min(BUILDERS_PER_SITE, workSpots(b.type).length) : 0;
+  // pulling down: no more hands than items it leaves (a log, a block…), and at most a few
+  if (b.status === 'demolishing') {
+    if (b.progress <= 0) return 0;
+    const items = Math.max(1, pileItems(total(b.demolition?.left ?? {})));
+    return Math.min(DEMOLITION_CREW, items, workSpots(b.type).length);
+  }
   const site = b.site;
   if (!site) return 0;
   const busy = builders(world, b).map((p) => p.job!.worker).filter((w) => currentJob(w) || w.carrying);
