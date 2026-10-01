@@ -167,7 +167,10 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   streets, then across the land) and fells it; a stonecutter cuts at the face of the nearest quarry.
   Workers walk at real ground speed: depth y is turned into ground px for every step (`worker.ts`).
 - `streets.ts`: the street network. A crossroads (the `intersection` building, 10 wood) opens a
-  new street across its own at right angles, crossing it at the new street's middle plot
+  new street across its own at right angles. Crossroads go only where their road runs down a line
+  of the road grid (`ROAD_GRID` in `layout.ts`, `onRoadGrid` in `grid.ts`): squares 30 cells
+  across, with roads down the columns 30n + 2 (the block starting at cell 30n + 1 of the main
+  street) and the rows 30n, so every street lies on it. It opens a new street, crossing it at the new street's middle plot
   (`CROSS_PLOT`). Each street is still a line with its own stretch of world x (street i starts at
   i × `STREET_STRIDE`, plot k of street i is `plots[i × PLOTS_PER_STREET + k]`), so one x says where
   anything is. On the map all streets lie on one 250 px grid, so they meet at plots: a new street is
@@ -203,7 +206,8 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
 - `layout.ts`: the shared world geometry (see above), including the grid constants.
   World y is a real depth on the ground (`behindRoad`: the camera's perspective, `HORIZON_Y`,
   `EYE_DIST`), so the village is a plane; a quarry takes real land behind the main street
-  (`quarryLand`), which streets stop short of and no tree or field grows on.
+  (`quarryLand`), which no tree or field grows on. Each quarry lies in the middle of a square of
+  the road grid, so no road ever runs into the rocks.
 - `save.ts`: save games, tested by `save.test.ts`. `saveWorld` snapshots the simulation state
   (time, buildings with their stores and farms, people with their jobs and working day, animals,
   the stockpile, rider, RNG, id counter) as versioned JSON-safe data; `loadWorld` validates

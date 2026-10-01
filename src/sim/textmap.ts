@@ -11,7 +11,7 @@ import { clock } from '../game/daynight';
 import { villageStock } from '../game/economy';
 import { baseLand, cellKey, cellName, cellOf, cellsOf, fieldCell, footprintAt as footprintOfType, footprintOf, roadCells, sizeOfBuilding, type Cell } from '../game/grid';
 import { FIELD_CELLS, FIELD_REACH } from '../game/land';
-import { BLOCK, CELL_W, QUARRIES, quarryLand } from '../game/layout';
+import { BLOCK, CELL_W, QUARRIES, quarryLand, ROAD_GRID, ROAD_GRID_COL, ROAD_GRID_ROW } from '../game/layout';
 import { treePoint } from '../game/nature';
 import { RESOURCES } from '../game/resources';
 import { groundPoint, mapPoint, streetOf, streetRange, streetStart } from '../game/streets';
@@ -221,8 +221,8 @@ export function summary(world: World): string {
  * What must hold in every state of the world; each broken rule as a line.
  * Buildings never share a cell or stand on a road or the rocks; they start at
  * a cell 3n + 1; fields lie on free land, each cell one farm's, near their
- * farm; small houses and yards side by side are merged; roads cross only at
- * a crossroads; every job is at a building that is there; nobody stands off
+ * farm; small houses and yards side by side are merged; roads keep off the
+ * rocks and cross only at a crossroads, on the road grid; every job is at a building that is there; nobody stands off
  * the streets.
  */
 export function checkInvariants(world: World): string[] {
@@ -295,6 +295,22 @@ export function checkInvariants(world: World): string[] {
       const touch = fa.i1 + 1 === fb.i0 || fb.i1 + 1 === fa.i0;
       if (touch && (a.size ?? 1) + (b.size ?? 1) <= 3) bad.push(`${name(a)} and ${name(b)} stand side by side but did not merge`);
     }
+  }
+
+  // roads keep to the road grid and off the rocks
+  for (const s of world.streets) {
+    if (s.gone) continue;
+    for (const c of roadCells(world, s)) {
+      if (rocks.has(cellKey(c.c, c.r))) {
+        bad.push(`the road of s${s.index} runs over the rocks at ${cellName(c.c, c.r)}`);
+        break;
+      }
+    }
+  }
+  for (const j of world.junctions) {
+    const c = cellOf(mapPoint(world, j.a));
+    const on = (n: number, at: number) => (((n - at) % ROAD_GRID) + ROAD_GRID) % ROAD_GRID === 0;
+    if (!on(c.c, ROAD_GRID_COL) || !on(c.r, ROAD_GRID_ROW)) bad.push(`crossroads #${j.buildingId} at ${cellName(c.c, c.r)} is off the road grid`);
   }
 
   // where two roads cross there is a crossroads, so people can turn there

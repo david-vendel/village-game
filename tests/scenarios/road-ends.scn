@@ -3,7 +3,7 @@
 new empty
 free on
 construction off
-build crossroads at s0:40
+build crossroads at s0:31
 ride #last
 turn up
 ride +30
@@ -12,16 +12,16 @@ ride #last
 turn up
 ride +30
 build crossroads here
-# the third street runs south past the main street's west end, and stops short of it
+# the third street runs south at column 2, past the main street's west end
 streets
-map L0:-C20
+map AH0:-F40
 
-# A crossroads whose road would cross another road where it can't meet it
-# (here: the rocks stop the new street, but its road's end would still run over
-# the main street) can't be built.
+# The rocks lie inside squares of the road grid: a street running past them
+# runs on beside them.
 new empty
 free on
 construction off
-build crossroads at s0:79
-build crossroads at s1:127
-expect cannot build crossroads at s2:142 another road is too close
+build crossroads at s0:61
+build crossroads at s0:91
+streets
+map O55:-C95

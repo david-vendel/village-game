@@ -274,8 +274,27 @@ export const TREE_Y = BACK_FIELD.back - 2;
 /** Where a woodcutter stands to fell a tree: beside its trunk, in front of it. */
 export const CHOP_SPOT = { dx: -11, y: TREE_Y + 4 };
 
-/** Where the rocky hills behind the street come down to the tree line, and a stonecutter can cut stone. */
-export const QUARRIES: readonly { x: number }[] = [{ x: 1640 }, { x: 4390 }];
+// --- The road grid ----------------------------------------------------------------
+// Every street keeps to one grid of squares ROAD_GRID cells across: crossroads
+// can only be built where their road runs down a line of it (grid.ts
+// onRoadGrid), so every road does. The lines are the columns 30n + 2 (the middle
+// of the block of three cells starting at cell 30n + 1 of the main street) and
+// the rows 30n (the main street's row, A, and every 30th from it).
+
+export const ROAD_GRID = 30;
+/** The column and row of the road grid's lines through the origin (map cells). */
+export const ROAD_GRID_COL = 2;
+export const ROAD_GRID_ROW = 0;
+/** World x (on the main street) of the middle of square n of the road grid: n squares east of the line at column ROAD_GRID_COL. */
+const squareMiddle = (n: number) => (ROAD_GRID_COL + 0.5 + ROAD_GRID * (n + 0.5)) * CELL_W;
+
+/**
+ * Where the rocky hills behind the street come down to the tree line, and a
+ * stonecutter can cut stone: each in the middle of a square of the road grid,
+ * so that no road can ever run into the rocks (quarryLand stays clear of the
+ * grid's lines and the roads along them).
+ */
+export const QUARRIES: readonly { x: number }[] = [{ x: squareMiddle(2) }, { x: squareMiddle(5) }];
 /** A quarry's width along the street (no trees grow in it). */
 export const QUARRY_W = 280;
 /** Depth of the quarry face, where stonecutters stand to cut. */

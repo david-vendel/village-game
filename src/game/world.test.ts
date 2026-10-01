@@ -91,7 +91,7 @@ describe('build menu', () => {
 
   it('selection wraps and is remembered after cancelling', () => {
     const w = emptyWorld();
-    w.rider.x = w.plots[0].x - 25;
+    w.rider.x = w.plots[5].x - 25; // where a crossroads can go too (the last entry)
     openMenu(w);
     moveMenu(w, -1);
     expect(w.menu!.selection).toBe(BUILDING_TYPES.length - 1);
@@ -181,8 +181,8 @@ describe('streets', () => {
   it('builders reach a site two streets away, turning at each crossroads only once', () => {
     const w = createWorld();
     w.buildings.find((b) => b.type === 'warehouse')!.stock.wood = 300;
-    placeBuilding(w, 2837.5, 'intersection', { instant: true });
-    placeBuilding(w, plotX(1, 50), 'intersection', { instant: true });
+    placeBuilding(w, 2312.5, 'intersection', { instant: true }); // cell 92, on the road grid
+    placeBuilding(w, plotX(1, 48), 'intersection', { instant: true }); // 30 cells up the new street
     const h = placeBuilding(w, plotX(2, 42) - 25, 'house')!;
     runFor(w, 90, { left: false, right: false });
     expect(h.status).toBe('done');

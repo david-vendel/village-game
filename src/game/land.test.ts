@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { cellKey, cellName, cellsOf, fieldCell, footprintOf, landUse, rowName, whyNotHere } from './grid';
+import { cellKey, cellName, cellsOf, fieldCell, footprintOf, landUse, onRoadLine, rowName, whyNotHere } from './grid';
 import { FIELD_CELLS } from './land';
-import { LOT_ROW } from './layout';
+import { CELL_W, LOT_ROW, QUARRIES, quarryLand } from './layout';
 import { createWorld, demolishSection, placeBuilding, whyNotBuild, type Building, type World } from './world';
 
 const emptyWorld = () => createWorld({ village: false });
@@ -46,7 +46,8 @@ describe('land grid', () => {
     expect(whyNotBuild(w, 'farm', a.x + 25)).toMatch(/in the way/);
     expect(whyNotHere(w, 'farm', 1640)).toBeNull(); // the rocks start behind the lots
     // a crossroads: right up to its road, but not on it
-    const x = w.plots[32].x;
+    const x = w.plots[25].x; // cell 92: crossroads go every 30 cells
+    expect(whyNotBuild(w, 'intersection', w.plots[24].x)).toMatch(/every 30 cells/);
     placeBuilding(w, x, 'intersection', { instant: true, free: true });
     expect(whyNotBuild(w, 'farm', x + 30)).toMatch(/road/);
     expect(whyNotBuild(w, 'farm', x + 112.5)).toBeNull();
@@ -120,5 +121,12 @@ describe('land grid', () => {
     const i = fieldKeys(w, farm).indexOf(key);
     expect(i).toBeGreaterThanOrEqual(0);
     expect(farm.farm!.plots[i]).toMatchObject({ tilled: true, state: 'ripe' });
+  });
+
+  it('the rocks lie inside squares of the road grid, where no road can ever run', () => {
+    for (const q of QUARRIES) {
+      const r = quarryLand(q);
+      for (let c = r.x0 / CELL_W; c < r.x1 / CELL_W; c++) for (let row = r.y0 / CELL_W; row < r.y1 / CELL_W; row++) expect(onRoadLine(c, row), cellName(c, row)).toBe(false);
+    }
   });
 });

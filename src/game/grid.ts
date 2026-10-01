@@ -19,8 +19,8 @@
 // with each other and with the crossroads (whose roads take a block too).
 
 import { BUILDINGS, type BuildingType } from './buildings';
-import { BLOCK, CELL_W, FIELD_ROW_J, LOT_ROW, QUARRIES, quarryLand } from './layout';
-import { backOf, streetOf, streetRange, streetStart, type Street, type Vec } from './streets';
+import { BLOCK, CELL_W, FIELD_ROW_J, LOT_ROW, QUARRIES, quarryLand, ROAD_GRID, ROAD_GRID_COL, ROAD_GRID_ROW } from './layout';
+import { backOf, mapPoint, streetOf, streetRange, streetStart, type Street, type Vec } from './streets';
 import type { Building, World } from './world';
 
 export type LandUse =
@@ -275,4 +275,26 @@ export function roadInWay(world: World, s: Street, t0: number, t1: number): bool
     }
   }
   return false;
+}
+
+/** Whether n is k·ROAD_GRID + at for some k. */
+const onLine = (n: number, at: number) => (((n - at) % ROAD_GRID) + ROAD_GRID) % ROAD_GRID === 0;
+
+/**
+ * Whether a crossroads can stand at world x (a crossroads place on its street):
+ * where the road it opens, across its street, runs down a line of the road
+ * grid (layout.ts ROAD_GRID): a column 30n + 2 for a road running north–south,
+ * a row 30n for one running east–west.
+ */
+export function onRoadGrid(world: World, x: number): boolean {
+  const s = world.streets[streetOf(x)];
+  if (!s) return false;
+  const c = cellOf(mapPoint(world, x));
+  const across = backOf(s.dir);
+  return Math.abs(across.x) < 0.5 ? onLine(c.c, ROAD_GRID_COL) : onLine(c.r, ROAD_GRID_ROW);
+}
+
+/** Whether cell (c, r) is on the road of some line of the road grid: where a road can ever run. */
+export function onRoadLine(c: number, r: number): boolean {
+  return [-1, 0, 1].some((d) => onLine(c + d, ROAD_GRID_COL) || onLine(r + d, ROAD_GRID_ROW));
 }

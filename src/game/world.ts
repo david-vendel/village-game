@@ -17,7 +17,7 @@ import { buildShortfall, putAway, takeFromWarehouses, upgradeShortfall, WAREHOUS
 import { createFarm, DEFAULT_WORK, farmWorkplace, updateCrops, type FarmState } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
 import { BLOCK, CELL_W, FIRST_PLOT_X, PLOT_SPACING, STREET_LENGTH } from './layout';
-import { alongCell, blockStartX, footprintOf, roadBlocked, roadInWay, siteX, sizeOfBuilding, whyNotHere } from './grid';
+import { alongCell, blockStartX, footprintOf, onRoadGrid, roadBlocked, roadInWay, siteX, sizeOfBuilding, whyNotHere } from './grid';
 import { clearLand, plantWoods, gatherWorkplace, isGatherHut, updateForest, type Tree } from './nature';
 import { employees, laneY, nameFor, openings, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
 import { builderPositions, builders, createSite, siteWork, siteWorkplace, upgrading, type Site } from './site';
@@ -321,6 +321,7 @@ export function whyNotBuild(world: World, type: BuildingType, x: number): string
   const at = placeAt(world, type, x);
   if (at === null) return 'No room for a road here';
   if (type === 'intersection' && crossroadsPlot(world, at)?.buildingId != null) return 'There is a crossroads here already';
+  if (type === 'intersection' && !onRoadGrid(world, at)) return 'Crossroads go only every 30 cells';
   const why = whyNotHere(world, type, at);
   if (why || type !== 'intersection') return why;
   // its road would run onto another road, and not meet it at a crossroads
