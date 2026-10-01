@@ -233,7 +233,6 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
   plusMinusIcon(ctx, L.zoomOut, false);
   button(ctx, L.zoomIn, false);
   plusMinusIcon(ctx, L.zoomIn, true);
-  button(ctx, L.newVillage, false);
   text(ctx, 'New village', L.newVillage.x + L.newVillage.w / 2, L.newVillage.y + L.newVillage.h - 3.5, 9, GOLD, 'center', true);
 
   if (st.touch && !world.menu) {
