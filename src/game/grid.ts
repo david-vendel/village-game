@@ -14,10 +14,12 @@
 // row j, j cells behind the middle of the road (layout.ts LOT_ROW).
 //
 // A building may stand anywhere along a street where it fits (whyNotHere):
-// on free land, right by the road.
+// on free land, right by the road. Buildings are whole blocks of three cells
+// wide and start at a cell 3n + 1 along their street (siteX), so they line up
+// with each other and with the crossroads (whose roads take a block too).
 
 import { BUILDINGS, type BuildingType } from './buildings';
-import { CELL_W, FIELD_ROW_J, LOT_ROW, QUARRIES, quarryLand } from './layout';
+import { BLOCK, CELL_W, FIELD_ROW_J, LOT_ROW, QUARRIES, quarryLand } from './layout';
 import { backOf, streetOf, streetRange, streetStart, type Street, type Vec } from './streets';
 import type { Building, World } from './world';
 
@@ -63,11 +65,14 @@ export function streetCell(s: Street, i: number, j: number): Cell {
 /** Which cell along its street world x is in. */
 export const alongCell = (x: number) => Math.floor((x - streetStart(streetOf(x))) / CELL_W + 1e-6);
 
-/** Cells a building of this type takes: w along the street, d back from it. */
-export function sizeOf(type: BuildingType): { w: number; d: number } {
+/** Cells a building of this type takes: w along the street, d back from it; `size` times as wide (a merged house). */
+export function sizeOf(type: BuildingType, size = 1): { w: number; d: number } {
   const def = BUILDINGS[type];
-  return { w: Math.ceil(def.width / CELL_W - 1e-6), d: def.depth ?? 2 };
+  return { w: Math.ceil(def.width / CELL_W - 1e-6) * size, d: def.depth ?? 2 };
 }
+
+/** Cells a building takes (sizeOf, for its own size). */
+export const sizeOfBuilding = (b: Building) => sizeOf(b.type, b.size);
 
 /** A block of cells seen from a street: cells i0..i1 along it, rows j0..j1. */
 export interface Footprint {
@@ -83,27 +88,28 @@ export interface Footprint {
  * takes the lots its road will run through, three cells wide, until it is
  * built (then they are road).
  */
-export function footprintAt(type: BuildingType, x: number): Footprint {
+export function footprintAt(type: BuildingType, x: number, size = 1): Footprint {
   const street = streetOf(x);
   if (type === 'intersection') {
     const i = alongCell(x);
     return { street, i0: i - 1, i1: i + 1, j0: LOT_ROW, j1: LOT_ROW + 2 };
   }
-  const { w, d } = sizeOf(type);
+  const { w, d } = sizeOf(type, size);
   const i0 = Math.round((x - streetStart(street)) / CELL_W - w / 2);
   return { street, i0, i1: i0 + w - 1, j0: LOT_ROW, j1: LOT_ROW + d - 1 };
 }
 
 /** The cells a building takes (none for a finished crossroads: it is road). */
 export function footprintOf(b: Building): Footprint | null {
-  return b.type === 'intersection' && b.status !== 'constructing' ? null : footprintAt(b.type, b.x);
+  return b.type === 'intersection' && b.status !== 'constructing' ? null : footprintAt(b.type, b.x, b.size);
 }
 
-/** World x a building of this type stands at when wanted at x: on whole cells, as near the middle of x as can be. */
+/** World x a building of this type stands at when wanted at x: starting at a cell 3n + 1, its middle as near x as can be. */
 export function siteX(type: BuildingType, x: number): number {
   const { w } = sizeOf(type);
   const start = streetStart(streetOf(x));
-  return start + (Math.round((x - start) / CELL_W - w / 2) + w / 2) * CELL_W;
+  const i0 = BLOCK * Math.round(((x - start) / CELL_W - w / 2 - 1) / BLOCK) + 1;
+  return start + (i0 + w / 2) * CELL_W;
 }
 
 /** Every cell of a block seen from a street. */

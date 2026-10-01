@@ -74,7 +74,7 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
 | Add a new mechanic | new module in `src/game` + tests, a state field for anything visible, then draw it in `src/render` |
 | Move where things stand (plots, farmyard, store, road) | `game/layout.ts` |
 | Change controls or add a key/button action | `app/controls.ts`, `app/actions.ts` (plus the button's look in `render/ui.ts`) |
-| Save something new, or change the save format | `game/save.ts` (bump `SAVE_VERSION`, add a migration, extend the validator) |
+| Save something new, or change the save format | `game/save.ts` (bump `SAVE_VERSION` and extend the validator; older saves are discarded, not migrated) |
 | Change where/when the game is saved | `app/persistence.ts` |
 | Change zoom behaviour or screen scaling | `app/viewport.ts`, `app/screen.ts` |
 
@@ -183,9 +183,12 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   middle lane running down a row or column of cells; buildings take `width` (rounded up to cells)
   × `depth` (default 2) cells; fields one cell each; quarries their rocky land (`landUse`). Seen
   from a street, cells lie in rows j along it (`LOT_ROW` in `layout.ts`): the road is rows -1..1,
-  buildings stand right by it, from row 2 back. A building goes anywhere along a street where it
-  fits on free cells (`whyNotHere`). Only crossroads keep to the 250 px plots, so streets still
-  meet at a plot of each.
+  buildings stand right by it, from row 2 back. Buildings are whole blocks of three cells wide
+  (3, 6, 9…) and start at a cell 3n + 1 along their street (`siteX`); a building goes at any such
+  place where it fits on free cells (`whyNotHere`). Crossroads stand on the plots, one per block,
+  so their roads take a block and streets meet at a plot of each. Houses come small (3), medium
+  (6) and large (9): a small house finished right beside a house becomes part of it
+  (`mergeHouses` in `world.ts`, `Building.size`).
 - `land.ts`: the farms' fields on the grid. A farm works the free cells nearest to it, up to
   `FIELD_REACH` cells to either side and `FIELD_CELLS` in all (more once upgraded). Building over a
   field, or a new road, re-lays the fields (`syncFarmFields`): fields keep their crops where their

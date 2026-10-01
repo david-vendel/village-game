@@ -28,27 +28,28 @@ describe('land grid', () => {
     expect(land.has(cellKey(40, 2))).toBe(false);
   });
 
-  it('a farm takes 7 × 3 cells, right by the road', () => {
+  it('a farm takes 6 × 3 cells, right by the road', () => {
     const w = emptyWorld();
     const farm = placeBuilding(w, 1000, 'farm', { instant: true, free: true })!;
     const cells = cellsOf(w, footprintOf(farm)!);
-    expect(cells).toHaveLength(21);
+    expect(cells).toHaveLength(18);
     expect(new Set(cells.map((c) => c.r))).toEqual(new Set([2, 3, 4]));
-    expect(new Set(cells.map((c) => c.c)).size).toBe(7);
+    expect(new Set(cells.map((c) => c.c)).size).toBe(6);
+    expect(Math.min(...cells.map((c) => c.c)) % 3).toBe(1); // it starts at a cell 3n + 1
   });
 
   it('a building goes anywhere it fits: not on another, not on a road or the rocks', () => {
     const w = emptyWorld();
     const a = placeBuilding(w, 1000, 'farm', { free: true })!;
     // right beside it is fine, half over it is not
-    expect(whyNotBuild(w, 'farm', a.x + 175)).toBeNull();
-    expect(whyNotBuild(w, 'farm', a.x + 100)).toMatch(/in the way/);
+    expect(whyNotBuild(w, 'farm', a.x + 150)).toBeNull();
+    expect(whyNotBuild(w, 'farm', a.x + 75)).toMatch(/in the way/);
     expect(whyNotHere(w, 'farm', 1640)).toBeNull(); // the rocks start behind the lots
     // a crossroads: right up to its road, but not on it
-    const x = w.plots[8].x;
+    const x = w.plots[32].x;
     placeBuilding(w, x, 'intersection', { instant: true, free: true });
-    expect(whyNotBuild(w, 'farm', x + 100)).toMatch(/road/);
-    expect(whyNotBuild(w, 'farm', x + 125)).toBeNull();
+    expect(whyNotBuild(w, 'farm', x + 30)).toMatch(/road/);
+    expect(whyNotBuild(w, 'farm', x + 112.5)).toBeNull();
   });
 
   it("a farm's fields are single free cells near it, never on a road or a building", () => {
@@ -69,10 +70,24 @@ describe('land grid', () => {
   it('building next to a farm takes back the cells its fields were on, and the farm sows others', () => {
     const w = emptyWorld();
     const farm = placeBuilding(w, 1000, 'farm', { instant: true, free: true })!;
-    const house = placeBuilding(w, farm.x + 175, 'house', { free: true })!; // still under construction: the land is claimed anyway
+    const house = placeBuilding(w, farm.x + 112.5, 'house', { free: true })!; // still under construction: the land is claimed anyway
     const keys = fieldKeys(w, farm);
     expect(keys).toHaveLength(FIELD_CELLS.base);
     for (const k of footKeys(w, house)) expect(keys).not.toContain(k);
+  });
+
+  it('a small house built right beside a house becomes part of it: medium, then large, no larger', () => {
+    const w = emptyWorld();
+    const a = placeBuilding(w, 1000, 'house', { instant: true, free: true })!;
+    const b = placeBuilding(w, a.x + 75, 'house', { instant: true, free: true })!;
+    expect(b).toBe(a);
+    expect(w.buildings).toHaveLength(1);
+    expect(a.size).toBe(2);
+    expect(cellsOf(w, footprintOf(a)!)).toHaveLength(12);
+    placeBuilding(w, a.x - 112.5, 'house', { instant: true, free: true });
+    expect(a.size).toBe(3);
+    placeBuilding(w, a.x + 150, 'house', { instant: true, free: true });
+    expect(w.buildings).toHaveLength(2); // a fourth stays a small house of its own
   });
 
   it('a field keeps its crop when the fields around it are re-laid', () => {

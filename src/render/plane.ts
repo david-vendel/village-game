@@ -12,7 +12,8 @@
 // scaled by distance.
 
 import { BUILDINGS } from '../game/buildings';
-import { BASE_Y, EYE_DIST, FIELD_ROWS, QUARRIES, quarryLand, ROAD_FAR_Y, ROAD_NEAR_Y, STREET_LINE_Y, TREE_Y } from '../game/layout';
+import { sizeOfBuilding } from '../game/grid';
+import { BASE_Y, CELL_W, EYE_DIST, FIELD_ROWS, QUARRIES, quarryLand, ROAD_FAR_Y, ROAD_NEAR_Y, STREET_LINE_Y, TREE_Y } from '../game/layout';
 import { employees } from '../game/people';
 import { laidOut, onSite, upgrading } from '../game/site';
 import { backOf, crossings, groundPoint, mapPoint, SIDE_ROAD_HALF, streetOf, streetRange, type Street, type Vec } from '../game/streets';
@@ -174,7 +175,7 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
     const across = Math.abs(back.x * eye.dir.x + back.y * eye.dir.y) > 0.5;
     if (!across) return { at: ground(world, x, BASE_Y), view: 'street' };
     const p = mapPoint(world, x);
-    const d = SIDE_ROAD_HALF + 10 + BUILDINGS[b.type].width / 2;
+    const d = SIDE_ROAD_HALF + 10 + (sizeOfBuilding(b).w * CELL_W) / 2;
     const at = { x: p.x + back.x * d, y: p.y + back.y * d };
     return { at, view: toEye(eye, at).u < toEye(eye, p).u ? 'roadsideL' : 'roadsideR' };
   };
@@ -188,6 +189,7 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
       seed: b.id * 97,
       farm: b.farm,
       upgraded: !!b.upgraded,
+      width: sizeOfBuilding(b).w * CELL_W,
       stock: b.stock,
       workers: employees(world, b).map((p) => p.job!.worker),
       onSite: onSite(b),

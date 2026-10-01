@@ -18,8 +18,8 @@ function roundTrip(world: World): World {
 function busyWorld(): World {
   const w = createWorld();
   run(w, 20, { left: false, right: true });
-  placeBuilding(w, w.plots[12].x, 'farm', { free: true }); // under construction
-  placeBuilding(w, w.plots[9].x, 'mill', { instant: true, free: true });
+  placeBuilding(w, 3412.5, 'farm', { free: true }); // under construction
+  placeBuilding(w, 2662.5, 'mill', { instant: true, free: true });
   run(w, 5);
   w.events.length = 0;
   return w;
@@ -94,7 +94,7 @@ describe('save games', () => {
     const r = loadWorld(s);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    const b = placeBuilding(r.world, r.world.plots[0].x, 'well')!;
+    const b = placeBuilding(r.world, 412.5, 'well')!;
     expect(r.world.buildings.filter((x) => x.id === b.id)).toHaveLength(1);
   });
 });

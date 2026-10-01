@@ -69,7 +69,7 @@ export interface BuildingDef {
   type: BuildingType;
   name: string;
   purpose: string;
-  /** Footprint width along the street in world px, rounded up to whole land-grid cells (grid.ts). */
+  /** Footprint width along the street in world px: whole blocks of three land-grid cells (grid.ts). */
   width: number;
   /** Footprint depth in land-grid cells, back from the verge (default 2). */
   depth?: number;
@@ -95,7 +95,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     type: 'warehouse',
     name: 'Storage yard',
     purpose: "Open yard with the village's wood, stone, grain, flour and bread in piles. Builders fetch from here.",
-    width: 170,
+    width: 150,
     buildTime: 14,
     cost: { wood: 60, stone: 40 },
     // everything lies out in the open, in its place in a pile (layout.ts warehouseSlot)
@@ -106,7 +106,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     type: 'house',
     name: 'House',
     purpose: 'Shelter for villagers. More homes, more hands.',
-    width: 150,
+    width: 75,
     buildTime: 10,
     cost: { wood: 40, stone: 10 },
     storage: {},
@@ -116,8 +116,8 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     type: 'farm',
     name: 'Farm',
     purpose: 'A farmstead with wheat fields. Feeds the village.',
-    // farmhouse, barn and grain store on 7 × 3 cells; the fields use free cells around it
-    width: 175,
+    // farmhouse, barn and grain store on 6 × 3 cells; the fields use free cells around it
+    width: 150,
     depth: 3,
     buildTime: 12,
     cost: { wood: 50, stone: 20 },
@@ -131,7 +131,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     type: 'mill',
     name: 'Mill',
     purpose: 'Grinds grain from the farms into flour.',
-    width: 130,
+    width: 150,
     buildTime: 16,
     cost: { wood: 60, stone: 60 },
     // a sack of grain waiting per slot, a sack of flour per slot (layout.ts MILL_SLOTS)
@@ -159,7 +159,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     type: 'blacksmith',
     name: 'Blacksmith',
     purpose: 'Forges tools and arms at the glowing anvil.',
-    width: 170,
+    width: 150,
     buildTime: 14,
     cost: { wood: 40, stone: 80 },
     storage: {},
@@ -169,7 +169,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     type: 'market',
     name: 'Market',
     purpose: 'Stalls where merchants trade goods and coin.',
-    width: 170,
+    width: 150,
     buildTime: 9,
     cost: { wood: 60, stone: 20 },
     storage: {},
@@ -179,7 +179,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     type: 'chapel',
     name: 'Chapel',
     purpose: 'Bells, prayer and a steeple seen for miles.',
-    width: 160,
+    width: 150,
     buildTime: 18,
     cost: { wood: 40, stone: 150 },
     storage: {},
@@ -189,7 +189,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     type: 'tavern',
     name: 'Tavern',
     purpose: 'Ale, songs, rumours and bread for weary travellers.',
-    width: 180,
+    width: 225,
     buildTime: 13,
     cost: { wood: 80, stone: 40 },
     // baskets of loaves on the bench outside (layout.ts TAVERN_SLOTS); guests eat them (tavern.ts)
@@ -201,7 +201,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     type: 'watchtower',
     name: 'Watchtower',
     purpose: 'Guards keep watch over the road and the woods.',
-    width: 90,
+    width: 75,
     buildTime: 12,
     cost: { wood: 60, stone: 60 },
     storage: {},
@@ -211,7 +211,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     type: 'well',
     name: 'Well',
     purpose: 'Fresh water for the whole street.',
-    width: 80,
+    width: 75,
     buildTime: 6,
     cost: { wood: 5, stone: 30 },
     storage: {},
@@ -221,7 +221,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     type: 'woodcutter',
     name: "Woodcutter's hut",
     purpose: 'Fells grown trees in the woods behind the street for wood.',
-    width: 130,
+    width: 150,
     buildTime: 9,
     cost: { wood: 30, stone: 10 },
     // logs stacked by the wall (layout.ts WOODCUTTER_SLOTS); the woods: nature.ts
@@ -233,7 +233,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     type: 'stonecutter',
     name: "Stonecutter's hut",
     purpose: 'Cuts blocks of stone out of the nearest quarry in the hills.',
-    width: 130,
+    width: 150,
     buildTime: 10,
     cost: { wood: 40, stone: 10 },
     // blocks set down by the wall (layout.ts STONECUTTER_SLOTS)
@@ -246,7 +246,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     name: 'Crossroads',
     purpose: 'A road across the street, at right angles. Ride up to it and turn to follow the new street.',
     // the road it opens is a street of its own (streets.ts); the footprint is where it meets this one
-    width: 60,
+    width: 75,
     buildTime: 4,
     cost: { wood: 10 },
     storage: {},

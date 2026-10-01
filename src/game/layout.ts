@@ -7,8 +7,12 @@
 
 /** Length of a street (px); its plots start at FIRST_PLOT_X from its start. */
 export const STREET_LENGTH = 6400;
-/** The first crossroads place along a street: on a land-grid cell's middle (a road crossing there runs down a row of cells). */
-export const FIRST_PLOT_X = 412.5;
+/**
+ * The first crossroads place along a street: the middle of cells 16..18, the
+ * first block of three cells starting at a cell 3n + 1 (where buildings start
+ * too; grid.ts), so a road crossing there runs down the block.
+ */
+export const FIRST_PLOT_X = 437.5;
 
 /** Scene height that zoom 1 fits to the screen. */
 export const VIEW_H = 600;
@@ -71,8 +75,10 @@ export const LOT_ROW = 2;
 /** Map px behind the middle of the road where row j's near and far edges lie. */
 export const rowNear = (j: number) => (j - 0.5) * CELL_W;
 export const rowFar = (j: number) => (j + 0.5) * CELL_W;
-/** Distance between the places along a street where a crossroads can be built. */
-export const PLOT_SPACING = 250;
+/** Distance between the places along a street where a crossroads can be built: every block of three cells. */
+export const PLOT_SPACING = 3 * CELL_W;
+/** Buildings are whole blocks of BLOCK cells wide, starting at a cell BLOCK·n + 1 along their street. */
+export const BLOCK = 3;
 
 // --- Farm (x relative to the farm's centre, y in world units) ----------------------
 

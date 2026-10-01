@@ -26,7 +26,8 @@ export function materialsIn(b: Building): Stock {
     for (const r of RESOURCES) out[r] += a[r] ?? 0;
   };
   const def = BUILDINGS[b.type];
-  if (b.status === 'done') add(def.cost);
+  // a merged house is two or three small ones
+  if (b.status === 'done') for (let i = 0; i < (b.size ?? 1); i++) add(def.cost);
   if (b.upgraded && def.upgrade) add(def.upgrade.cost);
   if (b.site) add(b.site.delivered);
   if (b.demolition) add(b.demolition.left);
@@ -36,7 +37,7 @@ export function materialsIn(b: Building): Stock {
 /** Seconds of labour to pull a building down: half what it took to build (as far as it got). */
 export function demolitionWork(b: Building): number {
   const def = BUILDINGS[b.type];
-  const built = def.buildTime * (b.status === 'done' ? 1 : b.progress);
+  const built = def.buildTime * (b.status === 'done' ? (b.size ?? 1) : b.progress);
   const upgrade = def.upgrade ? def.upgrade.buildTime * (b.upgraded ? 1 : b.site && b.status === 'done' ? b.progress : 0) : 0;
   return (built + upgrade) / 2;
 }

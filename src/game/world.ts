@@ -16,8 +16,8 @@ import { timeOfDay } from './daynight';
 import { buildShortfall, putAway, takeFromWarehouses, upgradeShortfall, WAREHOUSE_START } from './economy';
 import { createFarm, DEFAULT_WORK, farmWorkplace, updateCrops, type FarmState } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
-import { CELL_W, FIRST_PLOT_X, PLOT_SPACING, STREET_LENGTH } from './layout';
-import { roadBlocked, siteX, sizeOf, whyNotHere } from './grid';
+import { BLOCK, CELL_W, FIRST_PLOT_X, PLOT_SPACING, STREET_LENGTH } from './layout';
+import { footprintOf, roadBlocked, siteX, sizeOfBuilding, whyNotHere } from './grid';
 import { clearLand, plantWoods, gatherWorkplace, isGatherHut, updateForest, type Tree } from './nature';
 import { employees, laneY, nameFor, openings, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
 import { builderPositions, builders, createSite, siteWork, siteWorkplace, upgrading, type Site } from './site';
@@ -34,8 +34,8 @@ import { workshopWorkplace } from './workshop';
 export const WORLD_WIDTH = STREET_LENGTH;
 export const PLOT_WIDTH = 200;
 export { FIRST_PLOT_X, PLOT_SPACING };
-/** How close (px) the rider's x must be to a plot centre to interact with it. */
-export const INTERACT_RANGE = 90;
+/** How close (px) the rider's x must be to a crossroads to turn there. */
+export const INTERACT_RANGE = 40;
 
 export const RIDER_MAX_SPEED = 240; // px/s
 export const RIDER_ACCEL = 600; // px/s²
@@ -95,6 +95,8 @@ export interface Building {
   type: BuildingType;
   /** World x of the middle of its footprint (grid.ts): which street, and where along it. */
   x: number;
+  /** A house merged with its neighbours: two or three small houses' width (mergeHouses). */
+  size?: 2 | 3;
   /** 0..1 construction progress (of its upgrade, while one is being built). */
   progress: number;
   status: BuildingStatus;
@@ -180,15 +182,17 @@ export function rand(world: World): number {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }
 
+/** The starting village: where each building stands along the main street (world x), and what it is. */
 const STARTING_VILLAGE: Array<[number, BuildingType]> = [
-  [5, 'warehouse'],
-  [2, 'house'],
-  [3, 'well'],
-  [4, 'tavern'],
-  [6, 'house'],
-  [8, 'farm'],
-  [11, 'chapel'],
-  [16, 'house'],
+  [1675, 'warehouse'],
+  [925, 'house'],
+  [1000, 'house'],
+  [1187.5, 'well'],
+  [1412.5, 'tavern'],
+  [1925, 'house'],
+  [2425, 'farm'],
+  [3175, 'chapel'],
+  [4412.5, 'house'],
 ];
 
 export interface CreateWorldOptions {
@@ -218,7 +222,7 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
     junctions: [],
     plots: [],
     buildings: [],
-    rider: { x: FIRST_PLOT_X + 5 * PLOT_SPACING + PLOT_SPACING / 2, vx: 0, facing: 1, gait: 0 },
+    rider: { x: 1800, vx: 0, facing: 1, gait: 0 },
     people: [],
     animals: [],
     trees: [],
@@ -235,8 +239,8 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
   layPlots(world, world.streets[0]);
 
   if (opts.village ?? true) {
-    for (const [k, type] of STARTING_VILLAGE) {
-      const b = placeBuilding(world, plotX(0, k), type, { instant: true, free: true });
+    for (const [x, type] of STARTING_VILLAGE) {
+      const b = placeBuilding(world, x, type, { instant: true, free: true });
       if (!b) continue;
       b.completedAt = -100; // no completion effect for the starting village
       if (type === 'warehouse') b.stock = { ...WAREHOUSE_START };
@@ -250,7 +254,7 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
     for (const kind of [...kinds, ...Array<Look>(seekers).fill('peasant')]) {
       const id = world.nextId++;
       const stroll = {
-        x: FIRST_PLOT_X + rand(world) * 16 * PLOT_SPACING,
+        x: FIRST_PLOT_X + rand(world) * 4000,
         y: laneY(id),
         dir: (rand(world) < 0.5 ? -1 : 1) as 1 | -1,
         speed: kind === 'chicken' ? 22 + rand(world) * 14 : 26 + rand(world) * 18,
@@ -330,7 +334,7 @@ export function placeBuilding(
   if (!opts.free && Object.keys(buildShortfall(world, type)).length) return null;
   const instant = opts.instant ?? !world.constructionEnabled;
   if (instant && !opts.free) takeFromWarehouses(world, BUILDINGS[type].cost, x);
-  const b: Building = {
+  let b: Building = {
     id: world.nextId++,
     type,
     x,
@@ -343,6 +347,7 @@ export function placeBuilding(
   if (!instant) b.site = createSite(type, opts.free ? BUILDINGS[type].cost : {});
   world.buildings.push(b);
   if (instant && type === 'farm') b.farm = createFarm({ spots: farmFieldSpots(world, b) });
+  if (instant && type === 'house') b = mergeHouses(world, b);
   if (type === 'intersection') crossroadsPlot(world, x)!.buildingId = b.id;
   if (instant && type === 'intersection') openStreet(world, b);
   // the new footprint may cover land neighbouring farms were using; trees standing on it are cut down
@@ -361,7 +366,7 @@ export function buildingAt(world: World, x: number): Building | undefined {
   const plot = crossroadsPlot(world, x);
   if (plot && plot.buildingId !== null && Math.abs(plot.x - x) <= 1.5 * CELL_W) return getBuilding(world, plot.buildingId);
   const street = streetOf(x);
-  return world.buildings.find((b) => b.type !== 'intersection' && streetOf(b.x) === street && Math.abs(b.x - x) <= (sizeOf(b.type).w * CELL_W) / 2);
+  return world.buildings.find((b) => b.type !== 'intersection' && streetOf(b.x) === street && Math.abs(b.x - x) <= (sizeOfBuilding(b).w * CELL_W) / 2);
 }
 
 /** Whether a building can be upgraded now: finished, with an upgrade it hasn't had, and not already being upgraded. */
@@ -564,6 +569,7 @@ function complete(world: World, b: Building): void {
     return;
   }
   if (b.type === 'farm') b.farm = createFarm({ spots: farmFieldSpots(world, b) });
+  if (b.type === 'house') b = mergeHouses(world, b);
   if (b.type === 'intersection') {
     openStreet(world, b);
     syncFarmFields(world);
@@ -571,6 +577,33 @@ function complete(world: World, b: Building): void {
   // nothing grows on the farm's fields
   if (b.type === 'farm') clearLand(world);
   world.events.push({ kind: 'completed', buildingId: b.id });
+}
+
+/**
+ * A small house is finished: it is built onto a finished house it stands
+ * right beside, the two one house of their widths together, as long as that
+ * is no wider than a large house (three small ones). The older house takes in
+ * the newer. Returns the house it is now part of.
+ */
+export function mergeHouses(world: World, b: Building): Building {
+  for (;;) {
+    const fb = footprintOf(b)!;
+    const o = world.buildings.find((o) => {
+      if (o === b || o.type !== 'house' || o.status !== 'done' || o.site || streetOf(o.x) !== streetOf(b.x)) return false;
+      const fo = footprintOf(o)!;
+      return (fo.i1 + 1 === fb.i0 || fb.i1 + 1 === fo.i0) && (o.size ?? 1) + (b.size ?? 1) <= 3;
+    });
+    if (!o) return b;
+    const fo = footprintOf(o)!;
+    const [keep, gone] = o.id < b.id ? [o, b] : [b, o];
+    const size = ((o.size ?? 1) + (b.size ?? 1)) as 2 | 3;
+    keep.x = streetStart(streetOf(b.x)) + (Math.min(fb.i0, fo.i0) + (size * BLOCK) / 2) * CELL_W;
+    keep.size = size;
+    keep.completedAt = world.time;
+    world.buildings = world.buildings.filter((x) => x !== gone);
+    if (world.menu?.kind === 'building' && world.menu.buildingId === gone.id) world.menu = null;
+    b = keep;
+  }
 }
 
 // --- Streets -------------------------------------------------------------------

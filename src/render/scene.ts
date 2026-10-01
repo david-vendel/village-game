@@ -10,6 +10,8 @@ import type { Worker } from '../game/worker';
 import { laidOut, onSite, upgrading } from '../game/site';
 import { crossings, streetOf, streetRange } from '../game/streets';
 import { BUILDING_TYPES } from '../game/buildings';
+import { sizeOfBuilding } from '../game/grid';
+import { CELL_W } from '../game/layout';
 import { buildingAt, canDemolish, canUpgrade, crossroadAt, getBuilding, roomToBuild, type Building, type World } from '../game/world';
 import { drawBackground, drawForeground, drawHaze, drawSideRoad, drawStreetEnds, type View } from './background';
 import { BUILDING_LINE_DIST, distAt, drawOtherGround, eyeOf, standingOn, TREE_LINE_DIST } from './plane';
@@ -85,6 +87,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   const args = (b: Building): DrawArgs => ({
     x: b.x - camX,
     base: BASE,
+    width: sizeOfBuilding(b).w * CELL_W,
     time: world.time,
     seed: b.id * 97,
     farm: b.farm,

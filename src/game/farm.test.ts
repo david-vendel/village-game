@@ -148,11 +148,11 @@ describe('farms in the world', () => {
 
   it('a farm hires a farmer once finished: a free farmer, else someone looking for work (builders never farm)', () => {
     const w = createWorld();
-    const b = placeBuilding(w, w.plots[0].x, 'farm')!;
+    const b = placeBuilding(w, 412.5, 'farm')!;
     expect(b.farm).toBeUndefined();
     tick(w, 1);
     expect(employees(w, b).every((p) => p.job!.role === 'builder')).toBe(true);
-    const done = placeBuilding(w, w.plots[1].x, 'farm', { instant: true, free: true })!;
+    const done = placeBuilding(w, 662.5, 'farm', { instant: true, free: true })!;
     tick(w, 1);
     // the village's one farmer works the starting farm: a seeker takes the job, for life
     const [farmer] = employees(w, done);
@@ -160,7 +160,7 @@ describe('farms in the world', () => {
     expect(farmer.profession).toBe('farmer');
     expect(farmer.seeker).toBeUndefined();
     const empty = createWorld({ village: false });
-    const lonely = placeBuilding(empty, empty.plots[0].x, 'farm', { instant: true, free: true })!;
+    const lonely = placeBuilding(empty, 412.5, 'farm', { instant: true, free: true })!;
     tick(empty, 1);
     expect(employees(empty, lonely)).toHaveLength(0);
   });
@@ -187,7 +187,7 @@ describe('farms in the world', () => {
   it('a finished mill takes a serf as its miller before any more errands', () => {
     const w = createWorld();
     w.buildings.find((b) => b.type === 'warehouse')!.stock.grain = 40;
-    const mill = placeBuilding(w, w.plots[9].x, 'mill', { instant: true, free: true })!;
+    const mill = placeBuilding(w, 2662.5, 'mill', { instant: true, free: true })!;
     for (let t = 0; t < 200 && villageStock(w).flour === 0; t += 1 / 30) update(w, 1 / 30, { left: false, right: false });
     const [miller] = employees(w, mill);
     expect(miller.profession).toBe('miller');
@@ -210,7 +210,7 @@ describe('construction by builders', () => {
   it('builders carry the materials from the warehouse and build with them', () => {
     const w = createWorld();
     const everyone = w.people.map((p) => p.id).sort();
-    const well = placeBuilding(w, w.plots[7].x, 'well')!;
+    const well = placeBuilding(w, 2162.5, 'well')!;
     const cost = BUILDINGS.well.cost;
     // nothing is taken up front: builders fetch it
     expect(villageStock(w).stone).toBe(WAREHOUSE_START.stone);
@@ -238,9 +238,9 @@ describe('construction by builders', () => {
     const w = createWorld();
     // exactly what a farm costs, so the farm takes all the wood
     w.buildings.find((b) => b.type === 'warehouse')!.stock = stockOf(BUILDINGS.farm.cost);
-    expect(placeBuilding(w, w.plots[7].x, 'farm')).not.toBeNull();
-    expect(placeBuilding(w, w.plots[9].x, 'house')).toBeNull(); // the wood is promised to the farm
-    expect(w.plots[9].buildingId).toBeNull();
+    expect(placeBuilding(w, 2162.5, 'farm')).not.toBeNull();
+    expect(placeBuilding(w, 2662.5, 'house')).toBeNull(); // the wood is promised to the farm
+    expect(w.plots[36].buildingId).toBeNull();
   });
 
   it('empty-handed people walk faster than loaded ones', () => {

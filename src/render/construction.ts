@@ -39,7 +39,7 @@ export function drawConstructionFront(ctx: Ctx, type: BuildingType, a: DrawArgs,
 
 export function drawConstruction(ctx: Ctx, type: BuildingType, a: DrawArgs, progress: number): void {
   const def = BUILDINGS[type];
-  const W = def.width;
+  const W = a.width ?? def.width;
   const H = BUILDING_ART[type].height;
   const left = a.x - W / 2;
   const { stage, t } = constructionStage(progress);
@@ -110,7 +110,7 @@ export function drawConstruction(ctx: Ctx, type: BuildingType, a: DrawArgs, prog
 
 /** A finished building being upgraded: the upgraded art revealed over it, bottom-up, behind scaffolding. */
 export function drawUpgrade(ctx: Ctx, type: BuildingType, a: DrawArgs, progress: number): void {
-  const W = BUILDINGS[type].width;
+  const W = a.width ?? BUILDINGS[type].width;
   const H = BUILDING_ART[type].height;
   const left = a.x - W / 2;
   drawBuilding(ctx, type, { ...a, upgraded: false });
@@ -134,7 +134,7 @@ export function drawUpgrade(ctx: Ctx, type: BuildingType, a: DrawArgs, progress:
  * broken edge where the builders are at it, down to the foundation stones.
  */
 export function drawDemolition(ctx: Ctx, type: BuildingType, a: DrawArgs, left: number): void {
-  const W = BUILDINGS[type].width;
+  const W = a.width ?? BUILDINGS[type].width;
   const H = BUILDING_ART[type].height;
   const x0 = a.x - W / 2;
   const standing = (H + 60) * clamp01(left);

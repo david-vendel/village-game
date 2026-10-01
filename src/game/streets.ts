@@ -35,7 +35,7 @@ export const STREET_STRIDE = 10000;
 /** Plots a street can have: every PLOT_SPACING from FIRST_PLOT_X. */
 export const PLOTS_PER_STREET = Math.ceil((STREET_LENGTH - 200 - FIRST_PLOT_X) / PLOT_SPACING);
 /** Which plot of a new street is where it crosses the street it branches off: the middle one. */
-export const CROSS_PLOT = 12;
+export const CROSS_PLOT = Math.floor(PLOTS_PER_STREET / 2);
 /** Half the width of a road running into the street at a crossroads (px). */
 export const SIDE_ROAD_HALF = ROAD_HALF;
 /** A street's band across the ground (layout.ts): where another street crosses, none of this one's fields lie within it. */

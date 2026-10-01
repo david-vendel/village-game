@@ -23,6 +23,8 @@ export interface DrawArgs {
   farm?: FarmState;
   /** Upgraded (BuildingDef.upgrade): drawn as its bigger self. */
   upgraded?: boolean;
+  /** Its footprint's width (world px), when not its type's (a merged house). */
+  width?: number;
   /** The building's own store. */
   stock?: Stock;
   /** The people working here (for doors, sleepers…). */
@@ -329,14 +331,28 @@ function person(ctx: Ctx, x: number, base: number, tunic: string, time: number, 
 
 // --- Buildings ---------------------------------------------------------------
 
+/**
+ * A house as wide as its footprint: a small one (three cells) a cottage with a
+ * door and a window, a medium or large one (two or three small ones merged)
+ * longer, with more windows along it.
+ */
 function drawHouse(ctx: Ctx, a: DrawArgs): void {
-  const w = 104;
+  const size = Math.max(1, Math.round((a.width ?? 75) / 75));
+  const w = [50, 104, 172][Math.min(3, size) - 1];
   const d = 44;
   const ox = d * OX;
   const x0 = a.x - (w + ox) / 2;
   const plaster = PLASTER[Math.floor(hash(a.seed, 1) * PLASTER.length)];
   const twoStorey = hash(a.seed, 2) < 0.55;
   const thatch = hash(a.seed, 3) < 0.5;
+  /** Windows evenly along the front from u0 to u1 (px from x0), at height y. */
+  const windows = (u0: number, u1: number, y: number, s: number, salt: number) => {
+    const n = Math.max(0, Math.floor((u1 - u0 + 16) / 44));
+    for (let i = 0; i < n; i++) {
+      const u = n === 1 ? (u0 + u1) / 2 : u0 + ((u1 - u0) * i) / (n - 1);
+      window_(ctx, x0 + u - s / 2, y, s, s, hash(a.seed, salt + i) < 0.5, a.time, a.seed + i);
+    }
+  };
 
   stonePlinth(ctx, x0, a.base, w, 14, d);
   let top: number;
@@ -349,23 +365,25 @@ function drawHouse(ctx: Ctx, a: DrawArgs): void {
     timberFrame(ctx, x0 - jetty, g - 34, w + jetty * 2, 40, a.seed);
     rect(ctx, x0 - jetty, g - 36, w + jetty * 2, 4, '#3a281b');
     top = g - 74;
-    door(ctx, x0 + 18, a.base, 20, 36);
-    window_(ctx, x0 + 62, g - 26, 16, 14, hash(a.seed, 5) < 0.5, a.time, a.seed);
-    window_(ctx, x0 + 18, g - 64, 14, 14, false, a.time, a.seed);
-    window_(ctx, x0 + 70, g - 64, 14, 14, hash(a.seed, 6) < 0.6, a.time, a.seed + 1);
+    door(ctx, x0 + 15, a.base, 20, 36);
+    windows(52, w - 18, g - 26, 15, 5);
+    windows(18, w - 18, g - 64, 14, 9);
   } else {
     block(ctx, x0, a.base - 14, w, 48, d, plaster);
     timberFrame(ctx, x0, a.base - 14, w, 48, a.seed);
     top = a.base - 62;
-    door(ctx, x0 + 42, a.base, 20, 40);
-    window_(ctx, x0 + 12, a.base - 50, 16, 16, hash(a.seed, 5) < 0.5, a.time, a.seed);
-    window_(ctx, x0 + 76, a.base - 50, 16, 16, false, a.time, a.seed);
+    door(ctx, x0 + (size === 1 ? 6 : w / 2 - 10), a.base, 20, 40);
+    if (size === 1) windows(38, 38, a.base - 50, 14, 5);
+    else {
+      windows(18, w / 2 - 24, a.base - 50, 16, 5);
+      windows(w / 2 + 24, w - 18, a.base - 50, 16, 9);
+    }
   }
   const roofCol = thatch ? ['#b8955a', '#a8864e'][hash(a.seed, 4) < 0.5 ? 0 : 1] : ['#a4553a', '#8e4a33', '#6f6a74'][Math.floor(hash(a.seed, 4) * 3)];
   const r = gableRoof(ctx, x0 - (twoStorey ? 5 : 0), top, w + (twoStorey ? 10 : 0), d, thatch ? 50 : 44, roofCol, plaster, thatch ? 'thatch' : 'tile', a.seed);
   chimney(ctx, r.ridgeX1 + w * 0.7, r.ridgeY + 8, 18, a);
   // flower box / details
-  if (hash(a.seed, 7) < 0.6) {
+  if (size > 1 && hash(a.seed, 7) < 0.6) {
     barrel(ctx, x0 + w + 16, a.base + 4, 0.9);
   }
 }
