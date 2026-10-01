@@ -8,6 +8,7 @@ import { drawTopView } from './topview';
 import { drawBuildMenu, drawHud, drawToasts, drawTurnFade, type Toast } from './ui';
 
 export { artMode, loadArt, type ArtMode } from './assets';
+export { load3d } from './world3d';
 export { showArtPreview } from './preview';
 export { cameraX } from './scene';
 export { STRIDE as HORSE_STRIDE } from './horse';

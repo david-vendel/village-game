@@ -59,6 +59,8 @@ export interface BuildingArt {
   points?: Record<string, [number, number]>;
   /** The body's light-emitting parts (lit windows) alone, for a sprite's emissive layer. */
   lights?: (ctx: Ctx, a: DrawArgs) => void;
+  /** State parts showing now (a 3D model shows them; assets.ts STATE_PARTS). */
+  stateParts?: (a: DrawArgs) => string[];
 }
 
 /** Where a building's live details go: its sprite's points and parts, or the procedural art's own. */
@@ -409,6 +411,11 @@ function farmLights(ctx: Ctx, a: DrawArgs): void {
   const x0 = a.x - 58;
   rect(ctx, x0 + 8, a.base - 40, 13, 13, '#f3b75a');
   if (a.upgraded) rect(ctx, x0 + 59, a.base - 40, 13, 13, '#f3b75a');
+}
+
+/** The farmhouse door stands open while someone steps through it. */
+function farmStateParts(a: DrawArgs): string[] {
+  return (a.workers ?? []).some((w) => doorProgress(w) > 0 && doorProgress(w) < 1) ? ['doorOpen'] : [];
 }
 
 /** The farm's live details: the door open while someone steps through, fences, the grain store, sleepers. */
@@ -1118,7 +1125,7 @@ function drawCrossroads(ctx: Ctx, a: DrawArgs): void {
 export const BUILDING_ART: Record<BuildingType, BuildingArt> = {
   warehouse: { height: 100, draw: drawWarehouse },
   house: { height: 140, draw: drawHouse },
-  farm: { height: 120, behind: drawFarmField, draw: drawFarm, front: drawFarmFrontField, body: farmBody, overlay: farmOverlay, points: FARM_POINTS, lights: farmLights },
+  farm: { height: 120, behind: drawFarmField, draw: drawFarm, front: drawFarmFrontField, body: farmBody, overlay: farmOverlay, points: FARM_POINTS, lights: farmLights, stateParts: farmStateParts },
   mill: { height: 250, draw: drawMill },
   bakery: { height: 120, draw: drawBakery },
   blacksmith: { height: 150, draw: drawBlacksmith },

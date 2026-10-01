@@ -68,6 +68,16 @@ def _stone_mesh(size: tuple[float, float, float], seed: int) -> bpy.types.Mesh:
     return mesh
 
 
+def _outward(mesh: bpy.types.Mesh) -> bpy.types.Mesh:
+    """Make every face of a closed mesh point outwards (renderers that draw one side need it)."""
+    bm = bmesh.new()
+    bm.from_mesh(mesh)
+    bmesh.ops.recalc_face_normals(bm, faces=list(bm.faces))
+    bm.to_mesh(mesh)
+    bm.free()
+    return mesh
+
+
 def _roof_mesh(p: dict) -> bpy.types.Mesh:
     """The thatch shell: a thick gable roof profile run along x, cut in segments so it can sag and bulge."""
     t = p["thickness"]
@@ -99,6 +109,7 @@ def _roof_mesh(p: dict) -> bpy.types.Mesh:
     faces.append(tuple(segs * n + k for k in range(n)))
     mesh = bpy.data.meshes.new("thatch")
     mesh.from_pydata(verts, [], faces)
+    _outward(mesh)
     for poly in mesh.polygons:
         poly.use_smooth = True
     return mesh
@@ -114,7 +125,7 @@ def _gable_mesh(p: dict) -> bpy.types.Mesh:
     faces = [(0, 1, 2), (5, 4, 3), (0, 3, 4, 1), (1, 4, 5, 2), (2, 5, 3, 0)]
     mesh = bpy.data.meshes.new("gable")
     mesh.from_pydata(verts, [], faces)
-    return mesh
+    return _outward(mesh)
 
 
 def _leanto(e: Element) -> tuple[bpy.types.Mesh, Vector, tuple]:

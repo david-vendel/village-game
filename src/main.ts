@@ -11,12 +11,14 @@ import { installTuning } from './app/tuning';
 import { installWorkersPanel } from './app/workers';
 import { update } from './game/world';
 import { sizePanelButtons } from './app/panel';
-import { type ArtMode, cameraX, HUD_BUTTON, loadArt, renderFrame, showArtPreview, type Toast } from './render';
+import { type ArtMode, cameraX, HUD_BUTTON, load3d, loadArt, renderFrame, showArtPreview, type Toast } from './render';
 
 // ?art=procedural ignores sprite assets; ?art=preview shows the asset contact sheet instead of the game
 const artParam = new URLSearchParams(location.search).get('art');
 const art: ArtMode = artParam === 'procedural' || artParam === 'preview' ? artParam : 'auto';
 await loadArt({ mode: art, approvedOnly: import.meta.env.PROD });
+// buildings with a 3D model are drawn in real-time 3D (?3d=0 keeps them 2D)
+if (art === 'auto' && new URLSearchParams(location.search).get('3d') !== '0') await load3d();
 if (art === 'preview') showArtPreview();
 else await play();
 

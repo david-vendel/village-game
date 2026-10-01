@@ -178,6 +178,12 @@ function scaffolding(ctx: Ctx, a: DrawArgs, left: number, W: number, frameTop: n
  * off the top.
  */
 /** Materials a builder has laid down at their work spot: short logs stacked, stones beside them. */
+/** What lies on a site: the delivered pile and what builders laid at their spots (for a site drawn in 3D). */
+export function drawSitePiles(ctx: Ctx, type: BuildingType, a: DrawArgs): void {
+  materials(ctx, a.x, BUILDINGS[type].width, a.base, a.onSite ?? {}, a.seed);
+  for (const spot of a.laid ?? []) laidDown(ctx, a.x + spot.dx, a.base, spot.amounts, a.seed);
+}
+
 function laidDown(ctx: Ctx, x: number, base: number, amounts: Amounts, seed: number): void {
   const logs = Math.min(4, pileItems(amounts.wood ?? 0));
   for (let i = 0; i < logs; i++) {

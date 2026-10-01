@@ -13,9 +13,11 @@ import { canDemolish, canUpgrade, crossroadAt, getBuilding, plotAt, type Buildin
 import { drawBackground, drawForeground, drawHaze, drawSideRoad, drawStreetEnds, type View } from './background';
 import { BUILDING_LINE_DIST, distAt, drawOtherGround, eyeOf, standingOn, TREE_LINE_DIST } from './plane';
 import { flushEmissive } from './assets';
+import { constructionStage } from '../game/world';
+import { type Building3d, draw3d, has3d } from './world3d';
 import { BUILDING_ART, type DrawArgs } from './buildings';
 import { drawBuilding } from './sprites';
-import { drawConstruction, drawConstructionBehind, drawConstructionFront, drawDemolition, drawUpgrade } from './construction';
+import { drawConstruction, drawConstructionBehind, drawConstructionFront, drawDemolition, drawSitePiles, drawUpgrade } from './construction';
 import { drawWorker } from './farm';
 import { type Figure, figureOf } from './figure';
 import { drawLandGrid } from './grid';
@@ -141,14 +143,33 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     if (!world.menu && plotAt(world, world.rider.x) === p) drawPlotGlow(ctx, p.x - camX, BASE);
   }
 
-  // buildings
+  // buildings: those with a 3D model in one 3D pass (world3d.ts), the rest as 2D art
+  const light = lightAt(world);
+  const in3d: Array<{ b: Building; a: DrawArgs; m: Building3d }> = [];
   for (const b of world.buildings) {
     if (!onScreen(world.plots[b.plotIndex].x)) continue;
     const a = args(b);
+    if (has3d(b.type) && !b.demolition && !upgrading(b)) {
+      const stage = b.status === 'done' ? undefined : constructionStage(b.progress).stage;
+      const m: Building3d = { id: b.id, type: b.type, x: world.plots[b.plotIndex].x, upgraded: !!b.upgraded, stage: stage === 'done' ? undefined : stage, parts: BUILDING_ART[b.type].stateParts?.(a) ?? [] };
+      in3d.push({ b, a, m });
+      continue;
+    }
     if (b.demolition && b.demolition.from >= 1) drawDemolition(ctx, b.type, a, b.progress); // one still being built comes down through its stages
     else if (upgrading(b)) drawUpgrade(ctx, b.type, a, b.progress);
     else if (b.status === 'done') drawBuilding(ctx, b.type, a);
     else drawConstruction(ctx, b.type, a, b.progress);
+  }
+  if (in3d.length) {
+    const at = draw3d(ctx, in3d.map((e) => e.m), { camX, viewW, top: sv.top, bottom: sv.bottom, pxPerU: ctx.getTransform().a, phase: light.phase, sunHeight: light.sun, night: light.night });
+    for (const { b, a, m } of in3d) {
+      if (m.stage) {
+        drawSitePiles(ctx, b.type, a);
+        continue;
+      }
+      const point = at.get(b.id)!;
+      BUILDING_ART[b.type].overlay?.(ctx, a, { at: point, part: (name) => m.parts.includes(name) });
+    }
   }
   // a crossroads' fingerpost also stands on the street its road leads to
   for (const c of crossings(world)) {
@@ -183,7 +204,6 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
 
   drawForeground(ctx, v);
   // daylight: tint the land, then put the sky behind it
-  const light = lightAt(world);
   tintLand(ctx, v, light);
   // lights (sprites' emissive layers) shine through the dark
   flushEmissive(ctx, light.night);
