@@ -141,12 +141,32 @@ function plotsOf(farm: FarmState | undefined, zone: FieldPlot['zone']): FieldPlo
 
 // --- Grain store -----------------------------------------------------------------------
 
-function sheaf(ctx: Ctx, x: number, y: number): void {
+/** A sheaf of grain standing at (x, y): how grain looks wherever it is, at the farm, carried, or in a store. */
+export function sheaf(ctx: Ctx, x: number, y: number): void {
   // bundle of stalks tied at the waist, ears fanning out on top
   poly(ctx, [x - 5, y, x + 5, y, x + 3, y - 10, x + 7, y - 20, x - 7, y - 20, x - 3, y - 10], '#caa24a');
   poly(ctx, [x + 1, y, x + 5, y, x + 3, y - 10, x + 7, y - 20, x + 2, y - 20], '#a8832f');
   line(ctx, x - 4, y - 10, x + 4, y - 10, '#7a5a2a', 2);
   for (let i = -3; i <= 3; i++) ellipse(ctx, x + i * 2.2, y - 21 - Math.abs(i) * -0.6, 1.4, 3, '#e3c265', i * 0.15);
+}
+
+/**
+ * A stook: three sheaves leaned together, standing at (x, y), drawn at scale s.
+ * One stands for a store's item of grain (game/layout.ts SACK) where a farm's
+ * sheaf is one.
+ */
+export function stook(ctx: Ctx, x: number, y: number, s = 0.75): void {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(s, s);
+  for (const [dx, tilt] of [[-4, -0.18], [4, 0.18], [0, 0]] as const) {
+    ctx.save();
+    ctx.translate(dx, 0);
+    ctx.rotate(tilt);
+    sheaf(ctx, 0, 0);
+    ctx.restore();
+  }
+  ctx.restore();
 }
 
 export function drawStore(ctx: Ctx, a: Anchor, sheaves: number): void {
@@ -336,16 +356,23 @@ export function drawWorker(ctx: Ctx, f: Worker, fig: Figure, x: number, y: numbe
       body(swingHand(sx - 1.2, sy, swing + 0.05));
       if (!onShoulder) drawArm(ctx, o, sx, sy, ...swingHand(sx, sy, -swing + 0.05));
     }
-    if (load === 'flour' || (load === 'grain' && (f.carrying?.amount ?? 0) > 2)) {
-      // a sack over the shoulder
-      ellipse(ctx, 1, -15.5, 6.5, 5.5, load === 'flour' ? '#efe9da' : '#d8c79a', -0.4);
+    if (load === 'flour') {
+      // a sack of flour over the shoulder
+      ellipse(ctx, 1, -15.5, 6.5, 5.5, '#efe9da', -0.4);
       drawArm(ctx, o, sx, sy, 4.2, -15);
     } else if (load === 'grain') {
-      // sheaves over the shoulder
+      // sheaves over the shoulder, ears behind: the same sheaves as at the farm, an armful for a store's batch
+      const n = (f.carrying?.amount ?? 0) > 2 ? 3 : 1;
       ctx.save();
-      ctx.rotate(-0.9);
-      poly(ctx, [8, -8, 12, -8, 14, -26, 6, -26], '#caa24a');
-      line(ctx, 7, -16, 13, -16, '#7a5a2a', 2);
+      ctx.translate(-1, -15);
+      ctx.rotate(-1.25);
+      for (let i = 0; i < n; i++) {
+        ctx.save();
+        ctx.translate(10, (i - (n - 1) / 2) * 3.2);
+        ctx.scale(0.62, 0.62);
+        sheaf(ctx, 0, 0);
+        ctx.restore();
+      }
       ctx.restore();
       drawArm(ctx, o, sx, sy, 3.8, -14);
     } else if (load === 'wood') {

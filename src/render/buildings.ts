@@ -7,7 +7,7 @@ import { demoFarm, type FarmState } from '../game/farm';
 import { BAKERY_OVEN_MOUTH_DX, BAKERY_SLOTS, BASKET, MILL_SLOTS, PILE_UNIT, SACK, pileItems, STONECUTTER_DOOR, STONECUTTER_SLOTS, TAVERN_SLOTS, warehouseSlot, WOODCUTTER_DOOR, WOODCUTTER_SLOTS, YARD_ITEMS, type Slot } from '../game/layout';
 import { stockOf, type Amounts, type Stock } from '../game/resources';
 import type { Worker } from '../game/worker';
-import { breadBasket, doorProgress, drawBackFences, drawBackField, drawFrontField, drawStore } from './farm';
+import { breadBasket, doorProgress, drawBackFences, drawBackField, drawFrontField, drawStore, stook } from './farm';
 import { drawArm, drawHead, drawLegs, drawTorso, type Figure, HEAD, outfitOf, SHOULDER } from './figure';
 import { circle, clamp01, type Ctx, ellipse, hash, line, mix, poly, rect, shade, smoke } from './util';
 
@@ -429,11 +429,13 @@ function drawWarehouse(ctx: Ctx, a: DrawArgs): void {
     const s = warehouseSlot('bread', i);
     breadBasket(ctx, a.x + s.dx, a.base - s.lift, 0.75, Math.ceil((Math.min(PILE_UNIT, bread - i * PILE_UNIT) / PILE_UNIT) * 5));
   }
-  // sacks of grain and of flour stacked on the ground
-  for (const [r, body, tie] of [
-    ['grain', '#d8c79a', '#9a8656'],
-    ['flour', '#efe9da', '#b8ad94'],
-  ] as const) {
+  // grain in stooks of sheaves, as it comes from the farms
+  for (let i = 0; i < items('grain'); i++) {
+    const s = warehouseSlot('grain', i);
+    stook(ctx, a.x + s.dx, a.base - s.lift, 0.55);
+  }
+  // sacks of flour stacked on the ground
+  for (const [r, body, tie] of [['flour', '#efe9da', '#b8ad94']] as const) {
     for (let i = 0; i < items(r); i++) {
       const s = warehouseSlot(r, i);
       ellipse(ctx, a.x + s.dx, a.base - 5 - s.lift, 4, 5.5, body);
@@ -623,11 +625,11 @@ function drawMill(ctx: Ctx, a: DrawArgs): void {
     }
   }
   circle(ctx, hub.x, hub.y, 5, '#3e2c1d');
-  // the store: sacks of grain waiting left of the door, flour right of it, each in its place
-  for (const [r, body, shadow] of [
-    ['grain', '#d8c79a', '#b9a676'],
-    ['flour', '#e8e0cc', '#cbbfa4'],
-  ] as const) {
+  // the store: grain waiting left of the door in stooks of sheaves, as it comes from the farms
+  const stooks = Math.min(MILL_SLOTS.grain.length, Math.ceil((a.stock?.grain ?? 0) / SACK - 1e-9));
+  for (let i = 0; i < stooks; i++) stook(ctx, a.x + MILL_SLOTS.grain[i].dx, a.base - MILL_SLOTS.grain[i].lift, 0.7);
+  // and the flour it makes right of the door, in sacks, each in its place
+  for (const [r, body, shadow] of [['flour', '#e8e0cc', '#cbbfa4']] as const) {
     const n = Math.min(MILL_SLOTS[r].length, Math.ceil((a.stock?.[r] ?? 0) / SACK - 1e-9));
     for (let i = 0; i < n; i++) {
       const s = MILL_SLOTS[r][i];
