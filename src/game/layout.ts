@@ -7,7 +7,12 @@
 
 /** Length of a street (px); its plots start at FIRST_PLOT_X from its start. */
 export const STREET_LENGTH = 6400;
-export const FIRST_PLOT_X = 420;
+/**
+ * The first crossroads place along a street: the middle of cells 16..18, the
+ * first block of three cells starting at a cell 3n + 1 (where buildings start
+ * too; grid.ts), so a road crossing there runs down the block.
+ */
+export const FIRST_PLOT_X = 437.5;
 
 /** Scene height that zoom 1 fits to the screen. */
 export const VIEW_H = 600;
@@ -31,60 +36,76 @@ export const HORIZON_Y = 200;
 export const EYE_DIST = 400;
 /** Distance from the camera of ground at depth y. */
 const eyeDist = (y: number) => (EYE_DIST * (BASE_Y - HORIZON_Y)) / (y - HORIZON_Y);
+/**
+ * Distance from the camera of the middle of the road: its far edge (half its
+ * three lanes of 25 px behind the middle, see ROAD_HALF) is just in front of
+ * the buildings, which stand right by the road.
+ */
+const LINE_DIST = eyeDist(GROUND_Y + 6) - 1.5 * 25;
 /** How far behind the middle of the road (map px) ground at depth y lies (negative: in front of it). */
-export const behindRoad = (y: number) => eyeDist(y) - eyeDist(ROAD_Y);
+export const behindRoad = (y: number) => eyeDist(y) - LINE_DIST;
 /** The depth y of ground lying d map px behind the middle of the road (the inverse of behindRoad). */
-export const yAt = (d: number) => HORIZON_Y + (EYE_DIST * (BASE_Y - HORIZON_Y)) / (d + eyeDist(ROAD_Y));
+export const yAt = (d: number) => HORIZON_Y + (EYE_DIST * (BASE_Y - HORIZON_Y)) / (d + LINE_DIST);
+/** Depth (world y) of the middle of the road: the street's line on the map. */
+export const STREET_LINE_Y = yAt(0);
 /**
  * Half the width of a street's whole band across the ground (map px): its
  * road, the lots and fields along it. Streets on the grid lie two bands apart.
  */
 export const STREET_BAND_HALF = 125;
 
-// --- Farm (x relative to the farm's plot centre, y in world units) ---------------
+// --- The land grid --------------------------------------------------------------------
+// All the land is cut into square cells CELL_W across (game/grid.ts), the same
+// grid everywhere on the plane. Seen from a street, cells lie in rows along it:
+// row j is j cells behind the middle of the road (negative: in front of it).
+// The road takes rows -1, 0 and 1, its three lanes. Buildings stand right by
+// it, from row LOT_ROW back, as many rows deep as they are.
+
+export const CELL_W = 25;
+/** World x of the left edge of cell 0 along a street (streets start on cell edges). */
+export const GRID_X0 = 0;
+/** Half the road's width (map px): three lanes of one cell each. */
+export const ROAD_HALF = 1.5 * CELL_W;
+/** Depths (world y) of the road's far and near edges, and of the lines between its lanes. */
+export const ROAD_FAR_Y = yAt(ROAD_HALF);
+export const ROAD_NEAR_Y = yAt(-ROAD_HALF);
+export const LANE_YS = [yAt(CELL_W / 2), yAt(-CELL_W / 2)];
+/** The first row buildings stand in: the one next to the road. */
+export const LOT_ROW = 2;
+/** Map px behind the middle of the road where row j's near and far edges lie. */
+export const rowNear = (j: number) => (j - 0.5) * CELL_W;
+export const rowFar = (j: number) => (j + 0.5) * CELL_W;
+/** Distance between the places along a street where a crossroads can be built: every block of three cells. */
+export const PLOT_SPACING = 3 * CELL_W;
+/** Buildings are whole blocks of BLOCK cells wide, starting at a cell BLOCK·n + 1 along their street. */
+export const BLOCK = 3;
+
+// --- Farm (x relative to the farm's centre, y in world units) ----------------------
 
 export type FieldZone = 'back' | 'front';
 
-/** Back field: a shallow strip behind the farmstead (seen from a low angle). */
-export const BACK_FIELD = { front: BASE_Y - 3, back: BASE_Y - 30 };
-/** Front field: between the road and the viewer, so it takes more screen height. */
-export const FRONT_FIELD = { top: 512, bottom: VIEW_H - 14 };
-
-// --- Land grid ---------------------------------------------------------------------
-// The street is cut into cells CELL_W wide, in two rows: 'back' (the lots behind
-// the road, where buildings stand) and 'front' (the land between the road and the
-// viewer). A building's footprint covers whole cells, and farm fields may only
-// use cells that no building covers. Building plot centres fall on cell edges.
-
-export const CELL_W = 25;
-/** World x of the left edge of cell 0. */
-export const GRID_X0 = 20;
-/** Distance between building plot centres: each plot owns a lot this wide. */
-export const PLOT_SPACING = 250;
 /**
- * How far (px from the farm centre) a farm's fields may reach. Behind the road
- * they stop at the next building anyway; in front of it a farm may borrow the
- * land in front of both neighbouring lots, which it sows only once all of its
- * own land is in use.
+ * The rows of cells a farm's fields can lie in, far to near: behind the road
+ * the three rows of the lots, beside the buildings; in front of it the two
+ * rows next to the road. Each field is one cell.
  */
-export const FIELD_REACH: Record<FieldZone, number> = { back: 225, front: PLOT_SPACING * 1.5 };
-/** A field plot spans 2..MAX cells; a lone free cell stays grass. */
-export const PLOT_CELLS = { min: 2, max: 3 };
+export const FIELD_ROW_J: Record<FieldZone, number[]> = { back: [LOT_ROW + 2, LOT_ROW + 1, LOT_ROW], front: [-2, -3] };
 
-/** Where the front field splits into its far (road side) and near row; the near row looks deeper. */
-const FRONT_SPLIT = FRONT_FIELD.top + (FRONT_FIELD.bottom - FRONT_FIELD.top) * 0.42;
+/** Row j of cells as a band of world y (depth): far edge and near edge. */
+const rowBand = (j: number) => ({ far: yAt(rowFar(j)), near: yAt(rowNear(j)) });
 
 /**
- * Rows of plots in each zone, far to near, as world-y bands. Every column of
- * field land has one plot per row: one behind the road, two in front of it.
+ * Rows of field cells in each zone, far to near, as world-y bands (FIELD_ROW_J).
  */
 export const FIELD_ROWS: Record<FieldZone, Array<{ far: number; near: number }>> = {
-  back: [{ far: BACK_FIELD.back, near: BACK_FIELD.front }],
-  front: [
-    { far: FRONT_FIELD.top, near: FRONT_SPLIT },
-    { far: FRONT_SPLIT, near: FRONT_FIELD.bottom },
-  ],
+  back: FIELD_ROW_J.back.map(rowBand),
+  front: FIELD_ROW_J.front.map(rowBand),
 };
+
+/** Back field: from the far edge of the lots to the road. */
+export const BACK_FIELD = { front: FIELD_ROWS.back[FIELD_ROWS.back.length - 1].near, back: FIELD_ROWS.back[0].far };
+/** Front field: between the road and the viewer, so it takes more screen height. */
+export const FRONT_FIELD = { top: FIELD_ROWS.front[0].far, bottom: FIELD_ROWS.front[FIELD_ROWS.front.length - 1].near };
 
 /** Where the farmer stands while working a plot in this row: the middle of it. */
 export function workY(zone: FieldZone, row: number): number {
@@ -93,8 +114,8 @@ export function workY(zone: FieldZone, row: number): number {
 }
 /** The farmyard: the farmer's home spot, by the farmhouse door. */
 export const HOME = { dx: -19, y: BASE_Y + 3 };
-/** The grain store, between the farmhouse and the street. */
-export const STORE = { dx: -76, y: BASE_Y + 3 };
+/** The grain store, beside the farmhouse at the left end of the farmstead. */
+export const STORE = { dx: -70, y: BASE_Y + 3 };
 
 // --- Where things lie ----------------------------------------------------------------
 // Every stored thing has its own place on the ground: each sheaf in a farm's
@@ -148,11 +169,15 @@ function pyramid(i: number, rows: readonly number[]): { row: number; col: number
 }
 
 /**
- * Items the storage yard (the `warehouse` building) holds, per resource. Everything
- * it stores lies out in the open where it can be seen, so this is also its
- * capacity: YARD_ITEMS × PILE_UNIT (buildings.ts).
+ * Items a small storage yard (the `warehouse` building, three cells wide)
+ * holds, per resource; a medium or large one (two or three merged) holds
+ * twice or three times as much. Everything it stores lies out in the open
+ * where it can be seen, so this is also its capacity: YARD_ITEMS × PILE_UNIT
+ * (buildings.ts).
  */
-export const YARD_ITEMS = { wood: 30, stone: 30, grain: 10, flour: 10, bread: 10 } as const;
+export const YARD_ITEMS = { wood: 15, stone: 15, grain: 5, flour: 5, bread: 5 } as const;
+/** How many items of each the yard's piles are laid out for: a medium yard's. */
+const YARD_LAID = { wood: 30, stone: 30, grain: 10, flour: 10, bread: 10 } as const;
 
 /**
  * The storage yard's piles: a stone heap on the left, a log pile on the right,
@@ -160,8 +185,14 @@ export const YARD_ITEMS = { wood: 30, stone: 30, grain: 10, flour: 10, bread: 10
  * (right) stacked on the ground and baskets of bread on two shelves at the
  * back. Item i (0 = bottom of the stack).
  */
-export function warehouseSlot(r: 'wood' | 'stone' | 'grain' | 'flour' | 'bread', i: number): Slot {
-  const n = Math.max(0, Math.min(i, YARD_ITEMS[r] - 1));
+export function warehouseSlot(r: 'wood' | 'stone' | 'grain' | 'flour' | 'bread', i: number, size = 2): Slot {
+  // laid out for a medium yard; a small one is squeezed into half the width, a large one spread over half again
+  const s = warehouseSlotMedium(r, i);
+  return { dx: (s.dx * size) / 2, lift: s.lift };
+}
+
+function warehouseSlotMedium(r: 'wood' | 'stone' | 'grain' | 'flour' | 'bread', i: number): Slot {
+  const n = Math.max(0, Math.min(i, YARD_LAID[r] - 1));
   if (r === 'wood') {
     const { row, col } = pyramid(n, [7, 6, 5, 4, 3, 3, 2]);
     return { dx: 41 + col * 7 + row * 3.5, lift: 3.4 + row * 6 };
@@ -243,8 +274,28 @@ export const TREE_Y = BACK_FIELD.back - 2;
 /** Where a woodcutter stands to fell a tree: beside its trunk, in front of it. */
 export const CHOP_SPOT = { dx: -11, y: TREE_Y + 4 };
 
-/** Where the rocky hills behind the street come down to the tree line, and a stonecutter can cut stone. */
-export const QUARRIES: readonly { x: number }[] = [{ x: 1640 }, { x: 4390 }];
+// --- The road grid ----------------------------------------------------------------
+// Every street keeps to one grid of squares ROAD_GRID cells across: crossroads
+// can only be built where their road runs down a line of it (grid.ts
+// onRoadGrid), so every road does: nine blocks of three cells apart. The lines
+// are the columns 27n + 2 (the middle of the block of three cells starting at
+// cell 27n + 1 of the main street) and the rows 27n (the main street's row, A,
+// and every 27th from it).
+
+export const ROAD_GRID = 27;
+/** The column and row of the road grid's lines through the origin (map cells). */
+export const ROAD_GRID_COL = 2;
+export const ROAD_GRID_ROW = 0;
+/** World x (on the main street) of the middle of square n of the road grid: n squares east of the line at column ROAD_GRID_COL. */
+const squareMiddle = (n: number) => (ROAD_GRID_COL + 0.5 + ROAD_GRID * (n + 0.5)) * CELL_W;
+
+/**
+ * Where the rocky hills behind the street come down to the tree line, and a
+ * stonecutter can cut stone: each in the middle of a square of the road grid,
+ * so that no road can ever run into the rocks (quarryLand stays clear of the
+ * grid's lines and the roads along them).
+ */
+export const QUARRIES: readonly { x: number }[] = [{ x: squareMiddle(2) }, { x: squareMiddle(5) }];
 /** A quarry's width along the street (no trees grow in it). */
 export const QUARRY_W = 280;
 /** Depth of the quarry face, where stonecutters stand to cut. */

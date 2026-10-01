@@ -19,11 +19,12 @@
 // carry it to a warehouse (transport.ts, BuildingDef.ships). With the store
 // full they wait by the door. The rest of the day is the generic routine.
 
-import { BUILDINGS } from './buildings';
+import { storageOf } from './buildings';
 import { putAway, storeSpot } from './economy';
-import { BACK_FIELD, BASE_Y, behindRoad, CHOP_SPOT, FIELD_ROWS, PILE_UNIT, QUARRIES, QUARRY_SPOTS, QUARRY_W, QUARRY_Y, ROAD_BOTTOM, STAND_Y, STONECUTTER_DOOR, WOODCUTTER_DOOR, yAt } from './layout';
+import { behindRoad, CELL_W, CHOP_SPOT, PILE_UNIT, QUARRIES, QUARRY_SPOTS, QUARRY_W, QUARRY_Y, STAND_Y, STONECUTTER_DOOR, WOODCUTTER_DOOR, yAt } from './layout';
 import { room, type Load } from './resources';
-import { fromStreet, groundPoint, onQuarryLand, SIDE_ROAD_HALF, streetDist, streetOf, streetPoint, streetRange, type Vec } from './streets';
+import { cellKey, landUse, type LandUse } from './grid';
+import { groundPoint, streetDist, streetOf, streetPoint, streetRange, type Vec } from './streets';
 import type { JobTicket, Workplace } from './worker';
 import type { Building, World } from './world';
 
@@ -65,42 +66,28 @@ export function treeGrowth(t: Tree): number {
 
 /** How much room (map px) a trunk keeps from a road, a building, a field or the rocks. */
 const TRUNK_ROOM = 10;
-/** Depths (map px behind the middle of the road) of the road and its verges, and of the building lots. */
-const ROAD_BAND = { from: behindRoad(ROAD_BOTTOM) - TRUNK_ROOM, to: behindRoad(BASE_Y) };
-const LOT_BAND = { from: behindRoad(BASE_Y) - TRUNK_ROOM, to: behindRoad(BACK_FIELD.back) + TRUNK_ROOM };
 
 /** Where tree t stands on the map. */
 export const treePoint = (world: World, t: Tree): Vec => groundPoint(world, t.x, t.y);
 
 /**
- * Whether a tree can stand at map point p: not on a road (nor a crossroads
- * being built), a building, a farm's field or a quarry's land, and (unless
- * `crowd` is false) not crowding another tree.
+ * Whether a tree can stand at map point p: not on land anything takes (grid.ts:
+ * a road or its verges, a building or a crossroads being built, a farm's
+ * field, a quarry's land), and (unless `crowd` is false) not crowding another tree.
  */
 export function treeRoom(world: World, p: Vec, crowd = true, not?: Tree): boolean {
-  if (onQuarryLand(p, TRUNK_ROOM)) return false;
-  const seen = world.streets.map((s) => fromStreet(world, s.index, p));
-  for (const s of world.streets) {
-    const { x, d } = seen[s.index];
-    const { min, max } = streetRange(world, s.index);
-    if (x > min - TRUNK_ROOM && x < max + TRUNK_ROOM && d > ROAD_BAND.from && d < ROAD_BAND.to) return false;
-  }
-  for (const b of world.buildings) {
-    const bx = world.plots[b.plotIndex].x;
-    const { x, d } = seen[streetOf(bx)] ?? { x: Infinity, d: Infinity };
-    // a crossroads being built: its road will run off here
-    if (b.type === 'intersection') {
-      if (b.status !== 'done' && Math.abs(x - bx) < SIDE_ROAD_HALF + TRUNK_ROOM && d > 0) return false;
-      continue;
+  const land = landUse(world);
+  /** Whether land within r of p is taken by something `which` matches. */
+  const taken = (r: number, which: (u: LandUse) => boolean) => {
+    for (let c = Math.floor((p.x - r) / CELL_W); c <= Math.floor((p.x + r) / CELL_W); c++) {
+      for (let row = Math.floor((p.y - r) / CELL_W); row <= Math.floor((p.y + r) / CELL_W); row++) {
+        const u = land.get(cellKey(c, row));
+        if (u && which(u)) return true;
+      }
     }
-    if (Math.abs(x - bx) < BUILDINGS[b.type].width / 2 + TRUNK_ROOM && d > LOT_BAND.from && d < LOT_BAND.to) return false;
-    for (const f of b.farm?.plots ?? []) {
-      const row = FIELD_ROWS[f.zone][f.row];
-      const near = behindRoad(row.near) - TRUNK_ROOM;
-      const far = behindRoad(row.far) + TRUNK_ROOM;
-      if (Math.abs(x - (bx + f.dx)) < f.width / 2 + TRUNK_ROOM && d > near && d < far) return false;
-    }
-  }
+    return false;
+  };
+  if (taken(TRUNK_ROOM, () => true) || taken(CELL_W, (u) => u.kind === 'road')) return false;
   if (crowd) {
     for (const t of world.trees) {
       if (t === not) continue;
@@ -127,7 +114,7 @@ const WOODS = { behind: [140, 900], front: [-320, -200] } as const;
 function sprout(world: World, x: number, d: number, grown: boolean, rand: () => number): boolean {
   const s = streetOf(x);
   const { min, max } = streetRange(world, s);
-  if (x < min || x > max || !world.streets[s]) return false;
+  if (x < min || x > max || !world.streets[s] || world.streets[s].gone) return false;
   if (d < WOODS.front[0]) return false;
   const p = streetPoint(world, x, d);
   if (!treeRoom(world, p)) return false;
@@ -179,8 +166,8 @@ export function updateForest(world: World, dt: number, rand: () => number): void
     if (t.state === 'growing' && t.age >= TREE_GROW) t.state = 'grown';
   }
   world.trees = world.trees.filter((t) => t.state !== 'stump' || t.age < STUMP_TIME);
-  const streets = world.streets.length;
-  if (world.trees.length >= MAX_TREES * streets || rand() >= dt / SPROUT_EVERY) return;
+  const live = world.streets.filter((s) => !s.gone);
+  if (world.trees.length >= MAX_TREES * live.length || rand() >= dt / SPROUT_EVERY) return;
   const grown = world.trees.filter((t) => t.state === 'grown');
   if (grown.length && rand() < 0.75) {
     // a seed falls near a grown tree
@@ -189,7 +176,7 @@ export function updateForest(world: World, dt: number, rand: () => number): void
     const r = TREE_GAP + rand() * 70;
     sprout(world, parent.x + Math.cos(a) * r, behindRoad(parent.y) + Math.sin(a) * r, false, rand);
   } else {
-    const s = Math.floor(rand() * streets);
+    const s = live[Math.floor(rand() * live.length)].index;
     const { min, max } = streetRange(world, s);
     const band = rand() < 0.75 ? WOODS.behind : WOODS.front;
     sprout(world, min + rand() * (max - min), band[0] + rand() * (band[1] - band[0]), false, rand);
@@ -219,9 +206,9 @@ export function isGatherHut(type: Building['type']): type is GatherHut {
 
 /** The woodcutter's or stonecutter's hut as a workplace for its worker. */
 export function gatherWorkplace(world: World, b: Building & { type: GatherHut }): Workplace {
-  const x = world.plots[b.plotIndex].x;
+  const x = b.x;
   const { resource, action, seconds, door } = GATHER[b.type];
-  const capacity = BUILDINGS[b.type].storage;
+  const capacity = storageOf(b);
   const tree = (id: number) => world.trees.find((t) => t.id === id && t.state === 'grown');
   const spot = (job: JobTicket) => {
     if (action === 'chop') {

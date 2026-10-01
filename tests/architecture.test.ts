@@ -4,6 +4,7 @@
 //   src/game    rules, state, simulation — imports only src/game
 //   src/render  all visuals — imports src/game (read-only) and src/render
 //   src/app     input, screen, wiring — uses src/render only via its index
+//   src/sim     the game as text, headless — imports only src/game and src/sim
 //
 // Lives outside src so the browser typecheck doesn't need Node types.
 // If one of these fails, the fix is almost always to move code to the right
@@ -101,6 +102,11 @@ describe('layer boundaries', () => {
 
   it('render never calls game functions that change state', () => {
     const bad = all.filter((i) => layer(i.file) === 'render' && layer(i.target) === 'game' && i.names.some((n) => MUTATORS.includes(n)));
+    expect(bad).toEqual([]);
+  });
+
+  it('sim (the game as text) imports only src/game and src/sim', () => {
+    const bad = all.filter((i) => layer(i.file) === 'sim' && !['sim', 'game'].includes(layer(i.target)));
     expect(bad).toEqual([]);
   });
 

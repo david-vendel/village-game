@@ -20,7 +20,7 @@ import type { Resource } from '../game/resources';
 import { chapelBell } from '../game/daynight';
 import { employees } from '../game/people';
 import { RIDER_MAX_SPEED, getBuilding, type World } from '../game/world';
-import { HORSE_STRIDE } from '../render';
+import { galloping, strideAt } from '../render';
 
 export type UiSound = 'menuOpen' | 'menuMove' | 'menuClose' | 'toggle' | 'denied';
 
@@ -257,13 +257,16 @@ export function createSound(initialVolume = 0.6): Sound {
     lastGait = r.gait;
     const speed = Math.min(1, Math.abs(r.vx) / RIDER_MAX_SPEED);
     if (speed < 0.02 || r.gait === prev) return;
-    // same footfall pattern as render/horse.ts: 4-beat walk, 2-beat trot
+    // same footfall pattern as render/horse.ts: 4-beat walk, 2-beat trot, and the gallop's
+    // four even beats, each leg on its own, louder
+    const gallop = galloping(r.vx);
     const trot = speed > 0.6;
-    const beats = trot ? [0, 0.5] : [0, 0.25, 0.5, 0.75];
-    const a = prev / HORSE_STRIDE;
-    const b = r.gait / HORSE_STRIDE;
+    const beats = gallop ? [0, 0.25, 0.5, 0.75] : trot ? [0, 0.5] : [0, 0.25, 0.5, 0.75];
+    const stride = strideAt(r.vx);
+    const a = prev / stride;
+    const b = r.gait / stride;
     for (const off of beats) {
-      if (Math.floor(a - off) < Math.floor(b - off)) sfx.hoof(r.x, (trot ? 0.9 : 0.6) * (0.5 + speed * 0.5));
+      if (Math.floor(a - off) < Math.floor(b - off)) sfx.hoof(r.x, gallop ? 1.25 : (trot ? 0.9 : 0.6) * (0.5 + speed * 0.5));
     }
   }
 
@@ -283,7 +286,7 @@ export function createSound(initialVolume = 0.6): Sound {
         const b = getBuilding(world, ev.buildingId);
         if (!b || played.has(ev.kind)) continue;
         played.add(ev.kind);
-        const x = world.plots[b.plotIndex].x;
+        const x = b.x;
         if (ev.kind === 'placed') sfx.thunk(x);
         else sfx.chime(x);
       }
@@ -293,7 +296,7 @@ export function createSound(initialVolume = 0.6): Sound {
       const bellStruck = strokes > lastBellStrokes;
       lastBellStrokes = strokes;
       for (const b of world.buildings) {
-        const x = world.plots[b.plotIndex].x;
+        const x = b.x;
         const near = Math.abs(x - listenerX) < EARSHOT + 300;
 
         // people at work here: the blows and sweeps of their tools (render/farm.ts drawWorker)
@@ -336,7 +339,7 @@ export function createSound(initialVolume = 0.6): Sound {
         // a load worked on turns into what was made: nothing was put down or picked up
         const madeInside = !!before && !!now;
         if (!b || before === undefined || before === now || madeInside) continue;
-        const wx = world.plots[b.plotIndex].x + p.job!.worker.dx;
+        const wx = b.x + p.job!.worker.dx;
         if (before) sfx.setDown(wx, before);
         if (now) sfx.setDown(wx, now, 0.5);
       }

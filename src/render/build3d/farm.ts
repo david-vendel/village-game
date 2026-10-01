@@ -3,11 +3,11 @@
 // wattle-and-daub, a steep thatched roof with a chimney, shuttered window,
 // plank door) with a lean-to barn against its right gable.
 //
-// Fitted to the game: 10 m wide (BUILDINGS.farm.width = 200 u), the door
+// Fitted to the game: as wide as BUILDINGS.farm.width (7.5 m), the door
 // centred on HOME.dx, the grain store's ground (STORE.dx ± 1.25 m) in front
-// of the left room left clear. The Large farm (variant "upgraded") adds a bay
-// with a second room and window right of the hall; the barn gives up that bay,
-// so the footprint stays 10 m. farm(seed) gives both looks merged: elements in
+// left clear. The Large farm (variant "upgraded") adds a bay with a second room
+// and window right of the hall; the lean-to barn gives up that bay, so the
+// footprint doesn't change. farm(seed) gives both looks merged: elements in
 // only one look are tagged variant:upgraded / novariant:upgraded. The seed
 // varies the stones and boards, so no two farms are quite alike.
 
@@ -51,8 +51,8 @@ export const SPEC: FarmSpec = {
   width: BUILDINGS.farm.width / U,
   depth: 5,
   houseX0: -BUILDINGS.farm.width / U / 2,
-  houseX1: 1,
-  bayUpgraded: 2,
+  houseX1: 0.6,
+  bayUpgraded: 1.6,
   doorX: HOME.dx / U,
   doorW: 0.9,
   doorH: 1.85,
@@ -86,7 +86,7 @@ const wallY = (s: FarmSpec) => 0.05 + s.sill[0] / 2;
 const rad = (deg: number) => (deg * Math.PI) / 180;
 
 /** Where the chimney stands: x, and y from the ridge line (behind it). */
-const CHIMNEY: [number, number] = [-2.2, 0.7];
+const CHIMNEY: [number, number] = [-1.9, 0.7];
 
 /** Heights of the roof: rafter feet and apex (centre line), the thatch's outer ridge, the chimney top. */
 export function roofLevels(s: FarmSpec = SPEC): { rafterFoot: number; rafterApex: number; ridgeOuter: number; chimneyTop: number } {
@@ -97,19 +97,23 @@ export function roofLevels(s: FarmSpec = SPEC): { rafterFoot: number; rafterApex
   return { rafterFoot: foot, rafterApex: apex, ridgeOuter: apex + lift, chimneyTop: apex + lift + 0.75 };
 }
 
-/** Front wall post centres: corners, a post between the room and the hall, the door jambs, and bay posts. */
-function frontPosts(s: FarmSpec, x1: number): number[] {
+/**
+ * The house's wall bays for a house ending at x1: front and back post centres, the window bays
+ * (the room left of the door; the Large farm's room on the right) and the door bay. The room
+ * gets a post of its own between it and the hall only where it is wide enough for one.
+ */
+function bays(s: FarmSpec, x1: number): { front: number[]; back: number[]; windows: Array<[number, number]>; door: [number, number] } {
   const half = s.post / 2;
-  const xs = [s.houseX0 + 0.05 + half, -2.8, s.doorX - s.doorW / 2 - half, s.doorX + s.doorW / 2 + half, s.houseX1 - 0.05 - half];
-  if (x1 > s.houseX1 + 1e-9) xs.push(x1 - 0.05 - half);
-  return xs;
-}
-
-function backPosts(s: FarmSpec, x1: number): number[] {
-  const half = s.post / 2;
-  const xs = [s.houseX0 + 0.05 + half, -2.8, s.doorX, s.houseX1 - 0.05 - half];
-  if (x1 > s.houseX1 + 1e-9) xs.push(x1 - 0.05 - half);
-  return xs;
+  const corner = s.houseX0 + 0.05 + half;
+  const doorL = s.doorX - s.doorW / 2 - half;
+  const doorR = s.doorX + s.doorW / 2 + half;
+  const end = s.houseX1 - 0.05 - half;
+  const room = doorL - corner > 2.6 ? corner + (doorL - corner) * 0.6 : null;
+  const bay = x1 > s.houseX1 + 1e-9 ? x1 - 0.05 - half : null;
+  const front = [corner, ...(room !== null ? [room] : []), doorL, doorR, end, ...(bay !== null ? [bay] : [])];
+  const back = [corner, ...(room !== null ? [room] : []), s.doorX, end, ...(bay !== null ? [bay] : [])];
+  const windows: Array<[number, number]> = [[corner, room ?? doorL], ...(bay !== null ? [[end, bay] as [number, number]] : [])];
+  return { front, back, windows, door: [doorL, doorR] };
 }
 
 /** Fieldstone footing in two courses round a rectangle (outer faces at the given lines). */
@@ -187,8 +191,7 @@ function house(b: Builder, s: FarmSpec, upgraded: boolean): void {
 
   // posts: front, back, and the gable middles
   const posts: Record<string, [number, number, string]> = {};
-  const fx = frontPosts(s, x1);
-  const bx = backPosts(s, x1);
+  const { front: fx, back: bx, windows: winBays, door: doorBay } = bays(s, x1);
   fx.forEach((px, i) => (posts[`post.f${i}`] = [px, wyF, 'sill.f']));
   bx.forEach((px, i) => (posts[`post.b${i}`] = [px, wyB, 'sill.b']));
   posts['post.l'] = [x0 + 0.05 + half, D / 2, 'sill.l'];
@@ -206,8 +209,6 @@ function house(b: Builder, s: FarmSpec, upgraded: boolean): void {
 
   // girts and braces in the front wall, bay by bay
   const isBay = (i: number, pair: [number, number]) => fx[i] === pair[0] && fx[i + 1] === pair[1];
-  const winBays: Array<[number, number]> = [[fx[0], fx[1]], ...(upgraded ? [[fx[4], fx[5]] as [number, number]] : [])];
-  const doorBay: [number, number] = [fx[2], fx[3]];
   const mid = st + s.wallH * 0.5;
   const winSill = st + 0.95;
   const winHead = winSill + s.windowH;
@@ -249,7 +250,7 @@ function house(b: Builder, s: FarmSpec, upgraded: boolean): void {
 
   // tie beams across the house over every front post but the door jambs, and one over the door
   const tz = eaveZ(s) + s.tie[1] / 2;
-  const tieXs = [...new Set([...fx.filter((x) => x !== fx[2] && x !== fx[3]), s.doorX].map((x) => Math.round(x * 1e4) / 1e4))].sort((p, q) => p - q);
+  const tieXs = [...new Set([...fx.filter((x) => x !== doorBay[0] && x !== doorBay[1]), s.doorX].map((x) => Math.round(x * 1e4) / 1e4))].sort((p, q) => p - q);
   tieXs.forEach((tx, i) => b.beam(`tie${i}`, 'tie-beam', [tx, -s.tieOverhang, tz], [tx, D + s.tieOverhang, tz], s.tie, 'frame', ['plate.f', 'plate.b']));
 
   // rafters: pairs at even spacing, from beyond the eaves to the ridge; collars at two-thirds height
@@ -388,8 +389,12 @@ function barn(b: Builder, s: FarmSpec, upgraded: boolean): void {
     [x1 - 0.12, (y0 + y1) / 2],
     [x0 + 0.25, y0 + 0.12],
     [x0 + 0.25, y1 - 0.12],
-    [(x0 + x1) / 2 + 0.6, y0 + 0.12],
-    [(x0 + x1) / 2 + 0.6, y1 - 0.12],
+    ...(x1 - x0 > 2.5
+      ? ([
+          [(x0 + x1) / 2 + 0.6, y0 + 0.12],
+          [(x0 + x1) / 2 + 0.6, y1 - 0.12],
+        ] as Array<[number, number]>)
+      : []),
   ];
   postXY.forEach(([px, py], i) => b.box(`${pre}pad${i}`, 'pad-stone', [px, py, 0.1], [0.34, 0.34, 0.2], 'fieldstone', 'foundation', [], { shape: 'stone' }));
   postXY.forEach(([px, py], i) => {
@@ -485,10 +490,10 @@ export function farm(seed = 7, s: FarmSpec = SPEC): Element[] {
 
 /** Named points (ASSET_SPEC §7.1) in model space. */
 export function farmPoints(s: FarmSpec = SPEC): Record<string, Vec3> {
-  const f0 = frontPosts(s, s.houseX1);
-  const fUp = frontPosts(s, s.houseX1 + s.bayUpgraded);
-  const win0 = (f0[0] + f0[1]) / 2;
-  const win1 = (fUp[4] + fUp[5]) / 2;
+  const [w0] = bays(s, s.houseX1).windows;
+  const [, w1] = bays(s, s.houseX1 + s.bayUpgraded).windows;
+  const win0 = (w0[0] + w0[1]) / 2;
+  const win1 = (w1[0] + w1[1]) / 2;
   const winZ = sillTop(s) + 0.95 + s.windowH / 2;
   return {
     door: [s.doorX, 0, 0],

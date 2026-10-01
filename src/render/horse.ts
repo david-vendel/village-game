@@ -24,6 +24,12 @@ const HOOF = '#2a221c';
 
 /** Distance the horse moves per full gait cycle (px); the hoofbeat sound follows it too (app/sound.ts). */
 export const STRIDE = 48;
+/** Galloping (sprinting, faster than the usual top speed), each stride is a long leap. */
+export const GALLOP_STRIDE = 84;
+/** Whether a horse going at vx gallops. */
+export const galloping = (vx: number) => Math.abs(vx) > RIDER_MAX_SPEED * 1.08;
+/** Distance per gait cycle at vx. */
+export const strideAt = (vx: number) => (galloping(vx) ? GALLOP_STRIDE : STRIDE);
 
 /** Where the legs join the body, in the body's frame: fore (shoulder) and hind (stifle). */
 const FORE = { x: 11, y: -20.5, upper: 10.2, lower: 10.3, knee: -1 as const };
@@ -40,8 +46,8 @@ type LegDef = typeof FORE | typeof HIND;
  * `stance` part of the cycle, sliding back under the body exactly as fast as
  * the horse moves on, then lifted and swung forward.
  */
-function hoofAt(rootX: number, u: number, stance: number, liftH: number): { x: number; lift: number } {
-  const reach = STRIDE * stance;
+function hoofAt(rootX: number, u: number, stance: number, liftH: number, stride: number): { x: number; lift: number } {
+  const reach = stride * stance;
   if (u < stance) return { x: rootX + reach * (0.5 - u / stance), lift: 0 };
   const v = (u - stance) / (1 - stance);
   return { x: rootX + reach * (-0.5 + (1 - Math.cos(Math.PI * v)) / 2), lift: Math.sin(Math.PI * v) * liftH };
@@ -99,13 +105,16 @@ const GOLD = '#e8c14a';
 export function drawRider(ctx: Ctx, rider: Rider, screenX: number, groundY: number, time: number): void {
   const speed = Math.min(1, Math.abs(rider.vx) / RIDER_MAX_SPEED); // 0..1, vs the default top speed
   const moving = speed > 0.02;
-  const phase = rider.gait / STRIDE;
+  const gallop = galloping(rider.vx);
+  const stride = strideAt(rider.vx);
+  const phase = rider.gait / stride;
   const trot = speed > 0.6;
-  const stance = trot ? 0.38 : 0.5;
-  const liftH = trot ? 5.5 : 3.2;
+  const stance = gallop ? 0.3 : trot ? 0.38 : 0.5;
+  const liftH = gallop ? 10 : trot ? 5.5 : 3.2;
 
-  // the body rises and falls twice a cycle (as each diagonal pair or each end pushes off)
-  const bob = moving ? (0.5 - 0.5 * Math.cos(phase * Math.PI * 4)) * (trot ? 1.5 : 0.7) : 0;
+  // the body rises and falls twice a cycle (as each diagonal pair or each end pushes off);
+  // galloping, it bounds higher with each hoof's push
+  const bob = !moving ? 0 : gallop ? (0.5 - 0.5 * Math.cos(phase * Math.PI * 4)) * 3.2 : (0.5 - 0.5 * Math.cos(phase * Math.PI * 4)) * (trot ? 1.5 : 0.7);
   const breathe = Math.sin(time * 2.1) * 0.25;
   // the head swings with the walk; idle, slow nods, an occasional deeper dip, and a hoof pawing now and then
   const nod = moving ? Math.sin(phase * Math.PI * 4 + 0.6) * (trot ? 0.04 : 0.08) - speed * 0.12 : Math.sin(time * 0.9) * 0.08 + Math.max(0, Math.sin(time * 0.37) - 0.8) * 1.4;
@@ -117,21 +126,24 @@ export function drawRider(ctx: Ctx, rider: Rider, screenX: number, groundY: numb
   ellipse(ctx, 0, 0, 25, 3.2, '#2c2416');
   ctx.globalAlpha = 1;
   ctx.scale(rider.facing, 1);
+  // galloping, the body rocks: rearing up into each leap, diving out of it
+  if (gallop) ctx.rotate(Math.sin(phase * Math.PI * 4 - 0.8) * 0.04);
 
   // dust kicked up at speed
   if (speed > 0.4) {
-    for (let i = 0; i < 5; i++) {
-      const t = (phase * 2 + i / 5) % 1;
-      ctx.globalAlpha = (1 - t) * 0.28 * speed;
-      circle(ctx, -18 - t * 18, -2 - t * 6, 2.5 + t * 5, '#cdb48a');
+    const puffs = gallop ? 9 : 5;
+    for (let i = 0; i < puffs; i++) {
+      const t = (phase * 2 + i / puffs) % 1;
+      ctx.globalAlpha = (1 - t) * (gallop ? 0.38 : 0.28) * speed;
+      circle(ctx, -18 - t * (gallop ? 34 : 18), -2 - t * (gallop ? 10 : 6), (2.5 + t * 5) * (gallop ? 1.4 : 1), '#cdb48a');
     }
     ctx.globalAlpha = 1;
   }
 
-  // walk: left hind, left fore, right hind, right fore; trot: diagonal pairs
-  const off = trot ? { lh: 0, rf: 0, rh: 0.5, lf: 0.5 } : { lh: 0, lf: 0.25, rh: 0.5, rf: 0.75 };
+  // walk and gallop: left hind, left fore, right hind, right fore, each leg on its own beat; trot: diagonal pairs
+  const off = gallop ? { lh: 0, lf: 0.25, rh: 0.5, rf: 0.75 } : trot ? { lh: 0, rf: 0, rh: 0.5, lf: 0.5 } : { lh: 0, lf: 0.25, rh: 0.5, rf: 0.75 };
   const hoof = (leg: LegDef, o: number, far: boolean, lift = 0) => {
-    if (moving) return hoofAt(leg.x + (far ? 1.5 : 0), (((phase + o) % 1) + 1) % 1, stance, liftH);
+    if (moving) return hoofAt(leg.x + (far ? 1.5 : 0), (((phase + o) % 1) + 1) % 1, stance, liftH, stride);
     return { x: leg.x + (far ? 2.5 : -0.5) + (lift ? 2 : 0), lift };
   };
 
@@ -207,8 +219,8 @@ export function drawRider(ctx: Ctx, rider: Rider, screenX: number, groundY: numb
   ctx.restore();
 
   // the king, sitting the saddle: his body rises a little in the trot, and he leans into the ride
-  const post = trot ? Math.abs(Math.sin(phase * Math.PI * 2)) * 1.3 : 0;
-  const lean = speed * 0.14;
+  const post = gallop ? 0 : trot ? Math.abs(Math.sin(phase * Math.PI * 2)) * 1.3 : 0;
+  const lean = speed * 0.14 + (gallop ? 0.12 : 0);
   const bit = headPoint(nod, 16, -5, bob);
   drawKing(ctx, -1, -31.6 - bob - post, lean, speed, moving, time, bit);
   ctx.restore();

@@ -1,4 +1,5 @@
 import { stockOf } from './resources';
+import { plotX } from './streets';
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS, BUILDING_TYPES } from './buildings';
 import {
@@ -8,8 +9,9 @@ import {
   createWorld,
   moveMenu,
   openMenu,
+  placeAt,
   placeBuilding,
-  plotAt,
+  buildingAt,
   RIDER_MAX_SPEED,
   setConstructionEnabled,
   update,
@@ -29,25 +31,26 @@ function runFor(world: World, seconds: number, input = idle): void {
 }
 
 describe('building registry', () => {
-  it('every building fits inside a plot', () => {
-    for (const t of BUILDING_TYPES) expect(BUILDINGS[t].width).toBeLessThanOrEqual(200);
+  it('every building is whole blocks of three cells wide', () => {
+    for (const t of BUILDING_TYPES) expect(BUILDINGS[t].width % 75).toBe(0);
   });
 });
 
 describe('placement', () => {
-  it('places a building on an empty plot and marks the plot taken', () => {
+  it('places a building on whole cells where the rider wants it', () => {
     const w = emptyWorld();
-    const b = placeBuilding(w, 0, 'mill', { free: true });
+    const b = placeBuilding(w, 412.5, 'mill', { free: true });
     expect(b).not.toBeNull();
-    expect(w.plots[0].buildingId).toBe(b!.id);
+    expect(buildingAt(w, w.plots[0].x)).toBe(b);
+    expect(b!.x % 25).toBe(0); // 6 cells wide: its middle on a cell edge
     expect(b!.status).toBe('constructing');
   });
 
-  it('refuses to place on an occupied or missing plot', () => {
+  it('refuses to place over another building or off the streets', () => {
     const w = emptyWorld();
-    placeBuilding(w, 0, 'house', { free: true });
-    expect(placeBuilding(w, 0, 'farm', { free: true })).toBeNull();
-    expect(placeBuilding(w, 9999, 'farm', { free: true })).toBeNull();
+    placeBuilding(w, 412.5, 'house', { free: true });
+    expect(placeBuilding(w, 412.5, 'farm', { free: true })).toBeNull();
+    expect(placeBuilding(w, 999999, 'farm', { free: true })).toBeNull();
     expect(w.buildings).toHaveLength(1);
   });
 
@@ -55,6 +58,8 @@ describe('placement', () => {
     const w = createWorld();
     expect(w.buildings.length).toBeGreaterThan(3);
     expect(w.buildings.every((b) => b.status === 'done')).toBe(true);
+    // every one of them found room (none on a place kept for a crossroads)
+    for (const t of ['house', 'well', 'tavern', 'warehouse', 'farm', 'chapel'] as const) expect(w.buildings.some((b) => b.type === t), t).toBe(true);
     expect(w.events).toHaveLength(0);
   });
 
@@ -67,8 +72,8 @@ describe('placement', () => {
 describe('build menu', () => {
   it('builds at an empty plot, and offers what can be done to a building', () => {
     const w = emptyWorld();
-    placeBuilding(w, 10, 'warehouse', { instant: true, free: true })!.stock = stockOf({ wood: 300, stone: 300 });
-    w.rider.x = w.plots[2].x + 10;
+    placeBuilding(w, 2912.5, 'warehouse', { instant: true, free: true })!.stock = stockOf({ wood: 300, stone: 300 });
+    w.rider.x = w.plots[8].x - 25; // a cell 3n + 1, where a building starts
     expect(openMenu(w)).toBe(true);
     moveMenu(w, 2);
     const b = confirmMenu(w);
@@ -78,16 +83,17 @@ describe('build menu', () => {
     expect(w.menu?.kind).toBe('building');
   });
 
-  it('does not open between plots', () => {
+  it('opens on any cell of a block of three, the building starting at its cell 3n + 1', () => {
     const w = emptyWorld();
-    w.rider.x = (w.plots[0].x + w.plots[1].x) / 2;
-    expect(plotAt(w, w.rider.x)).toBeNull();
-    expect(openMenu(w)).toBe(false);
+    w.rider.x = w.plots[4].x + 20; // the block's last cell
+    expect(openMenu(w)).toBe(true);
+    expect(w.menu?.kind).toBe('build');
+    expect(placeAt(w, 'farm', w.rider.x)).toBe(w.plots[4].x - 25 + (BUILDINGS.farm.width - 25) / 2);
   });
 
   it('selection wraps and is remembered after cancelling', () => {
     const w = emptyWorld();
-    w.rider.x = w.plots[0].x;
+    w.rider.x = w.plots[4].x - 25; // where a crossroads can go (the last entry)
     openMenu(w);
     moveMenu(w, -1);
     expect(w.menu!.selection).toBe(BUILDING_TYPES.length - 1);
@@ -98,7 +104,7 @@ describe('build menu', () => {
 
   it('rider cannot move while the menu is open', () => {
     const w = emptyWorld();
-    w.rider.x = w.plots[0].x;
+    w.rider.x = w.plots[0].x - 25;
     openMenu(w);
     const x = w.rider.x;
     runFor(w, 1, { left: false, right: true });
@@ -109,7 +115,7 @@ describe('build menu', () => {
 describe('construction', () => {
   it('is built by its builders over buildTime of labour, and completes with an event', () => {
     const w = createWorld(); // villagers to hire
-    const b = placeBuilding(w, 7, 'well', { free: true })!; // materials already on site
+    const b = placeBuilding(w, 2162.5, 'well', { free: true })!; // materials already on site
     w.events.length = 0;
     // builders walk over from the street, then two of them share the labour
     const done = () => b.status === 'done';
@@ -121,7 +127,7 @@ describe('construction', () => {
 
   it('nothing gets built without anyone to build it', () => {
     const w = emptyWorld();
-    const b = placeBuilding(w, 0, 'well', { free: true })!;
+    const b = placeBuilding(w, 412.5, 'well', { free: true })!;
     runFor(w, BUILDINGS.well.buildTime * 2);
     expect(b.progress).toBe(0);
   });
@@ -129,13 +135,13 @@ describe('construction', () => {
   it('with construction disabled buildings appear finished instantly', () => {
     const w = emptyWorld();
     setConstructionEnabled(w, false);
-    const b = placeBuilding(w, 1, 'chapel', { free: true })!;
+    const b = placeBuilding(w, 787.5, 'chapel', { free: true })!;
     expect(b.status).toBe('done');
   });
 
   it('disabling construction finishes buildings in progress', () => {
     const w = emptyWorld();
-    const b = placeBuilding(w, 1, 'chapel', { free: true })!;
+    const b = placeBuilding(w, 787.5, 'chapel', { free: true })!;
     runFor(w, 1);
     setConstructionEnabled(w, false);
     expect(b.status).toBe('done');
@@ -170,5 +176,17 @@ describe('rider', () => {
     const w = emptyWorld();
     runFor(w, 60, { left: true, right: false });
     expect(w.rider.x).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('streets', () => {
+  it('builders reach a site two streets away, turning at each crossroads only once', () => {
+    const w = createWorld();
+    w.buildings.find((b) => b.type === 'warehouse')!.stock.wood = 300;
+    placeBuilding(w, 2087.5, 'intersection', { instant: true }); // cell 83, on the road grid
+    placeBuilding(w, plotX(1, 47), 'intersection', { instant: true }); // 27 cells up the new street
+    const h = placeBuilding(w, plotX(2, 42) - 25, 'house')!;
+    runFor(w, 90, { left: false, right: false });
+    expect(h.status).toBe('done');
   });
 });

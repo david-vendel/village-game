@@ -6,10 +6,14 @@ import { BUILDING_TYPES, BUILDINGS } from '../game/buildings';
 import { buildShortfall, upgradeShortfall } from '../game/economy';
 import { RESOURCES, type Amounts } from '../game/resources';
 import {
+  buildingAt,
   closeMenu,
   confirmMenu,
   crossroadAt,
   demolish,
+  demolishSection,
+  whyNotBuild,
+  whyNotDemolish,
   getBuilding,
   moveMenu,
   openMenu,
@@ -28,7 +32,7 @@ export type Notify = (text: string) => void;
 export interface Actions {
   toggleConstruction(): void;
   toggleSound(): void;
-  /** The menu at the plot the rider is at: build on an empty plot; upgrade or pull down a building. */
+  /** The menu where the rider is: build there; at a building, upgrade or pull it down. */
   openBuildMenu(): void;
   closeBuildMenu(): void;
   moveSelection(delta: number): void;
@@ -43,7 +47,7 @@ export interface Actions {
   turnToward(v: Vec): void;
 }
 
-export function createActions(world: World, notify: Notify, isTouch: () => boolean, sound: Sound): Actions {
+export function createActions(world: World, notify: Notify, _isTouch: () => boolean, sound: Sound): Actions {
   return {
     toggleConstruction() {
       sound.ui('toggle');
@@ -60,10 +64,8 @@ export function createActions(world: World, notify: Notify, isTouch: () => boole
         sound.ui('menuOpen');
         return;
       }
-      if (isTouch()) {
-        sound.ui('denied');
-        notify('Ride to a pennant to build');
-      }
+      sound.ui('denied');
+      notify(buildingAt(world, world.rider.x) ? 'Nothing can be done here' : 'No room to build here');
     },
     closeBuildMenu() {
       closeMenu(world);
@@ -92,7 +94,25 @@ export function createActions(world: World, notify: Notify, isTouch: () => boole
         const b = getBuilding(world, menu.buildingId);
         if (!b) return closeMenu(world);
         const name = BUILDINGS[b.type].name;
+        if (menu.options[menu.selection] === 'demolishSection') {
+          const why = whyNotDemolish(world, b);
+          if (why) {
+            sound.ui('denied');
+            notify(`The ${name} can't be pulled down: ${why.toLowerCase()}`);
+            return;
+          }
+          demolishSection(world, b, menu.x);
+          sound.ui('toggle');
+          notify(`Builders will pull down that section of the ${name}`);
+          return;
+        }
         if (menu.options[menu.selection] === 'demolish') {
+          const why = whyNotDemolish(world, b);
+          if (why) {
+            sound.ui('denied');
+            notify(`The ${name} can't be pulled down: ${why.toLowerCase()}`);
+            return;
+          }
           demolish(world, b);
           sound.ui('toggle');
           notify(world.constructionEnabled ? `Builders will pull the ${name} down` : `The ${name} is pulled down; serfs will carry off what is left`);
@@ -112,9 +132,16 @@ export function createActions(world: World, notify: Notify, isTouch: () => boole
         notify(b.upgraded ? `${upgrade.name} built` : `Upgrading the ${name} to a ${upgrade.name}`);
         return;
       }
-      if (!world.menu) return;
+      const m = world.menu;
+      if (m?.kind !== 'build') return;
       // the menu stays open when the village can't pay, so another choice is one key away
-      const type = BUILDING_TYPES[world.menu.selection];
+      const type = BUILDING_TYPES[m.selection];
+      const why = whyNotBuild(world, type, m.x);
+      if (why) {
+        sound.ui('denied');
+        notify(`No room for a ${BUILDINGS[type].name} here: ${why.toLowerCase()}`);
+        return;
+      }
       const lack = buildShortfall(world, type);
       if (Object.keys(lack).length) {
         sound.ui('denied');

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { VIEW_H } from '../game/layout';
-import { computeViewport, defaultZoom, zoomRange } from './viewport';
+import { computeViewport, defaultZoom, zoomRange, ZOOM_MAX } from './viewport';
 
 describe('viewport', () => {
   it('landscape desktop starts at zoom 1 with the ground at the bottom', () => {
@@ -40,7 +40,7 @@ describe('viewport', () => {
 
   it('zoom is clamped and UI keeps a minimum size', () => {
     const v = computeViewport(1170, 2532, 99);
-    expect(v.zoom).toBe(1);
+    expect(v.zoom).toBe(ZOOM_MAX);
     expect(v.uiW).toBeGreaterThanOrEqual(440);
     expect(computeViewport(1920, 1080, 0.01).zoom).toBe(0.45);
     expect(computeViewport(1920, 1080, 1).uiH).toBeCloseTo(540);

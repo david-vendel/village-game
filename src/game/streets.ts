@@ -27,8 +27,7 @@
 // the buildings stand, lie to its left (`backOf`), and a new street runs off
 // into what lay behind the old one.
 
-import { BUILDINGS } from './buildings';
-import { behindRoad, FIELD_ROWS, FIRST_PLOT_X, GROUND_Y, PLOT_SPACING, ROAD_BOTTOM, QUARRIES, quarryLand, STREET_BAND_HALF, STREET_LENGTH } from './layout';
+import { behindRoad, CELL_W, ROAD_HALF, FIRST_PLOT_X, PLOT_SPACING, QUARRIES, quarryLand, STREET_BAND_HALF, STREET_LENGTH } from './layout';
 import type { World } from './world';
 
 /** Distance in x between the starts of neighbouring streets (more than a street's length). */
@@ -36,13 +35,13 @@ export const STREET_STRIDE = 10000;
 /** Plots a street can have: every PLOT_SPACING from FIRST_PLOT_X. */
 export const PLOTS_PER_STREET = Math.ceil((STREET_LENGTH - 200 - FIRST_PLOT_X) / PLOT_SPACING);
 /** Which plot of a new street is where it crosses the street it branches off: the middle one. */
-export const CROSS_PLOT = 12;
+export const CROSS_PLOT = Math.floor(PLOTS_PER_STREET / 2);
 /** Half the width of a road running into the street at a crossroads (px). */
-export const SIDE_ROAD_HALF = 30;
+export const SIDE_ROAD_HALF = ROAD_HALF;
 /** A street's band across the ground (layout.ts): where another street crosses, none of this one's fields lie within it. */
 export { STREET_BAND_HALF };
-/** How far past its first and last plot a street runs on (px). */
-const STREET_END = 180;
+/** How far past its first and last plot a street runs on (px): to a cell's edge. */
+const STREET_END = 7.5 * CELL_W;
 export interface Vec {
   x: number;
   y: number;
@@ -58,6 +57,8 @@ export interface Street {
   /** Its first and last plot (0..PLOTS_PER_STREET-1): it may end short where it met another street. */
   lo: number;
   hi: number;
+  /** Gone (its crossroads was pulled down): no road and no plots, kept only for its place in the list. */
+  gone?: true;
 }
 
 /** Where two streets meet: the crossroads standing there, and the spot's world x on each street. */
@@ -68,7 +69,8 @@ export interface Junction {
 }
 
 export function mainStreet(): Street {
-  return { index: 0, from: null, origin: { x: 0, y: 0 }, dir: { x: 1, y: 0 }, lo: 0, hi: PLOTS_PER_STREET - 1 };
+  // its middle lane runs down the middle of row A of the land grid (grid.ts)
+  return { index: 0, from: null, origin: { x: 0, y: CELL_W / 2 }, dir: { x: 1, y: 0 }, lo: 0, hi: PLOTS_PER_STREET - 1 };
 }
 
 /** World x where street i starts. */
@@ -98,7 +100,7 @@ export function mapPoint(world: World, x: number): Vec {
 
 /**
  * Map point of world (x, y): along the road of x's street, and y's depth
- * across it (behind the road for y above ROAD_Y, in front of it below).
+ * across it (behind the middle of the road for y above STREET_LINE_Y, in front of it below).
  */
 export function groundPoint(world: World, x: number, y: number): Vec {
   const s = world.streets[streetOf(x)] ?? world.streets[0];
@@ -133,46 +135,6 @@ export function fromStreet(world: World, i: number, p: Vec): { x: number; d: num
   return { x: streetStart(i) + dx * s.dir.x + dy * s.dir.y, d: dx * b.x + dy * b.y };
 }
 
-/**
- * Whether the stretch of street s from t0 to t1 along it (px from its start),
- * d0..d1 behind its road (negative: in front), takes any of a quarry's land.
- */
-function onQuarry(s: Street, t0: number, t1: number, d0: number, d1: number): boolean {
-  const b = backOf(s.dir);
-  const pts = [t0, t1].flatMap((t) => [d0, d1].map((d) => ({ x: s.origin.x + s.dir.x * t + b.x * d, y: s.origin.y + s.dir.y * t + b.y * d })));
-  const x0 = Math.min(...pts.map((p) => p.x));
-  const x1 = Math.max(...pts.map((p) => p.x));
-  const y0 = Math.min(...pts.map((p) => p.y));
-  const y1 = Math.max(...pts.map((p) => p.y));
-  return QUARRIES.some((q) => {
-    const r = quarryLand(q);
-    return x0 < r.x1 && x1 > r.x0 && y0 < r.y1 && y1 > r.y0;
-  });
-}
-
-/** How far behind the middle of the road the road's edges are (negative: its near edge, in front). */
-const ROAD_ACROSS = { near: behindRoad(ROAD_BOTTOM), far: behindRoad(GROUND_Y + 6) };
-/** The lot behind the road a building stands on: as deep as the building row, as wide as the widest building. */
-const LOT_ACROSS = { near: behindRoad(FIELD_ROWS.back[0].near), far: behindRoad(FIELD_ROWS.back[0].far) };
-const LOT_HALF_W = Math.max(...Object.values(BUILDINGS).map((d) => d.width)) / 2;
-
-/**
- * Whether laying street s on to plot k (coming from the plot before it, `step`
- * the way it is being laid) would run its road over a quarry's land, the road
- * past the plot to the street's end included. A quarry beside the road is no
- * matter: only the lots on it can't be built on (lotOnQuarry).
- */
-export function roadOnQuarry(s: Street, k: number, step: 1 | -1): boolean {
-  const t = plotX(s.index, k) - streetStart(s.index);
-  return onQuarry(s, t - step * PLOT_SPACING, t + step * STREET_END, ROAD_ACROSS.near, ROAD_ACROSS.far);
-}
-
-/** Whether plot k of street s has its lot (behind the road) on a quarry's land, so nothing can be built there. */
-export function lotOnQuarry(s: Street, k: number): boolean {
-  const t = plotX(s.index, k) - streetStart(s.index);
-  return onQuarry(s, t - LOT_HALF_W, t + LOT_HALF_W, LOT_ACROSS.near, LOT_ACROSS.far);
-}
-
 /** How far a street runs past its last plot, and so how clear of the rocks it stops. */
 export const STREET_END_RUN = STREET_END;
 
@@ -203,22 +165,28 @@ const near = (a: number, b: number) => Math.abs(a - b) < 1e-6;
 
 /**
  * What a new street finds at map point p, from the streets already there: one
- * running along the same line through p (it must stop short), or one crossing
- * its way there (the plot of that street at p).
+ * running along the same line through p (it must stop short), one crossing
+ * its way there (the plot of that street at p), or the end of a road crossing
+ * its way past its last plot, where there is no plot to meet at (`blocked`:
+ * it must stop short of that too).
  */
-export function streetsAt(world: World, dir: Vec, p: Vec): { along: boolean; crossing: { street: number; k: number } | null } {
+export function streetsAt(world: World, dir: Vec, p: Vec): { along: boolean; crossing: { street: number; k: number } | null; blocked: boolean } {
   let crossing: { street: number; k: number } | null = null;
+  let blocked = false;
   for (const s of world.streets) {
-    // how far along s the point is, and whether it is on its line at all
+    if (s.gone) continue;
+    // how far along s the point is, and whether it is on its line, where its road runs
     const t = (p.x - s.origin.x) * s.dir.x + (p.y - s.origin.y) * s.dir.y;
     const off = (p.x - s.origin.x) * -s.dir.y + (p.y - s.origin.y) * s.dir.x;
     if (!near(off, 0)) continue;
+    const { min, max } = streetRange(world, s.index);
+    if (t + streetStart(s.index) < min || t + streetStart(s.index) > max) continue;
+    if (near(Math.abs(s.dir.x * dir.x + s.dir.y * dir.y), 1)) return { along: true, crossing: null, blocked: false };
     const k = (t - FIRST_PLOT_X) / PLOT_SPACING;
-    if (!near(k, Math.round(k)) || Math.round(k) < s.lo || Math.round(k) > s.hi) continue;
-    if (near(Math.abs(s.dir.x * dir.x + s.dir.y * dir.y), 1)) return { along: true, crossing: null };
-    crossing = { street: s.index, k: Math.round(k) };
+    if (near(k, Math.round(k)) && Math.round(k) >= s.lo && Math.round(k) <= s.hi) crossing = { street: s.index, k: Math.round(k) };
+    else blocked = true;
   }
-  return { along: false, crossing };
+  return { along: false, crossing, blocked };
 }
 
 /** Every crossroads, seen from both of its streets: world x here, and the same spot on the other street. */
@@ -247,6 +215,13 @@ interface Ways {
 
 const cache = new WeakMap<World, Ways>();
 
+/**
+ * What turning at a crossroads counts for (px), however short: without it,
+ * turning back onto the street just come from and then out again ties with
+ * going straight on, and someone standing at the corner turns there for ever.
+ */
+const TURN_COST = 1;
+
 function ways(world: World): Ways {
   const known = cache.get(world);
   if (known && known.junctions === world.junctions.length) return known;
@@ -260,7 +235,7 @@ function ways(world: World): Ways {
   });
   for (let i = 0; i < n; i++) {
     dist[i * n + i] = 0;
-    dist[i * n + (i ^ 1)] = 0;
+    dist[i * n + (i ^ 1)] = TURN_COST;
     for (const k of ends.get(streetOf(xs[i]))!) dist[i * n + k] = Math.min(dist[i * n + k], Math.abs(xs[i] - xs[k]));
   }
   for (let m = 0; m < n; m++) {
@@ -289,7 +264,7 @@ function bestTurn(world: World, from: number, to: number): { end: number; d: num
   for (const e of g.ends.get(streetOf(from)) ?? []) {
     for (const f of g.ends.get(streetOf(to)) ?? []) {
       // turning at e: over to the other street, then on to f and along to `to`
-      const d = Math.abs(from - g.xs[e]) + g.dist[(e ^ 1) * n + f] + Math.abs(g.xs[f] - to);
+      const d = Math.abs(from - g.xs[e]) + TURN_COST + g.dist[(e ^ 1) * n + f] + Math.abs(g.xs[f] - to);
       if (d < (best?.d ?? Infinity)) best = { end: e, d };
     }
   }

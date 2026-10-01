@@ -1,0 +1,130 @@
+# Three small houses side by side become one large house; a fourth stays its own.
+> new empty
+> free on
+> construction off
+> build house at s0:40
+  #1 house at s0:40-42, done
+> build house next
+  #1 house×2 at s0:40-45, done
+> build house next
+  #1 house×3 at s0:40-48, done
+> expect count house 1
+  ok: 1 house
+> expect at s0:40 house size 3 done
+  ok: #1 house×3 at s0:40-48, done
+> build house next
+  #4 house at s0:49-51, done
+> expect count house 2
+  ok: 2 house
+> map ids
+         40        50
+      |  |  |  |  |  |  
+    G ..................
+    F ..................
+    E ..................
+    D ...AAAAAAAAABBB...
+    C ...AAAAAAAAABBB...
+    B ==================
+    A ==================
+   -A ==================
+  
+    A=#1 house  B=#4 house
+    = | road  + crossing  Y kept for a crossroads  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
+# Pulling down the middle section of a large house leaves two small ones.
+> new empty
+> free on
+> construction off
+> build house at s0:40
+  #1 house at s0:40-42, done
+> build house next
+  #1 house×2 at s0:40-45, done
+> build house next
+  #1 house×3 at s0:40-48, done
+> demolish section at s0:43
+  pulling down a section of #1 house
+> run 1s
+> expect count house 2
+  ok: 2 house
+> expect at s0:40 house size 1
+  ok: #1 house at s0:40-42, done
+> expect at s0:46 house size 1
+  ok: #5 house at s0:46-48, done
+> map ids
+         40        50
+      |  |  |  |  |  
+    G ...............
+    F ...............
+    E ...............
+    D ...AAA...BBB...
+    C ...AAA...BBB...
+    B ===============
+    A ===============
+   -A ===============
+  
+    A=#1 house  B=#5 house
+    = | road  + crossing  Y kept for a crossroads  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
+# With builders: three houses built side by side merge as each one is finished.
+> new village
+> build house at s0:85
+  #81 house at s0:85-87, constructing
+> build house next
+  #82 house at s0:88-90, constructing
+> build house next
+  #83 house at s0:91-93, constructing
+> expect at s0:85 house constructing
+  ok: #81 house at s0:85-87, constructing
+> run until built
+  all built after 49.9s
+> expect at s0:85 house size 3 done
+  ok: #81 house×3 at s0:85-93, done
+> map ids D60:-C99
+      60        70        80        90
+       |  |  |  |  |  |  |  |  |  |  |  |  |  
+    D ....DDDDDD......EEE...YYYIIIIIIIIIFFFFFF
+    C ....DDDDDD......EEE...YYYIIIIIIIIIFFFFFF
+    B ========================================
+    A ============@===========================
+   -A ========================================
+   -B .................................fffffff
+   -C ...................................ffff.
+  
+    A=#1 house  B=#3 tavern  C=#4 well  D=#5 warehouse  E=#7 house  F=#8 farm  G=#9 chapel  H=#10 house  I=#81 house
+    = | road  + crossing  Y kept for a crossroads  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
+# Pulling down a section, what is left merges with a small house beside it,
+# as a new one built there would.
+> new empty
+> free on
+> construction off
+> build house at s0:40
+  #1 house at s0:40-42, done
+> build house next
+  #1 house×2 at s0:40-45, done
+> build house next
+  #1 house×3 at s0:40-48, done
+> build house next
+  #4 house at s0:49-51, done
+> expect at s0:49 house size 1
+  ok: #4 house at s0:49-51, done
+> demolish section at s0:43
+  pulling down a section of #1 house
+> run 1s
+> expect count house 2
+  ok: 2 house
+> expect at s0:40 house size 1
+  ok: #1 house at s0:40-42, done
+> expect at s0:46 house size 2
+  ok: #4 house×2 at s0:46-51, done
+> map ids
+         40        50
+      |  |  |  |  |  |  
+    G ..................
+    F ..................
+    E ..................
+    D ...AAA...BBBBBB...
+    C ...AAA...BBBBBB...
+    B ==================
+    A ==================
+   -A ==================
+  
+    A=#1 house  B=#4 house
+    = | road  + crossing  Y kept for a crossroads  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)

@@ -39,7 +39,7 @@ describe('procedural export (bootstrap)', () => {
   it('produces the farm, with its Large-farm variant, that passes the validator', async () => {
     const m: Manifest = JSON.parse(readFileSync(join(clean, 'manifest.json'), 'utf8'));
     const a = farm(m);
-    expect(a.footprintWidth).toBe(200);
+    expect(a.footprintWidth).toBe(150);
     expect(a.variants?.upgraded).toBeDefined();
     expect(a.views.street.points?.door).toBeDefined();
     expect(a.source.approvedBy).toBeUndefined();
@@ -65,8 +65,8 @@ describe('validator rejects', () => {
   });
 
   it('a footprint that differs from the building’s width', async () => {
-    const r = await broken((_, m) => void (farm(m).footprintWidth = 150));
-    expect(messages(r)).toMatch(/footprintWidth 150 u differs from BUILDINGS\.farm\.width 200 u/);
+    const r = await broken((_, m) => void (farm(m).footprintWidth = 225));
+    expect(messages(r)).toMatch(/footprintWidth 225 u differs from BUILDINGS\.farm\.width 150 u/);
   });
 
   it('an anchor outside the image', async () => {

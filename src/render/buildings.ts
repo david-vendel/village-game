@@ -23,6 +23,8 @@ export interface DrawArgs {
   farm?: FarmState;
   /** Upgraded (BuildingDef.upgrade): drawn as its bigger self. */
   upgraded?: boolean;
+  /** Its footprint's width (world px), when not its type's (a merged house). */
+  width?: number;
   /** The building's own store. */
   stock?: Stock;
   /** The people working here (for doors, sleepers…). */
@@ -331,14 +333,28 @@ function person(ctx: Ctx, x: number, base: number, tunic: string, time: number, 
 
 // --- Buildings ---------------------------------------------------------------
 
+/**
+ * A house as wide as its footprint: a small one (three cells) a cottage with a
+ * door and a window, a medium or large one (two or three small ones merged)
+ * longer, with more windows along it.
+ */
 function drawHouse(ctx: Ctx, a: DrawArgs): void {
-  const w = 104;
+  const size = Math.max(1, Math.round((a.width ?? 75) / 75));
+  const w = [50, 104, 172][Math.min(3, size) - 1];
   const d = 44;
   const ox = d * OX;
   const x0 = a.x - (w + ox) / 2;
   const plaster = PLASTER[Math.floor(hash(a.seed, 1) * PLASTER.length)];
   const twoStorey = hash(a.seed, 2) < 0.55;
   const thatch = hash(a.seed, 3) < 0.5;
+  /** Windows evenly along the front from u0 to u1 (px from x0), at height y. */
+  const windows = (u0: number, u1: number, y: number, s: number, salt: number) => {
+    const n = Math.max(0, Math.floor((u1 - u0 + 16) / 44));
+    for (let i = 0; i < n; i++) {
+      const u = n === 1 ? (u0 + u1) / 2 : u0 + ((u1 - u0) * i) / (n - 1);
+      window_(ctx, x0 + u - s / 2, y, s, s, hash(a.seed, salt + i) < 0.5, a.time, a.seed + i);
+    }
+  };
 
   stonePlinth(ctx, x0, a.base, w, 14, d);
   let top: number;
@@ -351,23 +367,25 @@ function drawHouse(ctx: Ctx, a: DrawArgs): void {
     timberFrame(ctx, x0 - jetty, g - 34, w + jetty * 2, 40, a.seed);
     rect(ctx, x0 - jetty, g - 36, w + jetty * 2, 4, '#3a281b');
     top = g - 74;
-    door(ctx, x0 + 18, a.base, 20, 36);
-    window_(ctx, x0 + 62, g - 26, 16, 14, hash(a.seed, 5) < 0.5, a.time, a.seed);
-    window_(ctx, x0 + 18, g - 64, 14, 14, false, a.time, a.seed);
-    window_(ctx, x0 + 70, g - 64, 14, 14, hash(a.seed, 6) < 0.6, a.time, a.seed + 1);
+    door(ctx, x0 + 15, a.base, 20, 36);
+    windows(52, w - 18, g - 26, 15, 5);
+    windows(18, w - 18, g - 64, 14, 9);
   } else {
     block(ctx, x0, a.base - 14, w, 48, d, plaster);
     timberFrame(ctx, x0, a.base - 14, w, 48, a.seed);
     top = a.base - 62;
-    door(ctx, x0 + 42, a.base, 20, 40);
-    window_(ctx, x0 + 12, a.base - 50, 16, 16, hash(a.seed, 5) < 0.5, a.time, a.seed);
-    window_(ctx, x0 + 76, a.base - 50, 16, 16, false, a.time, a.seed);
+    door(ctx, x0 + (size === 1 ? 6 : w / 2 - 10), a.base, 20, 40);
+    if (size === 1) windows(38, 38, a.base - 50, 14, 5);
+    else {
+      windows(18, w / 2 - 24, a.base - 50, 16, 5);
+      windows(w / 2 + 24, w - 18, a.base - 50, 16, 9);
+    }
   }
   const roofCol = thatch ? ['#b8955a', '#a8864e'][hash(a.seed, 4) < 0.5 ? 0 : 1] : ['#a4553a', '#8e4a33', '#6f6a74'][Math.floor(hash(a.seed, 4) * 3)];
   const r = gableRoof(ctx, x0 - (twoStorey ? 5 : 0), top, w + (twoStorey ? 10 : 0), d, thatch ? 50 : 44, roofCol, plaster, thatch ? 'thatch' : 'tile', a.seed);
   chimney(ctx, r.ridgeX1 + w * 0.7, r.ridgeY + 8, 18, a);
   // flower box / details
-  if (hash(a.seed, 7) < 0.6) {
+  if (size > 1 && hash(a.seed, 7) < 0.6) {
     barrel(ctx, x0 + w + 16, a.base + 4, 0.9);
   }
 }
@@ -461,19 +479,23 @@ function drawSnore(ctx: Ctx, x: number, y: number, time: number): void {
 function drawWarehouse(ctx: Ctx, a: DrawArgs): void {
   // an open storage yard: everything it holds lies out in plain sight, each
   // item in its own place (game/layout.ts warehouseSlot), where builders take
-  // it from and carriers put it down
+  // it from and carriers put it down; small, medium or large (one, two or
+  // three merged), its yard and shed as wide, its piles spread to match
+  const size = Math.max(1, Math.round((a.width ?? 75) / 75));
+  const k = size / 2;
   const stock = a.stock;
-  const items = (r: keyof typeof YARD_ITEMS) => Math.min(YARD_ITEMS[r], pileItems(stock?.[r] ?? 0));
+  const items = (r: keyof typeof YARD_ITEMS) => Math.min(YARD_ITEMS[r] * size, pileItems(stock?.[r] ?? 0));
+  const slot = (r: keyof typeof YARD_ITEMS, i: number) => warehouseSlot(r, i, size);
   // trodden earth and a wattle fence round the back of the yard
   ctx.globalAlpha = 0.35;
-  ellipse(ctx, a.x, a.base + 1, 90, 5, '#7a6446');
+  ellipse(ctx, a.x, a.base + 1, 90 * k, 5, '#7a6446');
   ctx.globalAlpha = 1;
-  for (let px = a.x - 84; px <= a.x + 84; px += 14) rect(ctx, px - 1.5, a.base - 26, 3, 26, '#6b4f33');
-  for (const y of [a.base - 22, a.base - 14, a.base - 7]) line(ctx, a.x - 86, y, a.x + 86, y, '#8a6a44', 2);
+  for (let px = a.x - 84 * k; px <= a.x + 84 * k + 0.1; px += (168 * k) / Math.max(2, Math.round(12 * k))) rect(ctx, px - 1.5, a.base - 26, 3, 26, '#6b4f33');
+  for (const y of [a.base - 22, a.base - 14, a.base - 7]) line(ctx, a.x - 86 * k, y, a.x + 86 * k, y, '#8a6a44', 2);
 
   // the open-fronted shed for what must stay dry
-  const xl = a.x - 32;
-  const xr = a.x + 34;
+  const xl = a.x - 32 * Math.max(0.75, k);
+  const xr = a.x + 34 * Math.max(0.75, k);
   rect(ctx, xl, a.base - 72, xr - xl, 72, '#6b4f33');
   for (let px = xl + 5; px < xr; px += 6) line(ctx, px, a.base - 72, px, a.base, '#5a412a', 1);
   for (const lift of [50, 62]) {
@@ -485,18 +507,18 @@ function drawWarehouse(ctx: Ctx, a: DrawArgs): void {
   // bread in baskets on the shelves, the last basket part-full
   const bread = stock?.bread ?? 0;
   for (let i = 0; i < items('bread'); i++) {
-    const s = warehouseSlot('bread', i);
+    const s = slot('bread', i);
     breadBasket(ctx, a.x + s.dx, a.base - s.lift, 0.75, Math.ceil((Math.min(PILE_UNIT, bread - i * PILE_UNIT) / PILE_UNIT) * 5));
   }
   // grain in stooks of sheaves, as it comes from the farms
   for (let i = 0; i < items('grain'); i++) {
-    const s = warehouseSlot('grain', i);
+    const s = slot('grain', i);
     stook(ctx, a.x + s.dx, a.base - s.lift, 0.55);
   }
   // sacks of flour stacked on the ground
   for (const [r, body, tie] of [['flour', '#efe9da', '#b8ad94']] as const) {
     for (let i = 0; i < items(r); i++) {
-      const s = warehouseSlot(r, i);
+      const s = slot(r, i);
       ellipse(ctx, a.x + s.dx, a.base - 5 - s.lift, 4, 5.5, body);
       line(ctx, a.x + s.dx - 2, a.base - 9.5 - s.lift, a.x + s.dx + 2, a.base - 9.5 - s.lift, tie, 1);
     }
@@ -506,14 +528,14 @@ function drawWarehouse(ctx: Ctx, a: DrawArgs): void {
 
   // the stone heap and the log pile out in the open
   for (let i = 0; i < items('stone'); i++) {
-    const s = warehouseSlot('stone', i);
+    const s = slot('stone', i);
     const bx = a.x + s.dx - 3.25;
     const by = a.base - s.lift - 2.5;
     rect(ctx, bx, by, 6.5, 5, shade('#aaa398', -hash(a.seed, i) * 0.15));
     rect(ctx, bx, by, 6.5, 1.5, '#c4beb3');
   }
   for (let i = 0; i < items('wood'); i++) {
-    const s = warehouseSlot('wood', i);
+    const s = slot('wood', i);
     ellipse(ctx, a.x + s.dx, a.base - s.lift, 3.4, 3.2, '#8b6440');
     ellipse(ctx, a.x + s.dx, a.base - s.lift, 2.2, 2, '#c9a577');
   }
@@ -1120,6 +1142,40 @@ function drawCrossroads(ctx: Ctx, a: DrawArgs): void {
   rect(ctx, px - 13, top + 21, 11, 1, '#6d4f30');
   // cap
   poly(ctx, [px - 4, top, px + 4, top, px, top - 5], '#5a3f28');
+}
+
+/**
+ * Where a crossroads can be built (game/grid.ts crossroadsPlaces): a signpost
+ * on the grass at the middle of the place, its boards fresh and bare, pointing
+ * both ways along the street and one into the land, where the new road would
+ * run; two pegs mark where the road's edges would be. Nothing else can be built
+ * here. x is the middle of the place, base the building line.
+ */
+export function drawCrossroadsSign(ctx: Ctx, x: number, base: number, time: number): void {
+  const BOARD = '#d8b77a';
+  const EDGE = '#8a6a42';
+  const top = base - 58;
+  // pegs at the road's edges, each with a strip of rag tied on, stirring in the wind
+  for (const dx of [-37, 37]) {
+    rect(ctx, x + dx - 1.5, base - 13, 3, 13, '#7a5634');
+    const flap = Math.sin(time * 2.4 + dx) * 1.5;
+    poly(ctx, [x + dx + 1.5, base - 13, x + dx + 8, base - 12 + flap, x + dx + 1.5, base - 9], '#c8513a');
+  }
+  // the post
+  ellipse(ctx, x + 2, base + 1, 8, 2.2, 'rgba(40,28,16,0.3)');
+  rect(ctx, x - 2.5, top, 5, base - top, '#6b4c30');
+  rect(ctx, x + 1, top, 1.5, base - top, '#4f3622');
+  // a board pointing right, along the street
+  poly(ctx, [x - 2, top + 6, x + 22, top + 6, x + 29, top + 11, x + 22, top + 16, x - 2, top + 16], BOARD);
+  rect(ctx, x + 3, top + 10.5, 15, 1, EDGE);
+  // one pointing left, the other way
+  poly(ctx, [x + 2, top + 19, x - 22, top + 19, x - 29, top + 24, x - 22, top + 29, x + 2, top + 29], shade(BOARD, -0.06));
+  rect(ctx, x - 18, top + 23.5, 15, 1, EDGE);
+  // one pointing into the land, foreshortened: where the road would run off
+  poly(ctx, [x - 3, top + 33, x + 12, top + 31.5, x + 16, top + 35.5, x + 12, top + 39.5, x - 3, top + 38], shade(BOARD, -0.18));
+  rect(ctx, x + 1, top + 35, 9, 1, EDGE);
+  // cap
+  poly(ctx, [x - 4.5, top, x + 4.5, top, x, top - 6], '#5a3f28');
 }
 
 export const BUILDING_ART: Record<BuildingType, BuildingArt> = {

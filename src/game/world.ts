@@ -16,14 +16,15 @@ import { timeOfDay } from './daynight';
 import { buildShortfall, putAway, takeFromWarehouses, upgradeShortfall, WAREHOUSE_START } from './economy';
 import { createFarm, DEFAULT_WORK, farmWorkplace, updateCrops, type FarmState } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
-import { FIRST_PLOT_X, PLOT_SPACING, STREET_LENGTH } from './layout';
+import { BLOCK, CELL_W, FIRST_PLOT_X, PLOT_SPACING, ROAD_GRID, STREET_LENGTH } from './layout';
+import { alongCell, blockStartX, footprintOf, onRoadGrid, roadBlocked, roadInWay, siteX, sizeOfBuilding, whyNotHere } from './grid';
 import { clearLand, plantWoods, gatherWorkplace, isGatherHut, updateForest, type Tree } from './nature';
 import { employees, laneY, nameFor, openings, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
 import { builderPositions, builders, createSite, siteWork, siteWorkplace, upgrading, type Site } from './site';
 import { demolitionWork, demolitionWorkplace, dropAll, materialsIn, tearDown, type Demolition } from './demolition';
 import { dropOnGround, type Pile } from './piles';
 import { RESOURCES, stockOf, type Stock } from './resources';
-import { CROSS_PLOT, lotOnQuarry, mainStreet, newStreet, plotPoint, roadOnQuarry, plotX, PLOTS_PER_STREET, route, streetOf, streetRange, streetsAt, turnFacing, type Junction, type Street, type Vec } from './streets';
+import { CROSS_PLOT, mainStreet, newStreet, plotPoint, plotX, PLOTS_PER_STREET, route, STREET_END_RUN, streetOf, streetRange, streetsAt, streetStart, turnFacing, type Junction, type Street, type Vec } from './streets';
 import { eatAtTaverns } from './tavern';
 import { serfPositions, transportHub, transportWorkplace } from './transport';
 import { createWorker, currentJob, offDuty, updateWorker, type Nav, type Worker, type Workplace } from './worker';
@@ -33,12 +34,15 @@ import { workshopWorkplace } from './workshop';
 export const WORLD_WIDTH = STREET_LENGTH;
 export const PLOT_WIDTH = 200;
 export { FIRST_PLOT_X, PLOT_SPACING };
-/** How close (px) the rider's x must be to a plot centre to interact with it. */
-export const INTERACT_RANGE = 90;
+/** How close (px) the rider's x must be to a crossroads to turn there. */
+export const INTERACT_RANGE = 40;
 
 export const RIDER_MAX_SPEED = 240; // px/s
 export const RIDER_ACCEL = 600; // px/s²
 export const RIDER_DECEL = 740; // px/s²
+/** Sprinting, the horse gallops this many times as fast, and picks up speed this much quicker. */
+export const SPRINT_SPEED = 1.75;
+export const SPRINT_ACCEL = 1.3;
 
 /** Live-tunable knobs (the tuning panel edits these; defaults are the constants above). */
 export interface WorldParams {
@@ -69,15 +73,20 @@ export const DEFAULT_PARAMS: WorldParams = {
   ...DEFAULT_WORK,
 };
 
+/**
+ * A place along a street where a crossroads can be built (every PLOT_SPACING,
+ * so streets keep to one grid and meet at a plot of each). Other buildings
+ * stand anywhere they fit on the land grid (grid.ts).
+ */
 export interface Plot {
   index: number;
   /** The street it is on (streets.ts). */
   street: number;
   /** Centre x in world px. */
   x: number;
-  /** What stands on it; a crossroads stands on a plot of each of its two streets. */
+  /** The crossroads standing on it; a crossroads stands on a plot of each of its two streets. */
   buildingId: number | null;
-  /** No plot: past the end of its street (which ended short where it met another), or its lot is on a quarry's land. */
+  /** No plot: past the end of its street (which ended short where it met another). */
   off?: true;
 }
 
@@ -87,7 +96,10 @@ export type BuildingStatus = 'constructing' | 'done' | 'demolishing';
 export interface Building {
   id: number;
   type: BuildingType;
-  plotIndex: number;
+  /** World x of the middle of its footprint (grid.ts): which street, and where along it. */
+  x: number;
+  /** A house merged with its neighbours: two or three small houses' width (mergeHouses). */
+  size?: 2 | 3;
   /** 0..1 construction progress (of its upgrade, while one is being built). */
   progress: number;
   status: BuildingStatus;
@@ -117,13 +129,14 @@ export interface Rider {
   turnedAt?: number;
 }
 
-/** What can be done to a building from its menu. */
-export type BuildingOption = 'upgrade' | 'demolish';
+/** What can be done to a building from its menu: pulling down just the section the rider is at, of a merged one. */
+export type BuildingOption = 'upgrade' | 'demolishSection' | 'demolish';
 
-/** The menu open at the plot the rider is at: what to build on an empty plot, or what to do with the building on it. */
+/** The menu open where the rider is: what to build there (at world x), or what to do with the building there. */
 export type BuildMenu =
-  | { kind: 'build'; plotIndex: number; selection: number }
-  | { kind: 'building'; plotIndex: number; buildingId: number; options: BuildingOption[]; selection: number };
+  /** fits: which of BUILDING_TYPES fit where the rider is, worked out once as the menu opens; only those can be chosen. */
+  | { kind: 'build'; x: number; selection: number; fits: boolean[] }
+  | { kind: 'building'; buildingId: number; options: BuildingOption[]; selection: number; x: number };
 
 export interface GameEvent {
   kind: 'placed' | 'completed' | 'upgraded' | 'demolished';
@@ -163,6 +176,8 @@ export interface World {
 export interface MoveInput {
   left: boolean;
   right: boolean;
+  /** Galloping: the way being ridden was tapped twice and is held (app/controls.ts). */
+  sprint?: boolean;
 }
 
 /** Deterministic RNG (mulberry32) stored in world state so tests are reproducible. */
@@ -173,15 +188,18 @@ export function rand(world: World): number {
   return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
 }
 
+/** The starting village: where each building stands along the main street (world x), and what it is. */
 const STARTING_VILLAGE: Array<[number, BuildingType]> = [
-  [5, 'warehouse'],
-  [2, 'house'],
-  [3, 'well'],
-  [4, 'tavern'],
-  [6, 'house'],
-  [8, 'farm'],
-  [11, 'chapel'],
-  [16, 'house'],
+  [925, 'house'],
+  [1000, 'house'],
+  [1100, 'tavern'],
+  [1325, 'well'],
+  [1600, 'warehouse'],
+  [1675, 'warehouse'],
+  [1900, 'house'],
+  [2350, 'farm'],
+  [3100, 'chapel'],
+  [4375, 'house'],
 ];
 
 export interface CreateWorldOptions {
@@ -196,7 +214,7 @@ export { PLOTS_PER_STREET };
 function layPlots(world: World, s: Street): void {
   for (let k = 0; k < PLOTS_PER_STREET; k++) {
     const plot: Plot = { index: world.plots.length, street: s.index, x: plotX(s.index, k), buildingId: null };
-    if (k < s.lo || k > s.hi || lotOnQuarry(s, k)) plot.off = true;
+    if (k < s.lo || k > s.hi) plot.off = true;
     world.plots.push(plot);
   }
 }
@@ -211,7 +229,7 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
     junctions: [],
     plots: [],
     buildings: [],
-    rider: { x: FIRST_PLOT_X + 5 * PLOT_SPACING + PLOT_SPACING / 2, vx: 0, facing: 1, gait: 0 },
+    rider: { x: 1800, vx: 0, facing: 1, gait: 0 },
     people: [],
     animals: [],
     trees: [],
@@ -228,8 +246,8 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
   layPlots(world, world.streets[0]);
 
   if (opts.village ?? true) {
-    for (const [plotIndex, type] of STARTING_VILLAGE) {
-      const b = placeBuilding(world, plotIndex, type, { instant: true, free: true });
+    for (const [x, type] of STARTING_VILLAGE) {
+      const b = placeBuilding(world, x, type, { instant: true, free: true });
       if (!b) continue;
       b.completedAt = -100; // no completion effect for the starting village
       if (type === 'warehouse') b.stock = { ...WAREHOUSE_START };
@@ -243,7 +261,7 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
     for (const kind of [...kinds, ...Array<Look>(seekers).fill('peasant')]) {
       const id = world.nextId++;
       const stroll = {
-        x: FIRST_PLOT_X + rand(world) * 16 * PLOT_SPACING,
+        x: FIRST_PLOT_X + rand(world) * 4000,
         y: laneY(id),
         dir: (rand(world) < 0.5 ? -1 : 1) as 1 | -1,
         speed: kind === 'chicken' ? 22 + rand(world) * 14 : 26 + rand(world) * 18,
@@ -283,9 +301,37 @@ export function plotAt(world: World, x: number): Plot | null {
   return best;
 }
 
+/** The crossroads place (plot) nearest world x on its street, if one is there. */
+function crossroadsPlot(world: World, x: number): Plot | null {
+  const street = streetOf(x);
+  const k = Math.round((x - plotX(street, 0)) / PLOT_SPACING);
+  const plot = k >= 0 && k < PLOTS_PER_STREET ? world.plots[street * PLOTS_PER_STREET + k] : undefined;
+  return plot && !plot.off && plot.street === street ? plot : null;
+}
+
+/** Where a building of this type goes when wanted at world x: starting at the cell 3n + 1 of x's block; a crossroads on that block's plot. */
+export function placeAt(world: World, type: BuildingType, x: number): number | null {
+  if (type !== 'intersection') return siteX(type, x);
+  return crossroadsPlot(world, blockStartX(x) + CELL_W)?.x ?? null;
+}
+
+/** Why a building of this type can't be built where the rider wants it (world x), or null if it can. */
+export function whyNotBuild(world: World, type: BuildingType, x: number): string | null {
+  if (closing(world, streetOf(x))) return 'This street is being closed';
+  const at = placeAt(world, type, x);
+  if (at === null) return 'No room for a road here';
+  if (type === 'intersection' && crossroadsPlot(world, at)?.buildingId != null) return 'There is a crossroads here already';
+  if (type === 'intersection' && !onRoadGrid(world, at)) return `Crossroads go only every ${ROAD_GRID} cells`;
+  const why = whyNotHere(world, type, at);
+  if (why || type !== 'intersection') return why;
+  // its road would run onto another road, and not meet it at a crossroads
+  return planStreet(world, -1, at).clear ? null : 'Another road is too close';
+}
+
 export function placeBuilding(
   world: World,
-  plotIndex: number,
+  /** Where the rider wants it (world x): it goes on whole cells there (placeAt). */
+  wantX: number,
   type: BuildingType,
   /**
    * instant: skip construction (materials are taken from the warehouses at
@@ -293,16 +339,16 @@ export function placeBuilding(
    */
   opts: { instant?: boolean; free?: boolean } = {},
 ): Building | null {
-  const plot = world.plots[plotIndex];
-  if (!plot || plot.off || plot.buildingId !== null) return null;
+  const x = placeAt(world, type, wantX);
+  if (x === null || whyNotBuild(world, type, wantX)) return null;
   // the warehouses must hold its materials, beyond what other sites are owed
   if (!opts.free && Object.keys(buildShortfall(world, type)).length) return null;
   const instant = opts.instant ?? !world.constructionEnabled;
-  if (instant && !opts.free) takeFromWarehouses(world, BUILDINGS[type].cost, plot.x);
-  const b: Building = {
+  if (instant && !opts.free) takeFromWarehouses(world, BUILDINGS[type].cost, x);
+  let b: Building = {
     id: world.nextId++,
     type,
-    plotIndex,
+    x,
     progress: instant ? 1 : 0,
     status: instant ? 'done' : 'constructing',
     completedAt: instant ? world.time : null,
@@ -312,7 +358,8 @@ export function placeBuilding(
   if (!instant) b.site = createSite(type, opts.free ? BUILDINGS[type].cost : {});
   world.buildings.push(b);
   if (instant && type === 'farm') b.farm = createFarm({ spots: farmFieldSpots(world, b) });
-  plot.buildingId = b.id;
+  if (instant) b = mergeNeighbours(world, b);
+  if (type === 'intersection') crossroadsPlot(world, x)!.buildingId = b.id;
   if (instant && type === 'intersection') openStreet(world, b);
   // the new footprint may cover land neighbouring farms were using; trees standing on it are cut down
   syncFarmFields(world);
@@ -320,6 +367,17 @@ export function placeBuilding(
   world.events.push({ kind: 'placed', buildingId: b.id });
   if (instant) world.events.push({ kind: 'completed', buildingId: b.id });
   return b;
+}
+
+/**
+ * The building the rider at world x is at: a crossroads within a lane of x,
+ * else the one on this street whose footprint x is in front of.
+ */
+export function buildingAt(world: World, x: number): Building | undefined {
+  const plot = crossroadsPlot(world, x);
+  if (plot && plot.buildingId !== null && Math.abs(plot.x - x) <= 1.5 * CELL_W) return getBuilding(world, plot.buildingId);
+  const street = streetOf(x);
+  return world.buildings.find((b) => b.type !== 'intersection' && streetOf(b.x) === street && Math.abs(b.x - x) <= (sizeOfBuilding(b).w * CELL_W) / 2);
 }
 
 /** Whether a building can be upgraded now: finished, with an upgrade it hasn't had, and not already being upgraded. */
@@ -339,17 +397,48 @@ export function upgradeBuilding(world: World, b: Building): boolean {
     b.site = createSite(b.type);
     b.progress = 0;
   } else {
-    takeFromWarehouses(world, upgrade.cost, world.plots[b.plotIndex].x);
+    takeFromWarehouses(world, upgrade.cost, b.x);
     b.site = createSite(b.type, upgrade.cost);
     complete(world, b);
   }
   return true;
 }
 
-/** Whether a building can be pulled down: anything but a crossroads (the streets run through it). */
+/**
+ * Whether a building can be offered for pulling down: anything not already
+ * coming down, but a crossroads made where two streets met (it goes with the
+ * street that made it). Whether it may be pulled down now: whyNotDemolish.
+ */
 export function canDemolish(b: Building): boolean {
-  return b.type !== 'intersection' && b.status !== 'demolishing';
+  return b.status !== 'demolishing' && !b.junction;
 }
+
+/** The street a finished crossroads opened, if any. */
+export function streetFrom(world: World, b: Building): Street | undefined {
+  return b.type === 'intersection' ? world.streets.find((s) => !s.gone && s.from === b.id) : undefined;
+}
+
+/**
+ * Why a building can't be pulled down now, or null if it can. A crossroads
+ * takes the street it opened with it, so that street must have nothing on it
+ * but the crossroads where it met other streets: no building, and no other
+ * crossroads opening a street of its own.
+ */
+export function whyNotDemolish(world: World, b: Building): string | null {
+  if (!canDemolish(b)) return 'It cannot be pulled down';
+  const street = streetFrom(world, b);
+  if (!street) return null;
+  if (world.buildings.some((o) => o.type !== 'intersection' && streetOf(o.x) === street.index)) return 'Its street has buildings on it';
+  const crossroads = world.plots.filter((p) => p.street === street.index && p.buildingId !== null && p.buildingId !== b.id).map((p) => getBuilding(world, p.buildingId));
+  if (crossroads.some((o) => o && !o.junction)) return 'Another street branches off its street';
+  return null;
+}
+
+/** Whether street i is closing: the crossroads that opened it is being pulled down (nothing new is built on it). */
+const closing = (world: World, i: number) => {
+  const from = world.streets[i]?.from;
+  return from != null && getBuilding(world, from)?.status === 'demolishing';
+};
 
 /** What pulling a building down leaves lying: its materials (built in or brought to its site) and its store. */
 export function demolitionYield(b: Building): Stock {
@@ -367,8 +456,8 @@ export function demolitionYield(b: Building): Stock {
  * Returns whether it started.
  */
 export function demolish(world: World, b: Building): boolean {
-  if (!canDemolish(b)) return false;
-  const x = world.plots[b.plotIndex].x;
+  if (whyNotDemolish(world, b)) return false;
+  const x = b.x;
   for (const p of employees(world, b)) {
     const w = p.job!.worker;
     if (w.carrying) dropOnGround(world, x + w.dx, w.carrying);
@@ -381,7 +470,7 @@ export function demolish(world: World, b: Building): boolean {
   b.status = 'demolishing';
   delete b.site;
   delete b.farm;
-  if (world.menu?.plotIndex === b.plotIndex) world.menu = null;
+  if (world.menu?.kind === 'building' && world.menu.buildingId === b.id) world.menu = null;
   // a farm's fields are gone with it
   syncFarmFields(world);
   if (!world.constructionEnabled) tearDown(world, b, Infinity);
@@ -391,11 +480,64 @@ export function demolish(world: World, b: Building): boolean {
 /** A building is down: its plot is free again. */
 function pulledDown(world: World, b: Building): void {
   for (const p of employees(world, b)) release(world, p);
+  const street = streetFrom(world, b);
+  if (street) closeStreet(world, b, street);
   world.buildings = world.buildings.filter((o) => o !== b);
-  world.plots[b.plotIndex].buildingId = null;
+  for (const p of world.plots) if (p.buildingId === b.id) p.buildingId = null;
   // its land is free again for the neighbouring farms' fields
   syncFarmFields(world);
   world.events.push({ kind: 'demolished', buildingId: b.id });
+}
+
+/**
+ * A crossroads is down, and the street it opened goes with it: the crossroads
+ * where that street met others go too (their plots on the other streets are
+ * free again), and whoever and whatever was on it is moved to where the
+ * crossroads stood. The street keeps its place in the list (world x's are
+ * worked out from it), as one that is gone: no road, no plots.
+ */
+function closeStreet(world: World, b: Building, street: Street): void {
+  const own = world.junctions.find((j) => j.buildingId === b.id);
+  const here = own ? (streetOf(own.a) === street.index ? own.b : own.a) : b.x;
+  const on = (x: number) => streetOf(x) === street.index;
+  const gone = world.junctions.filter((j) => on(j.a) || on(j.b));
+  world.junctions = world.junctions.filter((j) => !gone.includes(j));
+  for (const j of gone) {
+    const jb = getBuilding(world, j.buildingId);
+    if (jb?.junction && !world.junctions.some((o) => o.buildingId === jb.id)) {
+      world.buildings = world.buildings.filter((o) => o !== jb);
+      for (const p of world.plots) if (p.buildingId === jb.id) p.buildingId = null;
+    }
+  }
+  for (const p of world.plots) {
+    if (p.street !== street.index) continue;
+    p.off = true;
+    p.buildingId = null;
+  }
+  street.gone = true;
+  street.lo = CROSS_PLOT;
+  street.hi = CROSS_PLOT - 1;
+  // everyone and everything on it comes back to the crossroads' spot
+  if (on(world.rider.x)) world.rider.x = here;
+  for (const who of [...world.people, ...world.animals]) if (on(who.stroll.x)) who.stroll.x = here;
+  for (const pile of world.piles) if (on(pile.x)) pile.x = here;
+  for (const p of world.people) {
+    const at = p.job && getBuilding(world, p.job.buildingId);
+    if (!at) continue;
+    const x0 = at.x;
+    const w = p.job!.worker;
+    if (on(x0 + w.dx)) w.dx = here - x0;
+    if (w.task.kind === 'walk' && on(x0 + w.task.toDx)) w.task.toDx = here - x0;
+  }
+  world.trees = world.trees.filter((t) => !on(t.x));
+}
+
+/** A street that is gone (save.ts): its place in the list, with no road and no plots. */
+export function goneStreet(world: World): Street {
+  const street: Street = { ...mainStreet(), index: world.streets.length, gone: true, lo: CROSS_PLOT, hi: CROSS_PLOT - 1 };
+  world.streets.push(street);
+  layPlots(world, street);
+  return street;
 }
 
 /**
@@ -410,7 +552,7 @@ export function setConstructionEnabled(world: World, enabled: boolean): void {
       if (!b.site) continue;
       const lacks = { ...siteWork(b).cost };
       for (const r of RESOURCES) lacks[r] = Math.max(0, (lacks[r] ?? 0) - (b.site?.delivered[r] ?? 0));
-      takeFromWarehouses(world, lacks, world.plots[b.plotIndex].x);
+      takeFromWarehouses(world, lacks, b.x);
       complete(world, b);
     }
   }
@@ -427,16 +569,18 @@ function complete(world: World, b: Building): void {
   // of the work, unless construction was just switched off, which is instant)
   for (const p of builders(world, b)) {
     const load = p.job!.worker.carrying;
-    if (load) putAway(world, load, world.plots[b.plotIndex].x + p.job!.worker.dx);
+    if (load) putAway(world, load, b.x + p.job!.worker.dx);
     release(world, p);
   }
   if (upgrade) {
-    // the building's own workers carry on; it now gives the upgrade's jobs
+    // the building's own workers carry on; it now gives the upgrade's jobs (a farm, more fields)
     b.upgraded = true;
+    if (b.farm) syncFarmFields(world);
     world.events.push({ kind: 'upgraded', buildingId: b.id });
     return;
   }
   if (b.type === 'farm') b.farm = createFarm({ spots: farmFieldSpots(world, b) });
+  b = mergeNeighbours(world, b);
   if (b.type === 'intersection') {
     openStreet(world, b);
     syncFarmFields(world);
@@ -446,26 +590,132 @@ function complete(world: World, b: Building): void {
   world.events.push({ kind: 'completed', buildingId: b.id });
 }
 
+/** Buildings that grow by merging with their own kind beside them: up to three small ones in one (Building.size). */
+export const MERGES: Partial<Record<BuildingType, true>> = { house: true, warehouse: true };
+const MAX_SIZE = 3;
+
+/** Workers at `from` now work at `to`, standing where they stood. */
+function moveStaff(world: World, from: Building, to: Building): void {
+  for (const p of employees(world, from)) {
+    p.job!.buildingId = to.id;
+    p.job!.worker.dx += from.x - to.x;
+  }
+}
+
+/**
+ * A small house or storage yard is finished: it is built onto a finished one
+ * of its kind right beside it, the two one building of their widths together
+ * (medium, then large), no wider than three small ones. The older takes in
+ * the newer, with its store and its workers. Returns the building it is now
+ * part of.
+ */
+export function mergeNeighbours(world: World, b: Building): Building {
+  if (!MERGES[b.type]) return b;
+  for (;;) {
+    const fb = footprintOf(b)!;
+    const o = world.buildings.find((o) => {
+      if (o === b || o.type !== b.type || o.status !== 'done' || o.site || streetOf(o.x) !== streetOf(b.x)) return false;
+      const fo = footprintOf(o)!;
+      return (fo.i1 + 1 === fb.i0 || fb.i1 + 1 === fo.i0) && (o.size ?? 1) + (b.size ?? 1) <= MAX_SIZE;
+    });
+    if (!o) return b;
+    const fo = footprintOf(o)!;
+    const [keep, gone] = o.id < b.id ? [o, b] : [b, o];
+    const size = ((o.size ?? 1) + (b.size ?? 1)) as 2 | 3;
+    const oldX = keep.x;
+    keep.x = streetStart(streetOf(b.x)) + (Math.min(fb.i0, fo.i0) + (size * BLOCK) / 2) * CELL_W;
+    keep.size = size;
+    keep.completedAt = world.time;
+    for (const r of RESOURCES) keep.stock[r] += gone.stock[r];
+    for (const p of employees(world, keep)) p.job!.worker.dx += oldX - keep.x;
+    moveStaff(world, gone, keep);
+    world.buildings = world.buildings.filter((x) => x !== gone);
+    if (world.menu?.kind === 'building' && world.menu.buildingId === gone.id) world.menu = null;
+    b = keep;
+  }
+}
+
+/**
+ * Pull down the section of three cells of a merged building that world x is
+ * in: the section is split off as a small building of its own and pulled
+ * down; what stands either side of it stands on, as one or two buildings
+ * (a large house losing its middle is two small ones), each merging with one
+ * of its kind beside it where they fit (mergeNeighbours). Its store is shared
+ * out by width. Returns whether it started.
+ */
+export function demolishSection(world: World, b: Building, x: number): boolean {
+  const size = b.size ?? 1;
+  if (size < 2 || whyNotDemolish(world, b)) return false;
+  const f = footprintOf(b)!;
+  const start = streetStart(streetOf(b.x));
+  const k = Math.max(0, Math.min(size - 1, Math.floor((alongCell(x) - f.i0) / BLOCK)));
+  const xOf = (i0: number, n: number) => start + (i0 + (n * BLOCK) / 2) * CELL_W;
+  const share = (n: number) => {
+    const s = stockOf();
+    for (const r of RESOURCES) s[r] = (b.stock[r] * n) / size;
+    return s;
+  };
+  const fresh = (i0: number, n: number): Building => ({
+    id: world.nextId++,
+    type: b.type,
+    x: xOf(i0, n),
+    ...(n > 1 ? { size: n as 2 | 3 } : {}),
+    progress: 1,
+    status: 'done',
+    completedAt: b.completedAt,
+    stock: share(n),
+  });
+  const before = k;
+  const after = size - k - 1;
+  const section = fresh(f.i0 + k * BLOCK, 1);
+  const later = before && after ? fresh(f.i0 + (k + 1) * BLOCK, after) : null;
+  // b stands on (its workers too) as the part before the section, or else as the part after it
+  const [i0, n] = before ? [f.i0, before] : [f.i0 + (k + 1) * BLOCK, after];
+  const oldX = b.x;
+  b.x = xOf(i0, n);
+  b.stock = share(n);
+  if (n > 1) b.size = n as 2 | 3;
+  else delete b.size;
+  for (const p of employees(world, b)) p.job!.worker.dx += oldX - b.x;
+  world.buildings.push(section, ...(later ? [later] : []));
+  world.menu = null;
+  if (!demolish(world, section)) return false;
+  // what stands on either side may now be built onto a small one of its kind beside it, as a new one would be
+  mergeNeighbours(world, b);
+  if (later) mergeNeighbours(world, later);
+  return true;
+}
+
 // --- Streets -------------------------------------------------------------------
 
 /**
- * Lay out the street a finished crossroads opens (streets.ts): from its
- * crossroads plot, plot by plot both ways, up to a street's length. Where it
- * comes to a street crossing its way it joins it if that street's plot there
- * is free (a crossroads is made there, and it runs on across) and ends one
- * plot short of it otherwise; it ends one plot short of a street running along
- * the same line. Loading a save lays the streets out again this way, in order
- * (the crossroads made where streets met are saved, so they are found again).
+ * Where the street a crossroads at world x would open runs (streets.ts): from
+ * its crossroads plot, plot by plot both ways, up to a street's length. Where
+ * it comes to a street crossing its way it joins it if that street's plot
+ * there is free (a crossroads is made there, and it runs on across) and ends
+ * one plot short of it otherwise; it ends one plot short of a street running
+ * along the same line, and of the end of a road crossing its way past its last
+ * plot. Its road runs on past its last plot (STREET_END_RUN), so it ends as
+ * many plots shorter again as that needs to keep off any road it doesn't meet,
+ * with a cell of grass between;
+ * `clear` is false if even its crossroads plot is too close for that (it can't
+ * be built there: whyNotBuild). Changes nothing.
  */
-export function layStreet(world: World, b: Building): Street {
-  const at = world.plots[b.plotIndex].x;
-  const street = newStreet(world, b.id, at);
-  const joins: Array<{ k: number; plot: Plot }> = [];
+export function planStreet(world: World, from: number, at: number): { street: Street; joins: Array<{ k: number; plot: Plot }>; clear: boolean } {
+  const street = newStreet(world, from, at);
+  let joins: Array<{ k: number; plot: Plot }> = [];
+  let clear = true;
+  const stubInWay = (end: number, step: number) => {
+    const t = plotX(street.index, end) - streetStart(street.index);
+    // (a cell of grass short of it, so the end doesn't look like a turning)
+    return roadInWay(world, street, t + step * 1.5 * CELL_W, t + step * (STREET_END_RUN + CELL_W));
+  };
   for (const step of [-1, 1]) {
     for (let k = CROSS_PLOT + step; k >= 0 && k < PLOTS_PER_STREET; k += step) {
       const meet = streetsAt(world, street.dir, plotPoint(street, k));
-      // it stops short of a street along the same line, and of a quarry in its way (one beside it is no matter)
-      if (meet.along || roadOnQuarry(street, k, step as 1 | -1)) break;
+      // it stops short of a street along the same line, and of a quarry or a building in its way (a quarry beside it is no matter)
+      const t = plotX(street.index, k) - streetStart(street.index);
+      if (meet.along || meet.blocked || roadBlocked(world, street, t - step * PLOT_SPACING, t + step * STREET_END_RUN)) break;
       if (meet.crossing) {
         const plot = plotOf(world, meet.crossing.street, meet.crossing.k);
         const there = getBuilding(world, plot.buildingId);
@@ -475,7 +725,26 @@ export function layStreet(world: World, b: Building): Street {
       if (step < 0) street.lo = k;
       else street.hi = k;
     }
+    // back off, plot by plot, until the road past the end doesn't run onto a road it doesn't meet
+    for (let end = step < 0 ? street.lo : street.hi; stubInWay(end, step); end = step < 0 ? ++street.lo : --street.hi) {
+      if (end === CROSS_PLOT) {
+        clear = false;
+        break;
+      }
+    }
   }
+  joins = joins.filter(({ k }) => k >= street.lo && k <= street.hi);
+  return { street, joins, clear };
+}
+
+/**
+ * Lay out the street a finished crossroads opens (planStreet). Loading a save
+ * lays the streets out again this way, in order (the crossroads made where
+ * streets met are saved, so they are found again).
+ */
+export function layStreet(world: World, b: Building): Street {
+  const at = b.x;
+  const { street, joins } = planStreet(world, b.id, at);
   world.streets.push(street);
   layPlots(world, street);
   plotOf(world, street.index, CROSS_PLOT).buildingId = b.id;
@@ -490,7 +759,7 @@ export function layStreet(world: World, b: Building): Street {
 
 /** A crossroads where a new street met an old one at a free plot of it. */
 function makeJunction(world: World, plot: Plot): Building {
-  const b: Building = { id: world.nextId++, type: 'intersection', plotIndex: plot.index, progress: 1, status: 'done', completedAt: world.time, stock: stockOf(), junction: true };
+  const b: Building = { id: world.nextId++, type: 'intersection', x: plot.x, progress: 1, status: 'done', completedAt: world.time, stock: stockOf(), junction: true };
   world.buildings.push(b);
   plot.buildingId = b.id;
   return b;
@@ -511,7 +780,8 @@ function openStreet(world: World, b: Building): void {
 export function crossroadAt(world: World): { building: Building; street: number; x: number } | null {
   const plot = plotAt(world, world.rider.x);
   const b = getBuilding(world, plot?.buildingId ?? null);
-  if (!plot || !b || b.type !== 'intersection' || b.status !== 'done') return null;
+  // (one being pulled down can still be turned at until it is down)
+  if (!plot || !b || b.type !== 'intersection' || b.status === 'constructing') return null;
   const j = world.junctions.find((o) => o.buildingId === b.id);
   if (!j) return null;
   const to = j.a === plot.x ? j.b : j.a;
@@ -556,43 +826,62 @@ function turnOnto(world: World, c: { x: number }, facing: 1 | -1): boolean {
 
 // --- Build menu ------------------------------------------------------------
 
+/** Whether anything at all could be built in the block of three cells the rider is in (world x): buildings start at its cell 3n + 1. */
+export const roomToBuild = (world: World, x: number) => BUILDING_TYPES.some((t) => !whyNotBuild(world, t, x));
+
 /**
- * Open the menu at the plot the rider stands at: what to build on an empty
- * plot; on a building, upgrade it (when it can be) or pull it down. Returns
- * whether a menu opened.
+ * Open the menu where the rider is: on a building, upgrade it (when it can
+ * be) or pull it down; anywhere else, what to build there, if anything fits
+ * (the choice starts on the last one built, or else the first that fits).
+ * Returns whether a menu opened.
  */
 export function openMenu(world: World): boolean {
-  const plot = plotAt(world, world.rider.x);
-  if (!plot) return false;
-  const b = getBuilding(world, plot.buildingId);
-  if (plot.buildingId === null) world.menu = { kind: 'build', plotIndex: plot.index, selection: world.lastSelection };
-  else if (b && canDemolish(b)) {
-    const options: BuildingOption[] = canUpgrade(b) ? ['upgrade', 'demolish'] : ['demolish'];
-    world.menu = { kind: 'building', plotIndex: plot.index, buildingId: b.id, options, selection: 0 };
-  } else return false;
+  const x = world.rider.x;
+  const b = buildingAt(world, x);
+  if (b) {
+    if (!canDemolish(b)) return false;
+    const options: BuildingOption[] = [...(canUpgrade(b) ? ['upgrade' as const] : []), ...((b.size ?? 1) > 1 ? ['demolishSection' as const] : []), 'demolish'];
+    world.menu = { kind: 'building', buildingId: b.id, options, selection: 0, x };
+  } else {
+    const fits = BUILDING_TYPES.map((t) => !whyNotBuild(world, t, x));
+    if (!fits.includes(true)) return false;
+    world.menu = { kind: 'build', x, selection: fits[world.lastSelection] ? world.lastSelection : fits.indexOf(true), fits };
+  }
   world.rider.vx = 0;
   return true;
 }
 
 const menuSize = (menu: BuildMenu) => (menu.kind === 'build' ? BUILDING_TYPES.length : menu.options.length);
 
+/** Whether menu entry i can be chosen: in the build menu, only what fits. */
+export const canChoose = (menu: BuildMenu, i: number) => menu.kind !== 'build' || !!menu.fits[i];
+
+/** Move the selection by delta entries that can be chosen, round and round, jumping over the rest. */
 export function moveMenu(world: World, delta: number): void {
-  if (!world.menu) return;
-  const n = menuSize(world.menu);
-  world.menu.selection = (((world.menu.selection + delta) % n) + n) % n;
+  const menu = world.menu;
+  if (!menu) return;
+  const n = menuSize(menu);
+  let i = menu.selection;
+  for (let k = 0; k < Math.abs(delta); k++) {
+    for (let step = 0; step < n; step++) {
+      i = (((i + Math.sign(delta)) % n) + n) % n;
+      if (canChoose(menu, i)) break;
+    }
+  }
+  menu.selection = i;
 }
 
 export function selectMenu(world: World, index: number): void {
-  if (!world.menu || index < 0 || index >= menuSize(world.menu)) return;
+  if (!world.menu || index < 0 || index >= menuSize(world.menu) || !canChoose(world.menu, index)) return;
   world.menu.selection = index;
 }
 
 /** Build what is chosen in the build menu. */
 export function confirmMenu(world: World): Building | null {
   if (world.menu?.kind !== 'build') return null;
-  const { plotIndex, selection } = world.menu;
+  const { x, selection } = world.menu;
   closeMenu(world);
-  return placeBuilding(world, plotIndex, BUILDING_TYPES[selection]);
+  return placeBuilding(world, x, BUILDING_TYPES[selection]);
 }
 
 export function closeMenu(world: World): void {
@@ -635,11 +924,10 @@ export function workplaceOf(world: World, b: Building, role: Role): Workplace | 
   return null;
 }
 
-/** Hire for open jobs; construction sites and errands only hire while it's light enough to work. */
+/** Hire for open jobs; builders and serfs work day and night. */
 function staff(world: World): void {
-  const dayLabour = timeOfDay(world).daylight;
   const hub = transportHub(world);
-  const openingsOf = (b: Building) => (b === hub ? (dayLabour ? { serf: serfPositions(world) } : {}) : openings(b, builderPositions(world, b), dayLabour));
+  const openingsOf = (b: Building) => (b === hub ? { serf: serfPositions(world) } : openings(b, builderPositions(world, b), true));
   staffBuildings(world, (b, role, who) => newWorker(world, b, role, who), openingsOf);
 }
 
@@ -647,7 +935,7 @@ function staff(world: World): void {
 function newWorker(world: World, b: Building, role: Role, who: Person): Worker {
   const place = workplaceOf(world, b, role)!;
   const w = createWorker(place);
-  w.dx = who.stroll.x - world.plots[b.plotIndex].x;
+  w.dx = who.stroll.x - b.x;
   w.y = who.stroll.y;
   w.facing = w.dx > 0 ? -1 : 1;
   w.task = { kind: 'idle', wait: 0.2 };
@@ -659,7 +947,7 @@ function updateWorkers(world: World, dt: number): void {
   for (const b of world.buildings) {
     const people = employees(world, b);
     if (!people.length) continue;
-    const nav: Nav = { x: world.plots[b.plotIndex].x, route: (from, to) => route(world, from, to) };
+    const nav: Nav = { x: b.x, route: (from, to) => route(world, from, to) };
     // each role at the building works at its own workplace, alongside the others in that role
     const places = new Map<Role, Workplace | null>();
     for (const p of people) {
@@ -690,10 +978,12 @@ function updateRider(world: World, dt: number, input: MoveInput): void {
   const r = world.rider;
   const p = world.params;
   const dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
+  const sprint = dir !== 0 && !!input.sprint;
+  const top = p.riderMaxSpeed * (sprint ? SPRINT_SPEED : 1);
   if (dir !== 0) {
-    r.facing = dir as 1 | -1;
-    r.vx += dir * p.riderAccel * dt;
-    r.vx = Math.max(-p.riderMaxSpeed, Math.min(p.riderMaxSpeed, r.vx));
+    r.vx += dir * p.riderAccel * (sprint ? SPRINT_ACCEL : 1) * dt;
+    // past the top speed (the sprint let go of) it eases back down rather than stopping short
+    if (Math.abs(r.vx) > top) r.vx = Math.sign(r.vx) * Math.max(top, Math.abs(r.vx) - p.riderDecel * dt);
   } else {
     const dv = p.riderDecel * dt;
     r.vx = Math.abs(r.vx) <= dv ? 0 : r.vx - Math.sign(r.vx) * dv;
@@ -706,6 +996,9 @@ function updateRider(world: World, dt: number, input: MoveInput): void {
     r.x = Math.max(min, Math.min(max, r.x));
     r.vx = 0;
   }
+  // the horse faces the way it is going: braking, it still faces forward; standing, the way it is asked to go
+  if (r.vx !== 0) r.facing = r.vx > 0 ? 1 : -1;
+  else if (dir !== 0) r.facing = dir as 1 | -1;
   r.gait += Math.abs(r.vx) * dt;
 }
 

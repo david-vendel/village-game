@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import sharp from 'sharp';
 import { afterAll, describe, expect, it } from 'vitest';
+import { BUILDINGS } from '../src/game/buildings';
 import type { BuildingAsset, Manifest } from '../src/render/manifest';
 import { packRender, type RawMeta } from '../tools/art-pipeline/pack';
 import { formatReport, validateAssets } from '../tools/assets/validate';
@@ -83,7 +84,7 @@ describe('pack', () => {
     expect(report.files).toBe(10); // 5 layers × 2 tiers
 
     const farm = (JSON.parse(readFileSync(join(assets, 'manifest.json'), 'utf8')) as Manifest).assets['building.farm'] as BuildingAsset;
-    expect(farm.footprintWidth).toBe(200);
+    expect(farm.footprintWidth).toBe(BUILDINGS.farm.width);
     expect(farm.construction).toEqual({ mode: 'reveal' });
     expect(farm.views.street.points).toEqual({ door: [20, 35] });
     expect(farm.views.street.depthRange).toEqual([10, 11]);

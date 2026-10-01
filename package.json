@@ -12,7 +12,8 @@
     "assets:check": "tsx tools/assets/check.ts",
     "assets:export": "tsx tools/assets/export.ts",
     "art:render": "tsx tools/art-pipeline/run.ts",
-    "art:test": "python -m unittest discover -s tools/art-pipeline/tests"
+    "art:test": "python -m unittest discover -s tools/art-pipeline/tests",
+    "sim": "tsx tools/sim.ts"
   },
   "devDependencies": {
     "@napi-rs/canvas": "^1.0.10",

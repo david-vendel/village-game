@@ -13,7 +13,8 @@
 // A builder's next job, in order: build at a spot where materials lie; else
 // carry a load from the pile to a spot; else fetch a load of whatever is
 // still needed from the nearest place that has it (a warehouse, or the
-// woodcutter's or stonecutter's hut itself: economy.ts materialSource).
+// woodcutter's or stonecutter's hut itself: economy.ts materialSource), or
+// off a pile lying on the ground by the road, if that is nearer.
 // A site hires only as many builders as it has work for (builderPositions),
 // and a builder with nothing to do and nothing in hand is let go where they
 // stand, rather than walking over to the site to wait there.
@@ -24,15 +25,19 @@
 // finished building: its builders work alongside the building's own workers.
 
 import { BUILDINGS } from './buildings';
-import { materialSource, storeSpot, takeOut } from './economy';
+import { materialSource, nearestPile, storeSpot, takeOut } from './economy';
 import { pileItems, siteSlot, SPOT_PILE_DX, STAND_Y, type Spot } from './layout';
 import { employees } from './people';
+import { pileById, pileSpot as groundSpot, takeFromPile } from './piles';
+import { streetDist } from './streets';
 import { RESOURCES, stockOf, total, type Amounts, type Load, type Resource, type Stock } from './resources';
 import { currentJob, delivering, type JobTicket, type Workplace } from './worker';
 import type { Building, World } from './world';
 
 /** Builders a site employs at once. */
 export const BUILDERS_PER_SITE = 5;
+/** Most builders pulling a building down at once. */
+export const DEMOLITION_CREW = 3;
 /** How much one builder carries per trip. */
 export const LOAD_SIZE = 10;
 /** Seconds of labour per build job; a building needs its buildTime of labour in all. */
@@ -77,8 +82,12 @@ const FRONT: Spot = { dx: 0, y: STAND_Y };
 type Material = 'wood' | 'stone';
 const MATERIALS: readonly Material[] = ['wood', 'stone'];
 const fetchAction = (r: Resource) => `fetch-${r}`;
+/** Fetching off a pile on the ground (target: the pile's id). */
+const gatherAction = (r: Resource) => `gather-${r}`;
 const takeAction = (r: Resource) => `take-${r}`;
-const fetchedResource = (action: string) => RESOURCES.find((r) => action === fetchAction(r)) ?? null;
+/** The resource a fetch (from a store or off the ground) brings. */
+const fetchedResource = (action: string) => RESOURCES.find((r) => action === fetchAction(r) || action === gatherAction(r)) ?? null;
+const gathering = (action: string) => action.startsWith('gather-');
 const takenResource = (action: string) => MATERIALS.find((r) => action === takeAction(r)) ?? null;
 
 /** Where builders stand along the front of the building (dx), to lay materials down and build. */
@@ -151,8 +160,12 @@ function underway(world: World, b: Building): { carried: Stock; fetching: Stock 
  * build with, a load on the pile, a load still to fetch from somewhere that has it.
  */
 export function builderPositions(world: World, b: Building): number {
-  // pulling down: one at each work spot
-  if (b.status === 'demolishing') return b.progress > 0 ? Math.min(BUILDERS_PER_SITE, workSpots(b.type).length) : 0;
+  // pulling down: no more hands than items it leaves (a log, a block…), and at most a few
+  if (b.status === 'demolishing') {
+    if (b.progress <= 0) return 0;
+    const items = Math.max(1, pileItems(total(b.demolition?.left ?? {})));
+    return Math.min(DEMOLITION_CREW, items, workSpots(b.type).length);
+  }
   const site = b.site;
   if (!site) return 0;
   const busy = builders(world, b).map((p) => p.job!.worker).filter((w) => currentJob(w) || w.carrying);
@@ -162,8 +175,8 @@ export function builderPositions(world: World, b: Building): number {
   let waiting = site.laid.filter((s, k) => total(s) > 1e-9 && !building.has(k)).length;
   for (const r of MATERIALS) waiting += loads(site.pile[r] - taken.filter((j) => j.action === takeAction(r)).length * LOAD_SIZE);
   const need = stillNeeded(world, b);
-  const x = world.plots[b.plotIndex].x;
-  for (const r of RESOURCES) if (need[r] && materialSource(world, r, x)) waiting += loads(need[r]);
+  const x = b.x;
+  for (const r of RESOURCES) if (need[r] && (materialSource(world, r, x) || nearestPile(world, r, x))) waiting += loads(need[r]);
   return Math.min(BUILDERS_PER_SITE, busy.length + waiting);
 }
 
@@ -184,7 +197,7 @@ export function materialsAllow(b: Building): number {
 /** A construction site as a workplace for its builders. */
 export function siteWorkplace(world: World, b: Building, buildSpeed: number): Workplace {
   const site = b.site!;
-  const x = world.plots[b.plotIndex].x;
+  const x = b.x;
   const work = siteWork(b);
   const costTotal = total(work.cost);
   /** Materials one build job works in. */
@@ -195,6 +208,7 @@ export function siteWorkplace(world: World, b: Building, buildSpeed: number): Wo
   const laidAt = (k: number) => total(site.laid[k] ?? {});
   return {
     dayLabour: true,
+    allHours: true,
     // nothing to build with and nothing to fetch: let go, rather than wait at the site
     temporary: true,
     walkSpeed: world.params.builderWalk,
@@ -228,7 +242,13 @@ export function siteWorkplace(world: World, b: Building, buildSpeed: number): Wo
       const need = stillNeeded(world, b);
       for (const r of RESOURCES) {
         if (!need[r]) continue;
-        const from = materialSource(world, r, x + w.dx);
+        const at = x + w.dx;
+        const from = materialSource(world, r, at);
+        const pile = nearestPile(world, r, at);
+        // off the ground if that is nearer (or there is nowhere else)
+        if (pile && (!from || streetDist(world, at, pile.x) <= streetDist(world, at, from.x))) {
+          return { job: { action: gatherAction(r), target: pile.id, slot: target() }, ...groundSpot(pile, x) };
+        }
         if (from) return { job: { action: fetchAction(r), target: from.id, slot: target() }, ...storeSpot(world, from, r, x, true) };
       }
       return null; // nothing to build with, and nothing to fetch
@@ -237,6 +257,10 @@ export function siteWorkplace(world: World, b: Building, buildSpeed: number): Wo
       const t = takenResource(job.action);
       if (t) return pileSpot(b, t, pileItems(site.pile[t]) - 1);
       const r = fetchedResource(job.action);
+      if (r && gathering(job.action)) {
+        const pile = pileById(world, job.target);
+        return pile ? groundSpot(pile, x) : null;
+      }
       const from = r && source(job.target);
       return r && from ? storeSpot(world, from, r, x, true) : null;
     },
@@ -245,6 +269,7 @@ export function siteWorkplace(world: World, b: Building, buildSpeed: number): Wo
       const t = takenResource(job.action);
       if (t) return site.pile[t] > 1e-9 ? PICK_UP_TIME : null;
       const r = fetchedResource(job.action);
+      if (r && gathering(job.action)) return (pileById(world, job.target)?.amount ?? 0) > 1e-9 ? PICK_UP_TIME : null;
       const from = source(job.target);
       return r && from && from.stock[r] > 0 ? LOADING_TIME : null;
     },
@@ -269,12 +294,18 @@ export function siteWorkplace(world: World, b: Building, buildSpeed: number): Wo
         return amount > 0 ? { resource: t, amount } : null;
       }
       const r = fetchedResource(job.action);
-      const from = source(job.target);
-      if (!r || !from) return null;
+      if (!r) return null;
       // never take more than the site still lacks, after what the others are bringing
       const { carried, fetching } = underway(world, b);
-      const lacks = lacking(b, r) - carried[r] - (fetching[r] - 1) * LOAD_SIZE;
-      const amount = takeOut(from, r, Math.min(LOAD_SIZE, Math.max(0, lacks)));
+      const want = Math.min(LOAD_SIZE, Math.max(0, lacking(b, r) - carried[r] - (fetching[r] - 1) * LOAD_SIZE));
+      let amount = 0;
+      if (gathering(job.action)) {
+        const pile = pileById(world, job.target);
+        if (pile) amount = takeFromPile(world, pile, want);
+      } else {
+        const from = source(job.target);
+        if (from) amount = takeOut(from, r, want);
+      }
       return amount > 0 ? { resource: r, amount } : null;
     },
     dropSpot(job) {

@@ -2,7 +2,7 @@
 // frame; everything about how things look — draw order, art, HUD, menus — is
 // decided in src/render. Rendering only reads game state, never changes it.
 
-import { canDemolish, crossroadAt, getBuilding, plotAt, type World } from '../game/world';
+import { buildingAt, canDemolish, crossroadAt, roomToBuild, type World } from '../game/world';
 import { drawScene } from './scene';
 import { drawTopView } from './topview';
 import { drawBuildMenu, drawHud, drawToasts, drawTurnFade, type Toast } from './ui';
@@ -11,7 +11,7 @@ export { artMode, loadArt, type ArtMode } from './assets';
 export { set3d } from './world3d';
 export { showArtPreview } from './preview';
 export { cameraX } from './scene';
-export { STRIDE as HORSE_STRIDE } from './horse';
+export { galloping, STRIDE as HORSE_STRIDE, strideAt } from './horse';
 export { buildingMenuLayout, hit, HUD_BUTTON, hudLayout, menuLayout, type Rect, type Toast } from './ui';
 
 /** Everything the renderer needs besides the world: where the camera is and how the screen is scaled. */
@@ -40,9 +40,9 @@ export interface FrameView {
   /** Show the village from above instead of from the street, at its own zoom. */
   topView: boolean;
   topZoom: number;
-  /** The mouse over the canvas (canvas pixels), or null. */
+  /** Where the mouse is (canvas px), if over the canvas: the grid names the cell under it, buildings show their info box. */
   hover?: { x: number; y: number } | null;
-  /** Frames per second and the slowest frame (ms) lately, shown when given (unless ?fps=0). */
+  /** Frames per second and the slowest frame (ms) lately, shown when given (the panel's "frame rate"). */
   fps?: { fps: number; worstMs: number };
 }
 
@@ -53,7 +53,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   if (v.topView) {
     ctx.setTransform(v.uiScale, 0, 0, v.uiScale, 0, 0);
-    drawTopView(ctx, world, v.uiW, v.uiH, v.topZoom, v.showGrid);
+    drawTopView(ctx, world, v.uiW, v.uiH, v.topZoom, v.showGrid, v.hover ? { x: v.hover.x / v.uiScale, y: v.hover.y / v.uiScale } : null);
   } else {
   ctx.setTransform(v.worldScale, 0, 0, v.worldScale, 0, v.offsetY);
   drawScene(ctx, world, {
@@ -76,13 +76,12 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
   ctx.setTransform(v.uiScale, 0, 0, v.uiScale, 0, 0);
   // from above a turn is just a turn: the map doesn't change, so no fade
   if (!v.topView) drawTurnFade(ctx, world, v.uiW, v.uiH);
-  const plot = plotAt(world, world.rider.x);
-  const here = getBuilding(world, plot?.buildingId ?? null);
+  const here = buildingAt(world, world.rider.x);
   drawHud(ctx, world, v.uiW, v.uiH, {
     touch: v.touch,
     leftHeld: v.leftHeld,
     rightHeld: v.rightHeld,
-    canBuild: (!!plot && plot.buildingId === null) || (!!here && canDemolish(here)),
+    canBuild: here ? canDemolish(here) : roomToBuild(world, world.rider.x),
     canTurn: !world.menu && !!crossroadAt(world),
     topView: v.topView,
   });

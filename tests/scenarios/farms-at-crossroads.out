@@ -1,0 +1,98 @@
+# Two farms side by side, a crossroads just past them, and a farm on the new
+# street close by: it faces another way, and the fields share out the land.
+> new empty
+> free on
+> construction off
+> build farm at s0:43
+  #1 farm at s0:43-48, done
+> build farm next
+  #2 farm at s0:49-54, done
+> build crossroads at s0:55
+  #3 intersection at s0:55-57, done
+> expect streets 2
+  ok: 2 streets
+> streets
+  s0  runs east (lots on its north side), cells 10..252
+  s1  runs north (lots on its west side), cells 10..252, from crossroads #3
+    crossroads #3: s0:56 = s1:131 (cell A56)
+> ride #last
+  rider: s0:56 facing +
+> turn up
+  rider: s1:131 facing +
+> expect rider s1
+  ok: the rider is on s1
+> ride +5
+  rider: s1:136 facing +
+> build farm here
+  #63 farm at s1:136-141, done
+> expect at s1:136 farm done
+  ok: #63 farm at s1:136-141, done
+> expect fields at s0:43 24
+  ok: #1 has 24 fields
+> expect fields at s1:136 24
+  ok: #63 has 24 fields
+> list
+  #1  farm  s0:43-48  done  fields=24 (grass 24, fallow 0, growing 0, ripe 0)
+  #2  farm  s0:49-54  done  fields=24 (grass 24, fallow 0, growing 0, ripe 0)
+  #3  intersection  s0:55-57  done
+  #63  farm  s1:136-141  done  fields=24 (grass 24, fallow 0, growing 0, ripe 0)
+> map
+          40        50        60
+       |  |  |  |  |  |  |  |  |  |
+    R ...................|||.......
+    Q ...................|||.......
+    P ...................|||.......
+    O .................,.|||......#
+    N ................,,,|||......#
+    M ................,,,|||......#
+    L ................,,,|||,.....#
+    K ................FFF|||,,....#
+    J ................FFF|||,,....#
+    I ................FFF|||,,....#
+    H ................FFF|||,,....#
+    G ................FFF|||,,....#
+    F ................FFF|@|,,....#
+    E ...,,,,FFFFFFFFFFFF|||,.,,...
+    D ...,,,,FFFFFFFFFFFF|||,,,,...
+    C ....,,,FFFFFFFFFFFF|||,,,....
+    B ===================+++=======
+    A ===================+++=======
+   -A ===================+++=======
+   -B ......,,,,,,,,,,,,,|||,,.....
+   -C .......,,,,,,,,,,,,|||,......
+   -D ...................|||.......
+   -E ...................|||.......
+   -F ...................|||.......
+  
+    F farm  I intersection
+    = | road  + crossing  Y kept for a crossroads  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
+> map ids
+          40        50        60
+       |  |  |  |  |  |  |  |  |  |
+    R ...................|||.......
+    Q ...................|||.......
+    P ...................|||.......
+    O .................d.|||......#
+    N ................ddd|||......#
+    M ................ddd|||......#
+    L ................ddd|||d.....#
+    K ................DDD|||dd....#
+    J ................DDD|||dd....#
+    I ................DDD|||dd....#
+    H ................DDD|||dd....#
+    G ................DDD|||dd....#
+    F ................DDD|@|dd....#
+    E ...aaaaAAAAAABBBBBB|||d.bb...
+    D ...aaaaAAAAAABBBBBB|||bbbb...
+    C ....aaaAAAAAABBBBBB|||bbb....
+    B ===================+++=======
+    A ===================+++=======
+   -A ===================+++=======
+   -B ......aaaaaaabbbbbb|||bb.....
+   -C .......aaaaaabbbbbb|||b......
+   -D ...................|||.......
+   -E ...................|||.......
+   -F ...................|||.......
+  
+    A=#1 farm  B=#2 farm  C=#3 intersection  D=#63 farm
+    = | road  + crossing  Y kept for a crossroads  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)

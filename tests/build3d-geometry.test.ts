@@ -3,6 +3,7 @@
 
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
+import { BUILDINGS } from '../src/game/buildings';
 import { bounds } from '../src/render/build3d/elements';
 import { farm } from '../src/render/build3d/farm';
 import { elementGeometry, mergedByMaterial } from '../src/render/build3d/geometry';
@@ -55,14 +56,15 @@ describe('farm geometry', () => {
       tris += g.attributes.position.count / 3;
     }
     expect(tris).toBeLessThan(60_000);
-    // 10 m wide along x (three.js axes keep x), give or take the eaves
+    // as wide as the game's farm along x (three.js axes keep x), give or take the eaves
     const box = new THREE.Box3();
     for (const g of merged.values()) {
       g.computeBoundingBox();
       box.union(g.boundingBox!);
     }
-    expect(box.max.x - box.min.x).toBeGreaterThan(9.8);
-    expect(box.max.x - box.min.x).toBeLessThan(11.5);
+    const width = BUILDINGS.farm.width / 20;
+    expect(box.max.x - box.min.x).toBeGreaterThan(width - 0.2);
+    expect(box.max.x - box.min.x).toBeLessThan(width + 1.5);
     expect(box.min.y).toBeGreaterThanOrEqual(-0.05); // fieldstones settle a little into the ground
   });
 

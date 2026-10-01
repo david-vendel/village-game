@@ -10,6 +10,8 @@ npm run dev        # play in the browser
 npm test           # logic tests + layer-boundary checks (headless)
 npm run typecheck  # whole project, plus src/game alone without browser APIs
 npm run build      # typecheck + static build into dist/ (only approved art assets)
+npm run sim -- tests/scenarios/houses-merge.scn   # play a scenario headless, the village as text
+npm run sim -- -e "new empty; free on; construction off; build farm at s0:40; map"
 npm run assets:check   # validate public/assets against docs/art/ASSET_SPEC.md
 npm run assets:export  # export today's procedural farm as placeholder assets (format test)
 npm run art:render -- <scene> <job.json>  # render a 3D scene into assets with Blender (tools/art-pipeline)
@@ -40,7 +42,11 @@ touch). Portrait phones start zoomed out, with the street lifted above the butto
 
 ## Streets
 
-A **Crossroads** (10 wood) cuts a road across the street. Once it is built, ride up to it
+A **Crossroads** (10 wood) cuts a road across the street. Crossroads go only every 27 cells,
+nine blocks apart (on the main street, the blocks starting at cells 28, 55, 82, …), so the streets make a grid
+of squares, and the rocky hills lie inside the squares, clear of every road. A wooden
+signpost marks every place a crossroads can go; nothing else can be built there, and pressing
+Space there offers the crossroads. Once it is built, ride up to it
 and press ↑ or ↓ to turn onto the new street, which runs off at right angles with its own
 plots and woods. A crossroads on that street opens another, so the village grows into a
 net of streets. A new street joins any street it runs into where that street's plot is

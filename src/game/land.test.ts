@@ -1,110 +1,132 @@
 import { describe, expect, it } from 'vitest';
-import { isBorrowed } from './farm';
-import { cellX, footprint, landGrid } from './land';
-import { createWorld, placeBuilding, type Building, type World } from './world';
+import { cellKey, cellName, cellsOf, fieldCell, footprintOf, landUse, onRoadLine, rowName, whyNotHere } from './grid';
+import { FIELD_CELLS } from './land';
+import { CELL_W, LOT_ROW, QUARRIES, quarryLand } from './layout';
+import { createWorld, demolishSection, placeBuilding, whyNotBuild, type Building, type World } from './world';
 
-/** World x-range of each of a farm's plots in one zone. */
-function spans(world: World, farm: Building, zone: 'back' | 'front'): Array<[number, number]> {
-  const x = world.plots[farm.plotIndex].x;
-  return farm.farm!.plots.filter((p) => p.zone === zone).map((p) => [x + p.dx - p.width / 2, x + p.dx + p.width / 2]);
-}
+const emptyWorld = () => createWorld({ village: false });
 
-function footprintX(world: World, b: Building): [number, number] {
-  const { from, to } = footprint(world, b);
-  return [cellX(from), cellX(to)];
-}
-
-const overlaps = ([a0, a1]: [number, number], [b0, b1]: [number, number]) => a0 < b1 && b0 < a1;
+/** The grid cells a farm's fields are on. */
+const fieldKeys = (w: World, farm: Building) => farm.farm!.plots.map((p) => fieldCell(w, farm, p)!).map((c) => cellKey(c.c, c.r));
+const footKeys = (w: World, b: Building) => cellsOf(w, footprintOf(b)!).map((c) => cellKey(c.c, c.r));
 
 describe('land grid', () => {
-  it('plot centres fall on cell edges and footprints cover whole cells', () => {
-    const w = createWorld({ village: false });
-    const b = placeBuilding(w, 3, 'blacksmith', { instant: true, free: true })!;
-    const { from, to } = footprint(w, b);
-    expect(to - from).toBe(8); // 170 px → 8 cells of 25
-    const [x0, x1] = footprintX(w, b);
-    expect((x0 + x1) / 2).toBe(w.plots[3].x);
+  it('names cells by row (A, B, … north, -A, -B, … south) and column (0, 1, … east, -1, … west)', () => {
+    expect(cellName(0, 0)).toBe('A0');
+    expect(cellName(3, 1)).toBe('B3');
+    expect(cellName(-1, -1)).toBe('-A-1');
+    expect(rowName(25)).toBe('Z');
+    expect(rowName(26)).toBe('AA');
+    expect(rowName(-3)).toBe('-C');
   });
 
-  it('a farm between a chapel and a blacksmith keeps its back fields off their footprints', () => {
-    const w = createWorld({ village: false });
-    const chapel = placeBuilding(w, 2, 'chapel', { instant: true, free: true })!;
-    const farm = placeBuilding(w, 3, 'farm', { instant: true, free: true })!;
-    const smith = placeBuilding(w, 4, 'blacksmith', { instant: true, free: true })!;
-    const back = spans(w, farm, 'back');
-    for (const s of back) {
-      expect(overlaps(s, footprintX(w, chapel))).toBe(false);
-      expect(overlaps(s, footprintX(w, smith))).toBe(false);
-      expect(overlaps(s, footprintX(w, farm))).toBe(false);
+  it('the main street is a road three cells wide, on rows -A, A and B', () => {
+    const w = emptyWorld();
+    const land = landUse(w);
+    for (const r of [-1, 0, 1]) expect(land.get(cellKey(40, r))?.kind).toBe('road');
+    expect(land.has(cellKey(40, -2))).toBe(false);
+    expect(land.has(cellKey(40, 2))).toBe(false);
+  });
+
+  it('a farm takes 6 × 3 cells, right by the road', () => {
+    const w = emptyWorld();
+    const farm = placeBuilding(w, 1000, 'farm', { instant: true, free: true })!;
+    const cells = cellsOf(w, footprintOf(farm)!);
+    expect(cells).toHaveLength(18);
+    expect(new Set(cells.map((c) => c.r))).toEqual(new Set([2, 3, 4]));
+    expect(new Set(cells.map((c) => c.c)).size).toBe(6);
+    expect(Math.min(...cells.map((c) => c.c)) % 3).toBe(1); // it starts at a cell 3n + 1
+  });
+
+  it('a building goes anywhere it fits: not on another, not on a road or the rocks', () => {
+    const w = emptyWorld();
+    const a = placeBuilding(w, 1000, 'farm', { free: true })!;
+    // right beside it is fine, half over it is not
+    expect(whyNotBuild(w, 'farm', a.x + 150)).toBeNull();
+    expect(whyNotBuild(w, 'farm', a.x + 25)).toMatch(/in the way/);
+    expect(whyNotHere(w, 'farm', QUARRIES[0].x)).toBeNull(); // the rocks start behind the lots
+    // a crossroads: right up to its road, but not on it
+    const x = w.plots[22].x; // cell 83: crossroads go every 27 cells
+    expect(whyNotBuild(w, 'intersection', w.plots[21].x)).toMatch(/every 27 cells/);
+    placeBuilding(w, x, 'intersection', { instant: true, free: true });
+    expect(whyNotBuild(w, 'farm', x + 30)).toMatch(/road/);
+    expect(whyNotBuild(w, 'farm', x + 112.5)).toBeNull();
+  });
+
+  it("a farm's fields are single free cells near it, never on a road or a building", () => {
+    const w = emptyWorld();
+    const farm = placeBuilding(w, 1000, 'farm', { instant: true, free: true })!;
+    const keys = fieldKeys(w, farm);
+    expect(keys).toHaveLength(FIELD_CELLS.base);
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(farm.farm!.plots.every((p) => p.width === 25)).toBe(true);
+    const land = landUse(w);
+    for (const k of keys) expect(land.get(k)).toEqual({ kind: 'field', buildingId: farm.id });
+    // right beside the farmstead, by the road
+    const f = footprintOf(farm)!;
+    const beside = cellsOf(w, { ...f, i0: f.i1 + 1, i1: f.i1 + 1, j0: LOT_ROW, j1: LOT_ROW })[0];
+    expect(keys).toContain(cellKey(beside.c, beside.r));
+  });
+
+  it('building next to a farm takes back the cells its fields were on, and the farm sows others', () => {
+    const w = emptyWorld();
+    const farm = placeBuilding(w, 1000, 'farm', { instant: true, free: true })!;
+    const house = placeBuilding(w, farm.x + 112.5, 'house', { free: true })!; // still under construction: the land is claimed anyway
+    const keys = fieldKeys(w, farm);
+    expect(keys).toHaveLength(FIELD_CELLS.base);
+    for (const k of footKeys(w, house)) expect(keys).not.toContain(k);
+  });
+
+  it('a small house built right beside a house becomes part of it: medium, then large, no larger', () => {
+    const w = emptyWorld();
+    const a = placeBuilding(w, 1000, 'house', { instant: true, free: true })!;
+    const b = placeBuilding(w, a.x + 75, 'house', { instant: true, free: true })!;
+    expect(b).toBe(a);
+    expect(w.buildings).toHaveLength(1);
+    expect(a.size).toBe(2);
+    expect(cellsOf(w, footprintOf(a)!)).toHaveLength(12);
+    placeBuilding(w, a.x - 112.5, 'house', { instant: true, free: true });
+    expect(a.size).toBe(3);
+    placeBuilding(w, a.x + 150, 'house', { instant: true, free: true });
+    expect(w.buildings).toHaveLength(2); // a fourth stays a small house of its own
+  });
+
+  it('pulling down the middle of a large house leaves two small ones; an end, a medium one', () => {
+    const w = emptyWorld();
+    w.constructionEnabled = false;
+    const a = placeBuilding(w, 1000, 'house', { instant: true, free: true })!;
+    placeBuilding(w, 1075, 'house', { instant: true, free: true });
+    placeBuilding(w, 1150, 'house', { instant: true, free: true });
+    expect(a.size).toBe(3);
+    demolishSection(w, a, 1075);
+    const houses = w.buildings.filter((b) => b.type === 'house' && b.status === 'done');
+    expect(houses.map((b) => b.size ?? 1)).toEqual([1, 1]);
+    const yard = placeBuilding(w, 2150, 'warehouse', { instant: true, free: true })!;
+    placeBuilding(w, 2225, 'warehouse', { instant: true, free: true });
+    expect(yard.size).toBe(2);
+    yard.stock.wood = 200;
+    demolishSection(w, yard, 2225);
+    expect(yard.size).toBeUndefined();
+    expect(yard.stock.wood).toBeCloseTo(100);
+  });
+
+  it('a field keeps its crop when the fields around it are re-laid', () => {
+    const w = emptyWorld();
+    const farm = placeBuilding(w, 1000, 'farm', { instant: true, free: true })!;
+    const near = farm.farm!.plots[0];
+    near.tilled = true;
+    near.state = 'ripe';
+    const key = fieldKeys(w, farm)[0];
+    placeBuilding(w, farm.x - 300, 'house', { free: true });
+    const i = fieldKeys(w, farm).indexOf(key);
+    expect(i).toBeGreaterThanOrEqual(0);
+    expect(farm.farm!.plots[i]).toMatchObject({ tilled: true, state: 'ripe' });
+  });
+
+  it('the rocks lie inside squares of the road grid, where no road can ever run', () => {
+    for (const q of QUARRIES) {
+      const r = quarryLand(q);
+      for (let c = r.x0 / CELL_W; c < r.x1 / CELL_W; c++) for (let row = r.y0 / CELL_W; row < r.y1 / CELL_W; row++) expect(onRoadLine(c, row), cellName(c, row)).toBe(false);
     }
-    // one field on each side, squeezed between the buildings
-    expect(back).toHaveLength(2);
-    // in front of the road the neighbours' land is still free to farm
-    const front = spans(w, farm, 'front');
-    expect(Math.min(...front.map((s) => s[0]))).toBeLessThan(w.plots[3].x - 125);
-    expect(Math.max(...front.map((s) => s[1]))).toBeGreaterThan(w.plots[3].x + 125);
-  });
-
-  it('building next to a farm takes back the land its fields were on', () => {
-    const w = createWorld({ village: false });
-    const farm = placeBuilding(w, 3, 'farm', { instant: true, free: true })!;
-    const before = spans(w, farm, 'back').length;
-    const house = placeBuilding(w, 4, 'house', { free: true })!; // still under construction: the land is claimed anyway
-    const after = spans(w, farm, 'back');
-    expect(after.length).toBeLessThan(before);
-    for (const s of after) expect(overlaps(s, footprintX(w, house))).toBe(false);
-  });
-
-  it('the field next to the farmhouse keeps its crop when a neighbour trims it', () => {
-    const w = createWorld({ village: false });
-    const farm = placeBuilding(w, 3, 'farm', { instant: true, free: true })!;
-    const fx = w.plots[3].x;
-    const nearest = () =>
-      farm.farm!.plots.filter((p) => p.zone === 'back' && p.dx > 0).reduce((a, b) => (a.dx < b.dx ? a : b));
-    const before = nearest();
-    before.state = 'growing';
-    before.age = 17;
-    const smith = placeBuilding(w, 4, 'blacksmith', { instant: true, free: true })!;
-    const after = nearest();
-    expect(after.width).toBeLessThan(before.width); // the blacksmith took a cell of it
-    expect(fx + after.dx + after.width / 2).toBeLessThanOrEqual(footprintX(w, smith)[0]);
-    expect(after.state).toBe('growing');
-    expect(after.age).toBe(17);
-  });
-
-  it('a farm may borrow the land in front of both neighbouring lots, even with buildings on them', () => {
-    const w = createWorld({ village: false });
-    placeBuilding(w, 7, 'chapel', { instant: true, free: true });
-    const farm = placeBuilding(w, 8, 'farm', { instant: true, free: true })!;
-    placeBuilding(w, 9, 'blacksmith', { instant: true, free: true });
-    const x = w.plots[8].x;
-    const front = spans(w, farm, 'front');
-    expect(Math.min(...front.map((s) => s[0]))).toBe(w.plots[7].x - 125);
-    expect(Math.max(...front.map((s) => s[1]))).toBe(w.plots[9].x + 125);
-    // no plot straddles the edge of the farm's own lot
-    for (const s of front) expect(overlaps(s, [x - 125, x + 125]) && (s[0] < x - 125 || s[1] > x + 125)).toBe(false);
-    expect(farm.farm!.plots.some(isBorrowed)).toBe(true);
-  });
-
-  it('neighbouring farms share the land in front of the road without overlap', () => {
-    const w = createWorld({ village: false });
-    const a = placeBuilding(w, 3, 'farm', { instant: true, free: true })!;
-    const b = placeBuilding(w, 4, 'farm', { instant: true, free: true })!;
-    for (const zone of ['back', 'front'] as const) {
-      for (const sa of spans(w, a, zone)) for (const sb of spans(w, b, zone)) expect(overlaps(sa, sb)).toBe(false);
-    }
-  });
-
-  it('every cell has one use', () => {
-    const w = createWorld();
-    const g = landGrid(w);
-    const all = g.rows.flatMap((r) => r.cells);
-    for (const r of g.rows) expect(r.cells).toHaveLength(g.count);
-    expect(g.rows.map((r) => `${r.zone}${r.row}`)).toEqual(['back0', 'front0', 'front1']);
-    expect(g.rows[0].cells.some((c) => c.kind === 'building')).toBe(true);
-    expect(g.rows.slice(1).every((r) => r.cells.every((c) => c.kind !== 'building'))).toBe(true);
-    // a new village's farm has claimed its land but not tilled any of it yet
-    for (const r of g.rows) expect(r.cells.some((c) => c.kind === 'spare')).toBe(true);
-    expect(all.some((c) => c.kind === 'field')).toBe(false);
   });
 });

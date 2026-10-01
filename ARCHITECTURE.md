@@ -18,6 +18,8 @@ src/render   everything you see              imports src/game + src/render
    ▲
    │ renderFrame(), layouts
 src/app      input, screen/zoom, actions     main.ts wires it all into the loop
+
+src/sim      the game as text, headless       imports only src/game (like render, reads state; its scripts play the game)
 ```
 
 | Layer | Owns | Must not |
@@ -74,9 +76,11 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
 | Add a new mechanic | new module in `src/game` + tests, a state field for anything visible, then draw it in `src/render` |
 | Move where things stand (plots, farmyard, store, road) | `game/layout.ts` |
 | Change controls or add a key/button action | `app/controls.ts`, `app/actions.ts` (plus the button's look in `render/ui.ts`) |
-| Save something new, or change the save format | `game/save.ts` (bump `SAVE_VERSION`, add a migration, extend the validator) |
+| Save something new, or change the save format | `game/save.ts` (bump `SAVE_VERSION` and extend the validator; older saves are discarded, not migrated) |
 | Change where/when the game is saved | `app/persistence.ts` |
 | Change zoom behaviour or screen scaling | `app/viewport.ts`, `app/screen.ts` |
+| Try a situation out, or test a flow, without graphics | a script in `tests/scenarios/*.scn` (`npm run sim -- <file>`); commands in `sim/scenario.ts` |
+| Add a rule every world must keep | `checkInvariants` in `sim/textmap.ts` |
 
 ## Files
 
@@ -142,14 +146,13 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   building as a `Workplace`: its door, the next job and where it is done, how long a job takes,
   what it yields and where that goes down (`dropSpot`, asked again on the way as piles change),
   and whether a load is taken indoors to be worked on there (`inside`).
-- `farm.ts`: the farm's fields, and the farm as a `Workplace`. Tested by `farm.test.ts`. Plots lie
-  on the free land-grid cells around it (see `land.ts`) in rows (`FIELD_ROWS` in `layout.ts`): one
-  behind the road, two in front of it. A new farm is just the farmstead: a plot stays grass until
-  the farmer first works it (`tilled`), and borrowed land in front of the neighbouring lots
-  returns to grass after each harvest. Each plot keeps its own state (fallow → growing → ripe) and
-  age (150 s to ripe). Jobs: harvest while the farm store has room for the sheaf, else sow, own
-  land before borrowed, nearest first; each takes `sowPerCell` / `harvestPerCell` seconds per grid
-  cell of plot width (tuning sliders). A harvest yields a sheaf, stacked in its own place in the
+- `farm.ts`: the farm's fields, and the farm as a `Workplace`. Tested by `farm.test.ts`. Each
+  field is one land-grid cell (see `land.ts`) in one of the field rows (`FIELD_ROWS` in
+  `layout.ts`): the three lot rows behind the road, two in front of it. A new
+  farm is just the farmstead: a field stays grass until the farmer first works it (`tilled`). Each
+  field keeps its own state (fallow → growing → ripe) and age (150 s to ripe). Jobs: harvest while
+  the farm store has room for the sheaf, else sow, nearest first; each takes `sowPerCell` /
+  `harvestPerCell` seconds (tuning sliders). A harvest yields a sheaf, stacked in its own place in the
   store (`SHEAF_SLOTS`), from where serfs carry them to a warehouse (`transport.ts`).
 - `daynight.ts`: time of day, from `world.dayClock`, which runs at the `timeSpeed` knob (a day is
   `DAY_LENGTH` = 300 s at 1×). The `nightHours` knob (0–12) shapes the sun's path: fewer hours
@@ -164,32 +167,50 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   streets, then across the land) and fells it; a stonecutter cuts at the face of the nearest quarry.
   Workers walk at real ground speed: depth y is turned into ground px for every step (`worker.ts`).
 - `streets.ts`: the street network. A crossroads (the `intersection` building, 10 wood) opens a
-  new street across its own at right angles, crossing it at the new street's middle plot
+  new street across its own at right angles. Crossroads go only where their road runs down a line
+  of the road grid (`ROAD_GRID` in `layout.ts`, `onRoadGrid` in `grid.ts`): squares 27 cells
+  (nine blocks) across, with roads down the columns 27n + 2 (the block starting at cell 27n + 1
+  of the main street) and the rows 27n, so every street lies on it. Each such place not built on yet
+  (`crossroadsPlaces` in `grid.ts`) is kept for it: a signpost stands there, no other building
+  goes over the land its road would take (`keptLand`) and no field is sown there, so the build
+  menu opened there offers just the crossroads. It opens a new street, crossing it at the new street's middle plot
   (`CROSS_PLOT`). Each street is still a line with its own stretch of world x (street i starts at
   i × `STREET_STRIDE`, plot k of street i is `plots[i × PLOTS_PER_STREET + k]`), so one x says where
   anything is. On the map all streets lie on one 250 px grid, so they meet at plots: a new street is
   laid out plot by plot both ways (`layStreet` in `world.ts`); meeting a street that crosses its way
   it joins it if that plot is free (a crossroads is made there, `Building.junction`, and it runs on
   across) and ends one plot short otherwise, and it ends one plot short of a street along the same
-  line. Plots past a street's ends are `off`. So streets close into loops. `Junction`s are where
+  line. A road runs on past a street's last plot, so a street ends as many plots shorter again as
+  keeps that end off any road it doesn't meet, with a cell of grass between (`planStreet`); a
+  crossroads whose road can't keep off one that way can't be built. Plots past a street's ends are `off`. So streets close into loops. `Junction`s are where
   streets meet; `route` is the shortest way between two x's through them (to the corner, then on
   from the same spot on the next street; `worker.ts` walks it) and `streetDist` the walking distance
   every "nearest" is measured by. Each street is seen from its right-hand side, so its lots lie to
   its left (`backOf`) and a new street runs off into what lay behind the old one. The rider turns at
   a crossroads (`turnAtCrossroads`): ↑ onto the road away from the viewer, ↓ towards them. A new
   street gets its own woods; trees are cut where roads run off, and no field is sown across one.
-- `land.ts`: the land grid, tested by `land.test.ts`. The street is cut into 25 px cells in two
-  rows: `back` (behind the road, where buildings stand) and `front` (between the road and the
-  viewer). A building claims its footprint cells (its `width` rounded up to whole cells, centred on
-  the plot) as soon as it is placed. A farm's back fields fill the free cells up to the next
-  building on each side (usually one plot per side); its front fields take any front cells within
-  `FIELD_REACH` that are nearer to it than to another farm. Placing a building re-lays neighbouring
-  farms' fields (`syncFarmFields`): a plot the new building trims keeps its crop on the land
-  that is left; only plots whose land is taken entirely are lost.
+- `grid.ts`: the land grid, tested by `land.test.ts`. The whole plane is cut into 25 px cells,
+  north up: columns numbered 0, 1, 2… east (-1, -2… west), rows lettered A, B, C… north (-A, -B…
+  south), so a cell is named like B3. Roads take three cells across (one per lane), every street's
+  middle lane running down a row or column of cells; buildings take `width` (rounded up to cells)
+  × `depth` (default 2) cells; fields one cell each; quarries their rocky land (`landUse`). Seen
+  from a street, cells lie in rows j along it (`LOT_ROW` in `layout.ts`): the road is rows -1..1,
+  buildings stand right by it, from row 2 back. Buildings are whole blocks of three cells wide
+  (3, 6, 9…) and start at a cell 3n + 1 along their street (`siteX`); a building goes at any such
+  place where it fits on free cells (`whyNotHere`). Crossroads stand on the plots, one per block,
+  so their roads take a block and streets meet at a plot of each. Houses come small (3), medium
+  (6) and large (9): a small house finished right beside a house becomes part of it
+  (`mergeNeighbours` in `world.ts`, `Building.size`), and so does what is left of a merged one
+  when a section of it is pulled down.
+- `land.ts`: the farms' fields on the grid. A farm works the free cells nearest to it, up to
+  `FIELD_REACH` cells to either side and `FIELD_CELLS` in all (more once upgraded). Building over a
+  field, or a new road, re-lays the fields (`syncFarmFields`): fields keep their crops where their
+  cells are still theirs, and the farm takes the next nearest free cells instead.
 - `layout.ts`: the shared world geometry (see above), including the grid constants.
   World y is a real depth on the ground (`behindRoad`: the camera's perspective, `HORIZON_Y`,
   `EYE_DIST`), so the village is a plane; a quarry takes real land behind the main street
-  (`quarryLand`), which streets stop short of and no tree or field grows on.
+  (`quarryLand`), which no tree or field grows on. Each quarry lies in the middle of a square of
+  the road grid, so no road ever runs into the rocks.
 - `save.ts`: save games, tested by `save.test.ts`. `saveWorld` snapshots the simulation state
   (time, buildings with their stores and farms, people with their jobs and working day, animals,
   the stockpile, rider, RNG, id counter) as versioned JSON-safe data; `loadWorld` validates
@@ -197,6 +218,26 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   under the current rules (plots and field layout are derived, not stored; a job at a building
   that doesn't offer it is dropped). It refuses corrupt or newer saves with a reason instead of
   throwing. Not saved: the open menu, pending events, and tuning knobs (the URL owns those).
+
+### `src/sim`: the game as text
+The whole game can be played and looked at without graphics, instantly: the text is a view of the
+same state, and the same geometry (`grid.ts` `landUse`, `footprintOf`, `fieldCell`), that the
+renderer draws, so a layout that is right in text is right on screen.
+- `textmap.ts`: `renderMap`, the land grid from above, north up, one character per cell (roads
+  `=` `|`, crossings `+`, rocks `#`, a letter per building type, upper case standing and lower
+  case being built, fields `,` `_` `"` `*` by state, places kept for a crossroads `Y`, the rider `@`; `ids` mode gives each building
+  its own letter and its fields the lower case, to show which is which, e.g. merged houses);
+  `listBuildings`, `listStreets`, `summary`; and `checkInvariants`, the rules every world keeps
+  (no two buildings on a cell, nothing on a road or the rocks, buildings start at a cell 3n + 1,
+  every field on free land and one farm's, within reach; small houses and yards side by side are
+  merged; roads cross only at a crossroads; every job at a building that is there).
+- `scenario.ts`: `runScenario`, a script played one command a line through the game's own
+  functions (`build farm at s0:40`, `build house next`, `ride #last`, `turn up`, `build farm
+  here` through the build menu as the player does, `run until built`, `map ids`, `expect …`).
+  Places are `s<street>:<cell along it>`. The rules are checked after every command and every
+  few simulated seconds while running. `tools/sim.ts` is the command line (`npm run sim`).
+  `tests/scenarios.test.ts` plays every `tests/scenarios/*.scn`: no failure allowed, and the
+  output must match its `.out` snapshot (update with `npx vitest run tests/scenarios.test.ts -u`).
 
 ### `src/render`: graphics
 - `index.ts`: the renderer's public API: `renderFrame()` (world pass, then screen UI pass),
@@ -218,7 +259,9 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   the camera, smaller and nearer the horizon with distance. A building on a street running away from
   the camera stands beside that road. Things further off than this street's woods are drawn before
   them, nearer ones in among this street's people by screen depth.
-- `buildings.ts`: "2D picture of a 3D building" primitives (front face, shaded side face, gable
+- `buildings.ts`: the signpost where a crossroads can be built (`drawCrossroadsSign`, drawn on
+  this street by `scene.ts`, on the others by `plane.ts`, from above by `topview.ts`), and
+  "2D picture of a 3D building" primitives (front face, shaded side face, gable
   roof with thatch/tile/slate, timber framing) and `BUILDING_ART`: per building `draw`, optional
   `behind`/`front` art, and the drawn `height`. Art split for sprites also has `body` (the static
   picture a sprite replaces), `overlay` (live details: open door, stock, sleepers, drawn over the
@@ -246,8 +289,10 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
 - `construction.ts`: generic staged construction for any building: stakes → foundation →
   timber frame → walls → roof. The finished art is revealed bottom-up behind scaffolding, or,
   for a building with stage sprites, each stage's image fades in over the one before.
-- `grid.ts`: the land-grid debug overlay (tuning panel → "land grid", or `?grid=1`): cells tinted
-  by use (building footprint red, field green), plot boundaries dashed.
+- `grid.ts`: the land-grid overlay (G, or `?grid=1`) on the street being looked at: its rows of
+  cells tinted by use (road, building, field, quarry) and named where the names fit; and the cells
+  the building chosen in the build menu would take, green where it fits, red where not. From above
+  (`topview.ts`) the grid covers the whole plane, with column numbers and row letters at the edges.
 - `topview.ts`: the village from above (Tab, or the small map's spot on screen), at its own zoom: the
   plane north up around the rider, with streets, fields, the quarries' rocky land, roofs exactly on
   their footprint cells, sites as frames filling in, the mill's sails turning, trees where they stand,

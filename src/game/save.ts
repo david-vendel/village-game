@@ -11,30 +11,27 @@
 // - transient UI: the open build menu, pending events;
 // - tuning knobs (`params`), which the URL owns.
 //
-// Changing the save format:
-// 1. bump SAVE_VERSION;
-// 2. add MIGRATIONS[old] that turns an old-version `world` into the new shape;
-// 3. update SavedWorld and the validator below. Old saves then load through the
-//    migration chain; a save newer than this code is refused, never overwritten.
+// Changing the save format: bump SAVE_VERSION and update SavedWorld and the
+// validator below. Saves are not migrated: one from an older (or newer) version
+// is refused, kept aside, and a new village starts (app/persistence.ts).
 
 import { BUILDING_TYPES, BUILDINGS, ROLES, type BuildingType, type Role } from './buildings';
 import { createFarm, repairFarm, type FarmState, type FieldPlot } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
-import { FIELD_ROWS, TREE_Y, type FieldZone } from './layout';
+import { FIELD_ROWS, type FieldZone } from './layout';
 import { BUILDERS_PER_SITE, createSite, workSpots, type Site } from './site';
 import { transportHub } from './transport';
-import { employees, laneY, nameFor, openings, type Animal, type Job, type Look, type Person, type Stroll } from './people';
+import { employees, openings, type Animal, type Job, type Person, type Stroll } from './people';
 import { RESOURCES, stockOf, type Load, type Resource, type Stock } from './resources';
 import type { Worker, WorkerTask } from './worker';
-import { clearLand, createForest, type Tree } from './nature';
+import { clearLand, type Tree } from './nature';
 import type { Pile } from './piles';
+import { cellKey, cellName, cellsOf, footprintOf } from './grid';
 import { streetOf } from './streets';
-import { createWorld, layStreet, WORLD_WIDTH, type Building, type Rider, type World } from './world';
+import { createWorld, goneStreet, layStreet, MERGES, type Building, type Rider, type World } from './world';
 
-export const SAVE_VERSION = 16;
+export const SAVE_VERSION = 22;
 
-/** How often (s) the village used to collect goods from stores (until v9); old migrations need it. */
-const OLD_COLLECT_EVERY = 30;
 
 /** The persisted part of the world. */
 export type SavedWorld = Pick<
@@ -63,307 +60,6 @@ export interface SaveData {
 
 export type LoadResult = { ok: true; world: World } | { ok: false; error: string };
 
-/** Migrations from version n to n + 1, applied to the raw `world` object. */
-const MIGRATIONS: Record<number, (world: unknown) => unknown> = {
-  // v2: field plots record whether they have been tilled; sown land has been.
-  // (Migrations see unvalidated data, so they only touch what has the expected shape.)
-  1: (world) => {
-    const list = (v: unknown) => (Array.isArray(v) ? (v as unknown[]) : []);
-    const rec = (v: unknown) => (typeof v === 'object' && v !== null ? (v as Raw) : undefined);
-    for (const b of list(rec(world)?.buildings)) {
-      for (const p of list(rec(rec(b)?.farm)?.plots)) {
-        const plot = rec(p);
-        if (plot) plot.tilled = plot.state !== 'fallow';
-      }
-    }
-    return world;
-  },
-  // v3: the time of day runs on its own clock; until now it followed world time
-  2: (world) => {
-    const w = typeof world === 'object' && world !== null ? (world as Raw) : undefined;
-    if (w) w.dayClock = w.time;
-    return world;
-  },
-  // v4: farms record when the village next takes a sheaf from the store
-  3: (world) => {
-    const rec = (v: unknown) => (typeof v === 'object' && v !== null ? (v as Raw) : undefined);
-    const buildings = rec(world)?.buildings;
-    for (const b of Array.isArray(buildings) ? buildings : []) {
-      const farm = rec(rec(b)?.farm);
-      if (farm) farm.grainUse = OLD_COLLECT_EVERY;
-    }
-    return world;
-  },
-  // v5: plots have a row (the front field got a second one); work records its duration
-  4: (world) => {
-    const rec = (v: unknown) => (typeof v === 'object' && v !== null ? (v as Raw) : undefined);
-    const buildings = rec(world)?.buildings;
-    for (const b of Array.isArray(buildings) ? buildings : []) {
-      const farm = rec(rec(b)?.farm);
-      if (!farm) continue;
-      for (const p of Array.isArray(farm.plots) ? farm.plots : []) {
-        const plot = rec(p);
-        if (plot) plot.row = 0;
-      }
-      const task = rec(rec(farm.farmer)?.task);
-      if (task?.kind === 'work') task.duration = 3;
-    }
-    return world;
-  },
-  // v6: lunch is an hour of eating once a day: the farmer remembers the day he last ate
-  5: (world) => {
-    const rec = (v: unknown) => (typeof v === 'object' && v !== null ? (v as Raw) : undefined);
-    const buildings = rec(world)?.buildings;
-    for (const b of Array.isArray(buildings) ? buildings : []) {
-      const farmer = rec(rec(rec(b)?.farm)?.farmer);
-      if (!farmer) continue;
-      farmer.lunchDay = 0;
-      const task = rec(farmer.task);
-      if (task?.kind === 'home') task.left = task.activity === 'lunch' ? 1 : 0;
-    }
-    return world;
-  },
-  // v7: villagers become people (with names and jobs) and animals; the farmer
-  // becomes a person employed at the farm, with the generic worker routine;
-  // buildings get their own store (the farm's sheaves), and the village a stockpile
-  6: (world) => {
-    const rec = (v: unknown) => (typeof v === 'object' && v !== null ? (v as Raw) : undefined);
-    const list = (v: unknown) => (Array.isArray(v) ? (v as unknown[]) : []);
-    const w = rec(world);
-    if (!w) return world;
-    let nextId = typeof w.nextId === 'number' ? w.nextId : 1;
-    const people: unknown[] = [];
-    const animals: unknown[] = [];
-    for (const item of list(w.villagers)) {
-      const v = rec(item);
-      if (!v) continue;
-      const stroll = { x: v.x, dir: v.dir, speed: v.speed, idle: v.idle };
-      if (v.kind === 'chicken') animals.push({ id: v.id, kind: 'chicken', seed: v.seed, stroll });
-      else people.push({ id: v.id, name: nameFor(v.kind as Look, Number(v.seed) || 0), look: v.kind, seed: v.seed, job: null, stroll });
-    }
-    const task = (t: Raw | undefined): unknown => {
-      if (!t) return t;
-      const job = { action: t.action, target: t.plot };
-      if (t.kind === 'walk') {
-        const then = t.then === 'work' ? 'job' : t.then === 'deposit' ? 'deliver' : t.then;
-        return { kind: 'walk', toDx: t.toDx, toY: t.toY, then, job: then === 'job' ? job : null };
-      }
-      if (t.kind === 'work') return { kind: 'job', job, t: t.t, duration: t.duration };
-      return t;
-    };
-    for (const item of list(w.buildings)) {
-      const b = rec(item);
-      if (!b) continue;
-      const farm = rec(b.farm);
-      b.stock = { wood: 0, stone: 0, grain: typeof farm?.storage === 'number' ? farm.storage : 0 };
-      b.collectIn = typeof farm?.grainUse === 'number' ? farm.grainUse : OLD_COLLECT_EVERY;
-      const f = rec(farm?.farmer);
-      if (farm && f) {
-        const id = nextId++;
-        const seed = id * 7919;
-        const worker = { dx: f.dx, y: f.y, facing: f.facing, carrying: f.carrying ? 'grain' : null, task: task(rec(f.task)), stride: f.stride, lunchDay: f.lunchDay };
-        const stroll = { x: 0, dir: 1, speed: 30, idle: 0 };
-        people.push({ id, name: nameFor('peasant', seed), look: 'peasant', seed, job: { buildingId: b.id, role: 'farmer', worker }, stroll });
-      }
-      if (farm) {
-        delete farm.farmer;
-        delete farm.storage;
-        delete farm.grainUse;
-      }
-    }
-    w.people = people;
-    w.animals = animals;
-    delete w.villagers;
-    w.stock = { wood: 250, stone: 250, grain: 0 }; // the stockpile v7 started with
-    w.nextId = nextId;
-    return world;
-  },
-  // v8: the village's materials live in a warehouse (one is built for old saves,
-  // holding the old stockpile); builders now carry materials to construction
-  // sites (old sites were paid in full up front, so count as fully supplied);
-  // what a worker carries is a load with an amount
-  7: (world) => {
-    const rec = (v: unknown) => (typeof v === 'object' && v !== null ? (v as Raw) : undefined);
-    const list = (v: unknown) => (Array.isArray(v) ? (v as unknown[]) : []);
-    const w = rec(world);
-    if (!w) return world;
-    const buildings = list(w.buildings).map(rec).filter((b): b is Raw => !!b);
-    for (const b of buildings) {
-      if (b.status === 'constructing') {
-        const cost = BUILDINGS[b.type as BuildingType]?.cost ?? {};
-        b.site = { delivered: { wood: cost.wood ?? 0, stone: cost.stone ?? 0, grain: cost.grain ?? 0 } };
-      }
-    }
-    for (const p of list(w.people)) {
-      const worker = rec(rec(rec(p)?.job)?.worker);
-      if (worker && typeof worker.carrying === 'string') worker.carrying = { resource: worker.carrying, amount: 1 };
-    }
-    const old = rec(w.stock) ?? {};
-    if (!buildings.some((b) => b.type === 'warehouse')) {
-      const taken = new Set(buildings.map((b) => b.plotIndex));
-      const plotIndex = [5, 7, 9, 1, 10, 12, 14, 15, 0, 17, 18, 19, 20, 21, 22].find((i) => !taken.has(i));
-      if (plotIndex !== undefined) {
-        const cap = BUILDINGS.warehouse.storage;
-        const amount = (r: 'wood' | 'stone' | 'grain') => Math.min(cap[r] ?? 0, typeof old[r] === 'number' ? (old[r] as number) : 0);
-        const id = typeof w.nextId === 'number' ? w.nextId : 1;
-        w.nextId = id + 1;
-        (w.buildings as unknown[]).push({
-          id,
-          type: 'warehouse',
-          plotIndex,
-          progress: 1,
-          status: 'done',
-          completedAt: -100,
-          stock: { wood: amount('wood'), stone: amount('stone'), grain: amount('grain') },
-          collectIn: OLD_COLLECT_EVERY,
-        });
-      }
-    }
-    delete w.stock;
-    return world;
-  },
-  // v9: things have places and people have depth. Strollers keep a y (their
-  // lane); the invisible collection from stores is gone (collectIn); a site
-  // records what builders took off its pile and put in place (until now the
-  // pile was used up by progress); a delivery remembers the job its load
-  // came from (builders only carried fetched materials, farmers sheaves).
-  8: (world) => {
-    const list = (v: unknown) => (Array.isArray(v) ? (v as unknown[]) : []);
-    const rec = (v: unknown) => (typeof v === 'object' && v !== null ? (v as Raw) : undefined);
-    const w = rec(world);
-    if (!w) return world;
-    for (const who of [...list(w.people), ...list(w.animals)]) {
-      const s = rec(rec(who)?.stroll);
-      const id = rec(who)?.id;
-      if (s && typeof id === 'number') s.y = laneY(id);
-    }
-    for (const b of list(w.buildings).map(rec)) {
-      if (!b) continue;
-      delete b.collectIn;
-      const site = rec(b.site);
-      const delivered = rec(site?.delivered);
-      if (!site || !delivered) continue;
-      const cost = BUILDINGS[b.type as BuildingType]?.cost ?? {};
-      const progress = typeof b.progress === 'number' ? b.progress : 0;
-      const used: Raw = {};
-      for (const r of RESOURCES) used[r] = Math.min(typeof delivered[r] === 'number' ? (delivered[r] as number) : 0, progress * (cost[r] ?? 0));
-      site.taken = { ...used };
-      site.placed = { ...used };
-    }
-    for (const p of list(w.people)) {
-      const worker = rec(rec(rec(p)?.job)?.worker);
-      const task = rec(worker?.task);
-      const load = rec(worker?.carrying);
-      if (task?.kind === 'walk' && task.then === 'deliver' && !task.job) {
-        task.job = load?.resource === 'grain' ? { action: 'harvest', target: 0 } : { action: `fetch-${String(load?.resource ?? 'wood')}`, target: 0 };
-      }
-    }
-    return world;
-  },
-  // v10: flour; builders lay materials at work spots along the building
-  // (site: pile + laid, instead of taken + placed); farmers no longer carry
-  // sheaves to the warehouse (serfs do), so one on the way goes back to the
-  // farm's store.
-  9: (world) => {
-    const list = (v: unknown) => (Array.isArray(v) ? (v as unknown[]) : []);
-    const rec = (v: unknown) => (typeof v === 'object' && v !== null ? (v as Raw) : undefined);
-    const n = (v: unknown) => (typeof v === 'number' ? v : 0);
-    const w = rec(world);
-    if (!w) return world;
-    for (const b of list(w.buildings).map(rec)) {
-      if (!b) continue;
-      const st = rec(b.stock);
-      if (st) st.flour = 0;
-      const site = rec(b.site);
-      const delivered = rec(site?.delivered);
-      if (!site || !delivered) continue;
-      delivered.flour = 0;
-      const cost = BUILDINGS[b.type as BuildingType]?.cost ?? {};
-      const taken = rec(site.taken) ?? {};
-      const placed = rec(site.placed) ?? {};
-      const progress = n(b.progress);
-      const pile: Raw = {};
-      const laid: Raw = {};
-      for (const r of RESOURCES) {
-        pile[r] = Math.max(0, n(delivered[r]) - n(taken[r]));
-        // put in place but not yet built in: it lies at the first work spot
-        laid[r] = Math.max(0, n(placed[r]) - progress * (cost[r] ?? 0));
-      }
-      const spots = BUILDINGS[b.type as BuildingType] ? workSpots(b.type as BuildingType).length : 1;
-      b.site = { delivered, pile, laid: [laid, ...Array.from({ length: spots - 1 }, () => ({ wood: 0, stone: 0, grain: 0, flour: 0 }))] };
-    }
-    for (const p of list(w.people)) {
-      const worker = rec(rec(rec(p)?.job)?.worker);
-      const task = rec(worker?.task);
-      const job = rec(task?.job);
-      if (!task || job?.action !== 'haul') continue;
-      if (task.then === 'deliver') task.job = { action: 'harvest', target: 0 };
-      else worker!.task = { kind: 'idle', wait: 0.3 };
-    }
-    return world;
-  },
-  // v11: bread, and the bakery (listed after the mill, so later menu entries move up one)
-  10: (world) => {
-    const list = (v: unknown) => (Array.isArray(v) ? (v as unknown[]) : []);
-    const rec = (v: unknown) => (typeof v === 'object' && v !== null ? (v as Raw) : undefined);
-    const w = rec(world);
-    if (!w) return world;
-    const addBread = (s: unknown) => {
-      const st = rec(s);
-      if (st) st.bread = 0;
-    };
-    for (const b of list(w.buildings).map(rec)) {
-      if (!b) continue;
-      addBread(b.stock);
-      const site = rec(b.site);
-      addBread(site?.delivered);
-      addBread(site?.pile);
-      for (const l of list(site?.laid)) addBread(l);
-    }
-    const bakery = BUILDING_TYPES.indexOf('bakery');
-    if (typeof w.lastSelection === 'number' && w.lastSelection >= bakery) w.lastSelection += 1;
-    return world;
-  },
-  // v12: the woods behind the street are real trees, to be felled (nature.ts);
-  // (the woodcutter's and stonecutter's huts come last in the menu, so nothing moves)
-  11: (world) => {
-    const rec = (v: unknown) => (typeof v === 'object' && v !== null ? (v as Raw) : undefined);
-    const w = rec(world);
-    if (!w) return world;
-    let seed = typeof w.rngState === 'number' ? w.rngState : 1;
-    const rand = () => {
-      seed = (seed * 1103515245 + 12345) % 2147483648;
-      return seed / 2147483648;
-    };
-    let id = typeof w.nextId === 'number' ? w.nextId : 1;
-    w.trees = createForest(WORLD_WIDTH, rand, () => id++);
-    w.nextId = id;
-    return world;
-  },
-  // v13: crossroads open new streets (the crossroads comes last in the menu, so nothing moves)
-  12: (world) => {
-    const w = typeof world === 'object' && world !== null ? (world as Raw) : undefined;
-    if (w) w.branches = [];
-    return world;
-  },
-  // v14: trees stand anywhere on the land, each at its depth too; until now all stood on the tree line
-  13: (world) => {
-    const w = typeof world === 'object' && world !== null ? (world as Raw) : undefined;
-    for (const t of Array.isArray(w?.trees) ? (w.trees as unknown[]) : []) {
-      if (typeof t === 'object' && t !== null) (t as Raw).y = TREE_Y;
-    }
-    return world;
-  },
-  // v15: things can lie on the ground by the road (piles.ts); nothing did before
-  14: (world) => {
-    const w = typeof world === 'object' && world !== null ? (world as Raw) : undefined;
-    if (w) w.piles = [];
-    return world;
-  },
-  // v16: buildings can be being pulled down (status 'demolishing', with a demolition record); none were
-  15: (world) => world,
-};
-
 /** Snapshot the world. The result shares nothing with the live world. */
 export function saveWorld(world: World): SaveData {
   const saved: SavedWorld = {
@@ -379,7 +75,7 @@ export function saveWorld(world: World): SaveData {
     lastSelection: world.lastSelection,
     nextId: world.nextId,
     rngState: world.rngState,
-    branches: world.streets.flatMap((s) => (s.from === null ? [] : [s.from])),
+    branches: world.streets.slice(1).map((s) => (s.gone ? -1 : s.from!)),
   };
   return { version: SAVE_VERSION, world: JSON.parse(JSON.stringify(saved)) as SavedWorld };
 }
@@ -390,14 +86,9 @@ export function loadWorld(data: unknown): LoadResult {
     const root = obj(data, 'save');
     const version = int(root.version, 'version');
     if (version > SAVE_VERSION) return { ok: false, error: `save is version ${version}, this game reads up to ${SAVE_VERSION}` };
-    if (version < 1) return { ok: false, error: `unknown save version ${version}` };
-    let raw = root.world;
-    for (let v = version; v < SAVE_VERSION; v++) {
-      const migrate = MIGRATIONS[v];
-      if (!migrate) return { ok: false, error: `no migration from version ${v}` };
-      raw = migrate(raw);
-    }
-    return { ok: true, world: build(savedWorld(raw)) };
+    // an older save is not carried over: the village starts afresh
+    if (version < SAVE_VERSION) return { ok: false, error: `save is version ${version}, from an older game (this one reads ${SAVE_VERSION})` };
+    return { ok: true, world: build(savedWorld(root.world)) };
   } catch (e) {
     if (e instanceof SaveError) return { ok: false, error: e.message };
     throw e;
@@ -409,27 +100,32 @@ function build(saved: SavedWorld): World {
   const { branches, ...state } = saved;
   Object.assign(world, state);
   // the streets, in the order they were opened: each branches off at a finished crossroads on one before
-  // it, and joins the streets it meets where crossroads were made for it (so buildings go on their plots first)
+  // it, and joins the streets it meets where crossroads were made for it (so those go on their plots first)
+  const plotOf = (b: Building) => world.plots.find((p) => p.x === b.x);
   const seat = () => {
     for (const b of world.buildings) {
-      const plot = world.plots[b.plotIndex];
+      const plot = b.type === 'intersection' ? plotOf(b) : undefined;
       if (plot && plot.buildingId === null) plot.buildingId = b.id;
     }
   };
   const layBranch = (b: Building) => {
-    if (!world.plots[b.plotIndex]) throw new SaveError(`building ${b.id}: no plot ${b.plotIndex}`);
+    if (!plotOf(b)) throw new SaveError(`crossroads ${b.id}: no plot at ${b.x}`);
     seat();
     layStreet(world, b);
   };
   for (const id of branches) {
+    if (id === -1) {
+      goneStreet(world);
+      continue;
+    }
     const b = world.buildings.find((x) => x.id === id);
-    if (!b || b.type !== 'intersection' || b.status !== 'done') throw new SaveError(`a street branches off at ${id}, which is no finished crossroads`);
+    if (!b || b.type !== 'intersection' || b.status === 'constructing') throw new SaveError(`a street branches off at ${id}, which is no finished crossroads`);
     if (world.streets.some((st) => st.from === id)) throw new SaveError(`two streets branch off at crossroads ${id}`);
     layBranch(b);
   }
   // (a finished crossroads always leads somewhere)
   for (const b of world.buildings) {
-    if (b.type === 'intersection' && b.status === 'done' && !b.junction && !world.streets.some((st) => st.from === b.id)) layBranch(b);
+    if (b.type === 'intersection' && b.status !== 'constructing' && !b.junction && !world.streets.some((st) => st.from === b.id)) layBranch(b);
   }
   // a crossroads made where streets met, that no street met after all, is just a plot again
   world.buildings = world.buildings.filter((b) => !b.junction || world.junctions.some((j) => j.buildingId === b.id));
@@ -441,16 +137,25 @@ function build(saved: SavedWorld): World {
     }
   }
   const ids = new Set<number>();
+  const taken = new Set<string>();
   for (const b of world.buildings) {
-    const plot = world.plots[b.plotIndex];
-    if (!plot) throw new SaveError(`building ${b.id}: no plot ${b.plotIndex}`);
-    if (plot.buildingId !== null && plot.buildingId !== b.id) throw new SaveError(`building ${b.id}: plot ${b.plotIndex} already taken`);
+    const street = world.streets[streetOf(b.x)];
+    if (!street || street.gone) throw new SaveError(`building ${b.id}: no street at ${b.x}`);
     if (ids.has(b.id)) throw new SaveError(`duplicate building id ${b.id}`);
     ids.add(b.id);
+    // two buildings in one place is a broken save (one that grew since it was saved may lean on a neighbour)
+    const f = footprintOf(b);
+    const mid = f && cellsOf(world, { ...f, i0: Math.floor((f.i0 + f.i1) / 2), i1: Math.floor((f.i0 + f.i1) / 2), j1: f.j0 })[0];
+    if (mid && taken.has(cellKey(mid.c, mid.r))) throw new SaveError(`building ${b.id}: stands where another does, at ${cellName(mid.c, mid.r)}`);
+    if (mid) taken.add(cellKey(mid.c, mid.r));
+    if (b.type !== 'intersection') continue;
+    const plot = plotOf(b);
+    if (!plot) throw new SaveError(`crossroads ${b.id}: no plot at ${b.x}`);
+    if (plot.buildingId !== null && plot.buildingId !== b.id) throw new SaveError(`crossroads ${b.id}: plot at ${b.x} already taken`);
     plot.buildingId = b.id;
   }
   // what lies on the ground lies on a street that is there
-  world.piles = world.piles.filter((p) => p.amount > 1e-9 && !!world.streets[streetOf(p.x)]);
+  world.piles = world.piles.filter((p) => p.amount > 1e-9 && !!world.streets[streetOf(p.x)] && !world.streets[streetOf(p.x)].gone);
   const maxId = Math.max(0, ...[...world.buildings, ...world.people, ...world.animals, ...world.trees, ...world.piles].map((x) => x.id));
   world.nextId = Math.max(world.nextId, maxId + 1);
   // a construction site record belongs to buildings under construction, or
@@ -557,13 +262,14 @@ function building(v: unknown, path: string): Building {
   const out: Building = {
     id: int(b.id, `${path}.id`),
     type: oneOf<BuildingType>(b.type, BUILDING_TYPES, `${path}.type`),
-    plotIndex: int(b.plotIndex, `${path}.plotIndex`),
+    x: num(b.x, `${path}.x`),
     progress: Math.min(1, Math.max(0, num(b.progress, `${path}.progress`))),
     status: oneOf(b.status, ['constructing', 'done', 'demolishing'] as const, `${path}.status`),
     completedAt: b.completedAt === null ? null : num(b.completedAt, `${path}.completedAt`),
     stock: stock(b.stock, `${path}.stock`),
   };
   if (b.upgraded !== undefined && bool(b.upgraded, `${path}.upgraded`)) out.upgraded = true;
+  if (b.size !== undefined && MERGES[out.type]) out.size = oneOf(b.size, [2, 3] as const, `${path}.size`);
   if (b.junction !== undefined && bool(b.junction, `${path}.junction`) && out.type === 'intersection') out.junction = true;
   if (b.site !== undefined) out.site = site(b.site, `${path}.site`, out.type);
   if (b.farm !== undefined) out.farm = farm(b.farm, `${path}.farm`);

@@ -37,8 +37,11 @@ async function play(): Promise<void> {
   };
   const sound = createSound();
   const actions = createActions(world, notify, () => screen.touch, sound);
-  const controls = installControls(world, screen, actions);
-  const display = installTuning(world, sound, { onNewVillage: () => void autosave.newGame() });
+  // the game autosaves; the New village button by the zoom keys is the way back to a fresh start
+  const controls = installControls(world, screen, actions, () => {
+    if (window.confirm('Start a new village? Your saved village will be lost.')) void autosave.newGame();
+  });
+  const display = installTuning(world, sound);
   installWorkersPanel(world);
   if (restored) notify('Welcome back to your village');
 

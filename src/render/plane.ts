@@ -12,12 +12,13 @@
 // scaled by distance.
 
 import { BUILDINGS } from '../game/buildings';
-import { BASE_Y, EYE_DIST, FIELD_ROWS, GROUND_Y, QUARRIES, quarryLand, ROAD_Y, TREE_Y } from '../game/layout';
+import { crossroadsPlaces, sizeOfBuilding } from '../game/grid';
+import { BASE_Y, CELL_W, EYE_DIST, FIELD_ROWS, QUARRIES, quarryLand, ROAD_FAR_Y, ROAD_NEAR_Y, STREET_LINE_Y, TREE_Y } from '../game/layout';
 import { employees } from '../game/people';
 import { laidOut, onSite, upgrading } from '../game/site';
 import { backOf, crossings, groundPoint, mapPoint, SIDE_ROAD_HALF, streetOf, streetRange, type Street, type Vec } from '../game/streets';
 import { getBuilding, type Building, type World } from '../game/world';
-import type { DrawArgs } from './buildings';
+import { drawCrossroadsSign, type DrawArgs } from './buildings';
 import type { ViewId } from './manifest';
 import { drawBuilding } from './sprites';
 import { drawConstruction, drawDemolition, drawUpgrade } from './construction';
@@ -31,7 +32,7 @@ import { type Ctx, mix } from './util';
 const SPAN = GROUND_REF_Y - HORIZON_Y;
 /** Distance from the camera of ground at depth y of the street being looked at. */
 export const distAt = (y: number) => (EYE_DIST * SPAN) / (y - HORIZON_Y);
-const ROAD_DIST = distAt(ROAD_Y);
+const ROAD_DIST = distAt(STREET_LINE_Y);
 /** Nothing nearer the camera than this is drawn (it is below the bottom of the screen anyway). */
 const NEAR = 150;
 /** Things this far off are too small to make out. */
@@ -99,13 +100,13 @@ function groundShape(ctx: Ctx, eye: Eye, pts: Vec[], fill: string): void {
   ctx.fill();
 }
 
-const others = (world: World, eye: Eye) => world.streets.filter((s) => s.index !== eye.street);
+const others = (world: World, eye: Eye) => world.streets.filter((s) => s.index !== eye.street && !s.gone);
 
 /** The roads of the other streets, and the fields of the farms along them, on the ground. */
 export function drawOtherGround(ctx: Ctx, world: World, eye: Eye): void {
   const road = (s: Street) => {
     const { min, max } = streetRange(world, s.index);
-    return [ground(world, min, GROUND_Y + 6), ground(world, max, GROUND_Y + 6), ground(world, max, 500), ground(world, min, 500)];
+    return [ground(world, min, ROAD_FAR_Y), ground(world, max, ROAD_FAR_Y), ground(world, max, ROAD_NEAR_Y), ground(world, min, ROAD_NEAR_Y)];
   };
   const far = (pts: Vec[]) => Math.max(...pts.map((p) => toEye(eye, p).z));
   const shapes: Array<{ pts: Vec[]; fill: string }> = others(world, eye).map((s) => ({ pts: road(s), fill: '#a8875b' }));
@@ -115,7 +116,7 @@ export function drawOtherGround(ctx: Ctx, world: World, eye: Eye): void {
     shapes.push({ pts: [{ x: r.x0, y: r.y0 }, { x: r.x1, y: r.y0 }, { x: r.x1, y: r.y1 }, { x: r.x0, y: r.y1 }], fill: '#9d9585' });
   }
   for (const b of world.buildings) {
-    const x = world.plots[b.plotIndex].x;
+    const x = b.x;
     if (!b.farm || streetOf(x) === eye.street) continue;
     for (const p of b.farm.plots) {
       if (!p.tilled) continue;
@@ -174,12 +175,12 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
     const across = Math.abs(back.x * eye.dir.x + back.y * eye.dir.y) > 0.5;
     if (!across) return { at: ground(world, x, BASE_Y), view: 'street' };
     const p = mapPoint(world, x);
-    const d = SIDE_ROAD_HALF + 10 + BUILDINGS[b.type].width / 2;
+    const d = SIDE_ROAD_HALF + 10 + (sizeOfBuilding(b).w * CELL_W) / 2;
     const at = { x: p.x + back.x * d, y: p.y + back.y * d };
     return { at, view: toEye(eye, at).u < toEye(eye, p).u ? 'roadsideL' : 'roadsideR' };
   };
   for (const b of world.buildings) {
-    const x = world.plots[b.plotIndex].x;
+    const x = b.x;
     if (!elsewhere(x)) continue;
     const a: DrawArgs = {
       x: 0,
@@ -188,6 +189,7 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
       seed: b.id * 97,
       farm: b.farm,
       upgraded: !!b.upgraded,
+      width: sizeOfBuilding(b).w * CELL_W,
       stock: b.stock,
       workers: employees(world, b).map((p) => p.job!.worker),
       onSite: onSite(b),
@@ -205,9 +207,11 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
   // a crossroads' fingerpost stands at both of its ends
   for (const c of crossings(world)) {
     const b = getBuilding(world, c.buildingId);
-    if (!b || !elsewhere(c.x) || world.plots[b.plotIndex].x === c.x) continue;
+    if (!b || !elsewhere(c.x) || b.x === c.x) continue;
     add(ground(world, c.x, BASE_Y), 80, () => drawBuilding(ctx, 'intersection', { x: 0, base: 0, time: world.time, seed: b.id * 97 }));
   }
+  // and a signpost where a crossroads can be built
+  for (const x of crossroadsPlaces(world)) if (elsewhere(x)) add(ground(world, x, BASE_Y), 80, () => drawCrossroadsSign(ctx, 0, 0, world.time));
   // every tree, wherever it stands (this street's too: they stand at all depths)
   const felling = beingFelled(world);
   for (const t of world.trees) add(ground(world, t.x, t.y), 60, () => drawTreeAt(ctx, world, t, 0, 0, 1, felling));
@@ -221,7 +225,7 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
     const b = p.job && getBuilding(world, p.job.buildingId);
     if (p.job && b) {
       const w = p.job.worker;
-      const x = world.plots[b.plotIndex].x + w.dx;
+      const x = b.x + w.dx;
       if (!elsewhere(x)) continue;
       const f = facingOf(world.streets[streetOf(x)]);
       add(ground(world, x, w.y), 20, () => {

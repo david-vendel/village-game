@@ -3,42 +3,39 @@
 // world-anchored labels. Screen UI (HUD, menu,
 // touch buttons) is drawn separately by main.ts in its own coordinate space.
 
-import { BUILDINGS } from '../game/buildings';
 import { chapelBell } from '../game/daynight';
 import { employees } from '../game/people';
 import { GROUND_PILE_Y } from '../game/piles';
 import type { Worker } from '../game/worker';
 import { laidOut, onSite, upgrading } from '../game/site';
 import { crossings, streetOf, streetRange } from '../game/streets';
-import { canDemolish, canUpgrade, crossroadAt, getBuilding, plotAt, type Building, type World } from '../game/world';
+import { BUILDING_TYPES } from '../game/buildings';
+import { blockStartX, crossroadsPlaces, sizeOfBuilding } from '../game/grid';
+import { CELL_W } from '../game/layout';
+import { buildingAt, canDemolish, canUpgrade, constructionStage, crossroadAt, getBuilding, roomToBuild, type Building, type World } from '../game/world';
 import { drawBackground, drawForeground, drawHaze, drawSideRoad, drawStreetEnds, type View } from './background';
 import { BUILDING_LINE_DIST, distAt, drawOtherGround, eyeOf, standingOn, TREE_LINE_DIST } from './plane';
 import { flushEmissive } from './assets';
-import { constructionStage } from '../game/world';
-import { type Building3d, draw3d, has3d, height3d } from './world3d';
-import { BUILDING_ART, type DrawArgs } from './buildings';
+import { BUILDING_ART, drawCrossroadsSign, type DrawArgs } from './buildings';
 import { drawBuilding } from './sprites';
 import { drawConstruction, drawConstructionBehind, drawConstructionFront, drawDemolition, drawSitePiles, drawUpgrade } from './construction';
 import { drawWorker } from './farm';
 import { type Figure, figureOf } from './figure';
-import { drawLandGrid } from './grid';
+import { drawBlockGlow, drawLandGrid, drawSitePreview } from './grid';
 import { groundX } from './ground';
 import { drawSkyBehind, lightAt, tintLand } from './sky';
 import { drawRider } from './horse';
 import { drawVillager, walker } from './people';
 import { drawGroundPile } from './piles';
-import { drawBuildingLabel, drawCompletionEffect, drawPlotGlow, drawPlotPrompt, drawProgress } from './ui';
-import { type Ctx, GROUND_Y, rect, ROAD_Y, VIEW_H } from './util';
+import { drawBuildingLabel, drawCompletionEffect, drawDemolitionLabel, drawPlotPrompt, drawProgress } from './ui';
+import { type Ctx, GROUND_Y, ROAD_Y, VIEW_H } from './util';
+import { type Building3d, draw3d, has3d, height3d } from './world3d';
 
 const BASE = GROUND_Y + 4;
 
 export function cameraX(world: World, viewW: number): number {
-  const target = world.rider.x - viewW / 2 + world.rider.facing * viewW * 0.08;
-  // the camera stays on the rider's street (and on a street shorter than the view, in its middle)
-  const { min, max } = streetRange(world, streetOf(world.rider.x));
-  const lo = min - 60;
-  const hi = max + 60 - viewW;
-  return lo > hi ? (lo + hi) / 2 : Math.max(lo, Math.min(hi, target));
+  // always centred on the rider, out to the very end of a street too (past it the grass runs on)
+  return world.rider.x - viewW / 2;
 }
 
 export interface SceneView {
@@ -62,8 +59,9 @@ export interface SceneView {
   /** Overlay the land grid (debug view). */
   showGrid: boolean;
   /**
-   * The mouse in scene coordinates (null: not over the scene). Buildings show their info box
-   * only under the mouse; undefined (touch screens) shows it for the building at the rider.
+   * The mouse in scene units (x from the camera's left edge, y world depth), null when it isn't
+   * over the canvas: the grid names the cell under it, and a building shows its info box only
+   * under it. Undefined on touch screens (no hover): the building at the rider shows its box.
    */
   hover?: { x: number; y: number } | null;
 }
@@ -82,7 +80,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   // the ground first: the other streets' roads and fields on the plane, and a road still being laid at a crossroads
   drawOtherGround(ctx, world, eye);
   for (const b of world.buildings) {
-    const x = world.plots[b.plotIndex].x;
+    const x = b.x;
     if (b.type === 'intersection' && b.status !== 'done' && onScreen(x)) drawSideRoad(ctx, v, x, 0.15 + 0.85 * b.progress);
   }
 
@@ -90,8 +88,9 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   const onGround = (x: number, y: number) => groundX(x - camX, y, viewW / 2);
   const bell = chapelBell(world).angle;
   const args = (b: Building): DrawArgs => ({
-    x: world.plots[b.plotIndex].x - camX,
+    x: b.x - camX,
     base: BASE,
+    width: sizeOfBuilding(b).w * CELL_W,
     time: world.time,
     seed: b.id * 97,
     farm: b.farm,
@@ -108,7 +107,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   const atWork = world.people.flatMap((p) => {
     const b = p.job && getBuilding(world, p.job.buildingId);
     // builders fetching from a far warehouse can be anywhere along the street
-    const x = b ? world.plots[b.plotIndex].x : 0;
+    const x = b ? b.x : 0;
     return b && onScreen(x + p.job!.worker.dx, 300) ? [{ w: p.job!.worker, fig: figureOf(p), x }] : [];
   });
   // they walk on the ground, so they follow its perspective like the fields do
@@ -118,7 +117,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
 
   // things that spread behind buildings (farm fields)
   for (const b of world.buildings) {
-    if (!onScreen(world.plots[b.plotIndex].x, 400)) continue;
+    if (!onScreen(b.x, 400)) continue;
     const a = args(b);
     if (b.status === 'done') BUILDING_ART[b.type].behind?.(ctx, a);
     else if (!b.demolition) drawConstructionBehind(ctx, b.type, a, b.progress);
@@ -142,23 +141,20 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   }
   if (!hazed) drawHaze(ctx, v);
 
-  // empty plot markers
-  for (const p of world.plots) {
-    if (p.off || p.buildingId !== null || !onScreen(p.x)) continue;
-    plotMarker(ctx, p.x - camX, BASE, p.index);
-    if (!world.menu && plotAt(world, world.rider.x) === p) drawPlotGlow(ctx, p.x - camX, BASE);
-  }
+  // the block of three cells the rider has stopped in, gently lit, if something could be built there
+  if (!world.menu && Math.abs(world.rider.vx) < 5 && !buildingAt(world, world.rider.x) && roomToBuild(world, world.rider.x)) drawBlockGlow(ctx, world.rider.x, camX, viewW, world.time);
+  // where the building chosen in the menu would stand: its cells on the ground, green where it fits
+  if (world.menu?.kind === 'build') drawSitePreview(ctx, world, BUILDING_TYPES[world.menu.selection], world.menu.x, camX, viewW);
 
   // buildings: those with a 3D model in one 3D pass (world3d.ts), the rest as 2D art
   const light = lightAt(world);
   const in3d: Array<{ b: Building; a: DrawArgs; m: Building3d }> = [];
   for (const b of world.buildings) {
-    if (!onScreen(world.plots[b.plotIndex].x)) continue;
+    if (!onScreen(b.x)) continue;
     const a = args(b);
     if (has3d(b.type) && !b.demolition && !upgrading(b)) {
       const stage = b.status === 'done' ? undefined : constructionStage(b.progress).stage;
-      const m: Building3d = { id: b.id, type: b.type, seed: a.seed, x: world.plots[b.plotIndex].x, upgraded: !!b.upgraded, stage: stage === 'done' ? undefined : stage, parts: BUILDING_ART[b.type].stateParts?.(a) ?? [] };
-      in3d.push({ b, a, m });
+      in3d.push({ b, a, m: { id: b.id, type: b.type, seed: a.seed, x: b.x, upgraded: !!b.upgraded, stage: stage === 'done' ? undefined : stage, parts: BUILDING_ART[b.type].stateParts?.(a) ?? [] } });
       continue;
     }
     if (b.demolition && b.demolition.from >= 1) drawDemolition(ctx, b.type, a, b.progress); // one still being built comes down through its stages
@@ -169,23 +165,21 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   if (in3d.length) {
     const at = draw3d(ctx, in3d.map((e) => e.m), { camX, viewW, top: sv.top, bottom: sv.bottom, pxPerU: ctx.getTransform().a, phase: light.phase, sunHeight: light.sun, night: light.night });
     for (const { b, a, m } of in3d) {
-      if (m.stage) {
-        drawSitePiles(ctx, b.type, a);
-        continue;
-      }
-      const point = at.get(b.id)!;
-      BUILDING_ART[b.type].overlay?.(ctx, a, { at: point, part: (name) => m.parts.includes(name) });
+      if (m.stage) drawSitePiles(ctx, b.type, a);
+      else BUILDING_ART[b.type].overlay?.(ctx, a, { at: at.get(b.id)!, part: (name) => m.parts.includes(name) });
     }
   }
+  // where a crossroads can be built on this street, a signpost
+  for (const x of crossroadsPlaces(world)) if (streetOf(x) === street && onScreen(x)) drawCrossroadsSign(ctx, x - camX, BASE, world.time);
   // a crossroads' fingerpost also stands on the street its road leads to
   for (const c of crossings(world)) {
     const b = getBuilding(world, c.buildingId);
-    if (b && world.plots[b.plotIndex].x !== c.x && onScreen(c.x)) drawBuilding(ctx, 'intersection', { ...args(b), x: c.x - camX });
+    if (b && b.x !== c.x && onScreen(c.x)) drawBuilding(ctx, 'intersection', { ...args(b), x: c.x - camX });
   }
 
   // land in front of the road (farm front fields)
   for (const b of world.buildings) {
-    if (!onScreen(world.plots[b.plotIndex].x, 300)) continue;
+    if (!onScreen(b.x, 300)) continue;
     const a = args(b);
     if (b.status === 'done') BUILDING_ART[b.type].front?.(ctx, a);
     else if (!b.demolition) drawConstructionFront(ctx, b.type, a, b.progress);
@@ -215,62 +209,55 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   flushEmissive(ctx, light.night);
   drawSkyBehind(ctx, v, light);
   drawGrade(ctx, viewW, sv.top, sv.bottom);
-  if (sv.showGrid) drawLandGrid(ctx, world, camX, viewW);
+  if (sv.showGrid) drawLandGrid(ctx, world, camX, viewW, sv.hover ?? null);
 
   // world-anchored UI
   for (const b of world.buildings) {
-    const sx = world.plots[b.plotIndex].x - camX;
-    if (!onScreen(world.plots[b.plotIndex].x)) continue;
-    if (b.site) drawProgress(ctx, world, b, sx, BASE - BUILDING_ART[b.type].height - 20, k);
+    const sx = b.x - camX;
+    if (!onScreen(b.x)) continue;
+    if (b.status === 'demolishing') drawDemolitionLabel(ctx, world, b, sx, BASE - BUILDING_ART[b.type].height - 20, k);
+    else if (b.site) drawProgress(ctx, world, b, sx, BASE - BUILDING_ART[b.type].height - 20, k);
     else if (b.completedAt !== null) drawCompletionEffect(ctx, sx, BASE, BUILDING_ART[b.type].height, world.time - b.completedAt, b.id);
   }
-  const plot = plotAt(world, world.rider.x);
-  const atRider = plot ? getBuilding(world, plot.buildingId) : null;
-  if (plot && !atRider && !world.menu) drawPlotPrompt(ctx, plot.x - camX, BASE, world.time, sv.promptLabel, k);
-  // a building's info box: the one under the mouse (on touch screens, the one at the rider)
-  const shown = sv.hover === undefined ? atRider : sv.hover ? buildingAt(world, camX, sv.hover) : null;
-  if (shown && shown.status === 'done' && !shown.site && !world.menu) {
-    const here = shown === atRider;
-    const turn = here && crossroadAt(world) ? sv.turnLabel : null;
-    const hint = !here ? null : canUpgrade(shown) ? sv.upgradeLabel : canDemolish(shown) ? sv.destroyLabel : null;
-    const sx = world.plots[shown.plotIndex].x - camX;
-    const height = has3d(shown.type) ? height3d(shown.type) : BUILDING_ART[shown.type].height;
-    drawBuildingLabel(ctx, world, shown, sx, BASE - height - 30, k * 0.8, viewW, hint, turn);
+  if (!world.menu) {
+    const b = buildingAt(world, world.rider.x);
+    const sx = (b?.x ?? blockStartX(world.rider.x) + CELL_W) - camX;
+    // anywhere something fits, once the rider stops, they can build
+    if (!b) {
+      if (Math.abs(world.rider.vx) < 5 && roomToBuild(world, world.rider.x)) drawPlotPrompt(ctx, sx, BASE, world.time, sv.promptLabel, k);
+    }
+    // a building's info box: the one under the mouse (on touch screens, the one at the rider)
+    const shown = sv.hover === undefined ? b : sv.hover ? buildingUnder(world, camX, sv.hover) : null;
+    if (shown && shown.status === 'done' && !shown.site) {
+      const here = shown === b;
+      const turn = here && crossroadAt(world) ? sv.turnLabel : null;
+      const hint = !here ? null : canUpgrade(shown) ? sv.upgradeLabel : canDemolish(shown) ? sv.destroyLabel : null;
+      drawBuildingLabel(ctx, world, shown, shown.x - camX, BASE - drawnHeight(shown) - 30, k * 0.8, viewW, hint, turn);
+    }
   }
 }
 
+/** How tall a building stands on screen: its 3D model's height, or its 2D art's. */
+function drawnHeight(b: Building): number {
+  return has3d(b.type) ? height3d(b.type) : BUILDING_ART[b.type].height;
+}
+
 /** The finished building of this street under a point of the scene (its footprint, up to its drawn height). */
-function buildingAt(world: World, camX: number, p: { x: number; y: number }): Building | null {
+function buildingUnder(world: World, camX: number, p: { x: number; y: number }): Building | null {
   let best: Building | null = null;
   let bestD = Infinity;
   for (const b of world.buildings) {
     if (b.status !== 'done' || b.type === 'intersection') continue;
-    const sx = world.plots[b.plotIndex].x - camX;
-    const half = BUILDINGS[b.type].width / 2;
-    const height = has3d(b.type) ? height3d(b.type) : BUILDING_ART[b.type].height;
-    if (Math.abs(p.x - sx) > half || p.y > BASE + 6 || p.y < BASE - height - 10) continue;
+    const sx = b.x - camX;
+    const half = (sizeOfBuilding(b).w * CELL_W) / 2;
     const d = Math.abs(p.x - sx);
+    if (d > half || p.y > BASE + 6 || p.y < BASE - drawnHeight(b) - 10) continue;
     if (d < bestD) {
       best = b;
       bestD = d;
     }
   }
   return best;
-}
-
-/** A little stake with a pennant marks each free building plot. */
-function plotMarker(ctx: Ctx, x: number, base: number, index: number): void {
-  rect(ctx, x - 1.5, base - 26, 3, 26, '#6b4c30');
-  const col = index % 2 ? '#c9a24a' : '#b8453a';
-  ctx.fillStyle = col;
-  ctx.beginPath();
-  ctx.moveTo(x + 1.5, base - 26);
-  ctx.lineTo(x + 14, base - 22);
-  ctx.lineTo(x + 1.5, base - 18);
-  ctx.fill();
-  ctx.globalAlpha = 0.5;
-  rect(ctx, x - 40, base - 1, 80, 1.5, '#e9dcb8');
-  ctx.globalAlpha = 1;
 }
 
 /** Warm colour grade + soft vignette for a painterly finish. */

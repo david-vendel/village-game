@@ -5,17 +5,19 @@
 // that make or use them (transport.ts). Every store keeps each item in its
 // own place (storeSlot), where it is picked up from and put down.
 
-import { BUILDINGS, type BuildingType } from './buildings';
+import { BUILDINGS, type BuildingType, storageOf } from './buildings';
 import { BAKERY_SLOTS, BASKET, MILL_SLOTS, PILE_UNIT, SACK, STONECUTTER_SLOTS, TAVERN_SLOTS, SHEAF_SLOTS, STAND_Y, warehouseSlot, WOODCUTTER_SLOTS, type Slot, type Spot } from './layout';
 import { room, RESOURCES, shortfall, stockOf, type Amounts, type Load, type Resource, type Stock } from './resources';
+import { takeFromPile, type Pile } from './piles';
 import { owed } from './site';
 import { streetDist } from './streets';
+import { delivering } from './worker';
 import type { Building, World } from './world';
 
 /** What the starting village's warehouse holds. */
 export const WAREHOUSE_START: Stock = stockOf({ wood: 250, stone: 200 });
 
-const xOf = (world: World, b: Building) => world.plots[b.plotIndex].x;
+const xOf = (_world: World, b: Building) => b.x;
 /** How far building b is from world x, along the streets. */
 const away = (world: World, b: Building, x: number) => streetDist(world, x, xOf(world, b));
 
@@ -49,12 +51,18 @@ export function committed(world: World): Stock {
 const holdsFor = (b: Building, r: Resource) => b.status === 'done' && (b.type === 'warehouse' || !!BUILDINGS[b.type].ships?.includes(r));
 
 /**
- * What the village can still spend on a new building: in the warehouses and
- * the huts' stores (builders fetch from both), and not yet promised.
+ * What the village can still spend on a new building: in the warehouses, the
+ * huts' stores and the piles on the ground (builders fetch from all three),
+ * plus what serfs are carrying off the ground, and not yet promised.
  */
 export function available(world: World): Stock {
   const have = stockOf();
   for (const b of world.buildings) for (const r of RESOURCES) if (holdsFor(b, r)) have[r] += b.stock[r];
+  for (const p of world.piles) have[p.resource] += p.amount;
+  for (const p of world.people) {
+    const w = p.job?.worker;
+    if (w?.carrying && delivering(w)?.action.startsWith('collect-')) have[w.carrying.resource] += w.carrying.amount;
+  }
   const promised = committed(world);
   for (const r of RESOURCES) have[r] = Math.max(0, have[r] - promised[r]);
   return have;
@@ -85,6 +93,16 @@ export function materialSource(world: World, r: Resource, x: number): Building |
   return best;
 }
 
+/** The nearest pile of r on the ground to x, if any. */
+export function nearestPile(world: World, r: Resource, x: number): Pile | null {
+  let best: Pile | null = null;
+  for (const p of world.piles) {
+    if (p.resource !== r || p.amount <= 1e-9) continue;
+    if (!best || streetDist(world, x, p.x) < streetDist(world, x, best.x)) best = p;
+  }
+  return best;
+}
+
 /** Take up to `amount` of r out of a warehouse; returns how much was taken. */
 export function takeOut(warehouse: Building, r: Resource, amount: number): number {
   const n = Math.max(0, Math.min(amount, warehouse.stock[r]));
@@ -92,25 +110,29 @@ export function takeOut(warehouse: Building, r: Resource, amount: number): numbe
   return n;
 }
 
-/** Take whatever there is of `amounts` out of the warehouses, nearest to x first; returns what was taken. */
+/**
+ * Take whatever there is of `amounts` out of the warehouses, nearest to x
+ * first, then off the huts' stores and the piles on the ground; returns what was taken.
+ */
 export function takeFromWarehouses(world: World, amounts: Amounts, x: number): Stock {
   const got = stockOf();
   const near = [...warehouses(world)].sort((a, b) => away(world, a, x) - away(world, b, x));
   for (const r of RESOURCES) {
     for (const w of near) got[r] += takeOut(w, r, (amounts[r] ?? 0) - got[r]);
+    for (const b of world.buildings) if (b.type !== 'warehouse' && holdsFor(b, r)) got[r] += takeOut(b, r, (amounts[r] ?? 0) - got[r]);
+    for (const p of [...world.piles]) if (p.resource === r) got[r] += takeFromPile(world, p, (amounts[r] ?? 0) - got[r]);
   }
   return got;
 }
 
 /** Put a load into the warehouse nearest x that has room; returns how much fitted. */
 export function putAway(world: World, load: Load, x: number): number {
-  const capacity = BUILDINGS.warehouse.storage;
   const fits = warehouses(world)
-    .filter((w) => room(w.stock, capacity, load.resource) > 0)
+    .filter((w) => room(w.stock, storageOf(w), load.resource) > 0)
     .sort((a, b) => away(world, a, x) - away(world, b, x));
   let left = load.amount;
   for (const w of fits) {
-    const n = Math.min(left, room(w.stock, capacity, load.resource));
+    const n = Math.min(left, room(w.stock, storageOf(w), load.resource));
     w.stock[load.resource] += n;
     left -= n;
     if (left <= 0) break;
@@ -124,7 +146,7 @@ export function putAway(world: World, load: Load, x: number): number {
  */
 export function storeSlots(b: Building, r: Resource): { unit: number; perTrip: number; slot: (i: number) => Slot } | null {
   const pick = (slots: readonly Slot[]) => (i: number) => slots[Math.max(0, Math.min(i, slots.length - 1))];
-  if (b.type === 'warehouse') return { unit: PILE_UNIT, perTrip: 1, slot: (i) => warehouseSlot(r, i) };
+  if (b.type === 'warehouse') return { unit: PILE_UNIT, perTrip: 1, slot: (i) => warehouseSlot(r, i, b.size ?? 1) };
   if (b.type === 'farm' && r === 'grain') return { unit: 1, perTrip: 2, slot: pick(SHEAF_SLOTS) };
   if (b.type === 'mill' && (r === 'grain' || r === 'flour')) return { unit: SACK, perTrip: 1, slot: pick(MILL_SLOTS[r]) };
   if (b.type === 'bakery' && r === 'flour') return { unit: SACK, perTrip: 1, slot: pick(BAKERY_SLOTS.flour) };

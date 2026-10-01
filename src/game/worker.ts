@@ -62,6 +62,8 @@ export interface Workplace {
    * workers are let go rather than going indoors (the world does that).
    */
   dayLabour?: boolean;
+  /** Work goes on day and night (builders): never off duty. */
+  allHours?: boolean;
   /**
    * Work by the errand (transport): a worker with no errand to run is let go
    * where they stand (the world does that), instead of waiting at the door.
@@ -168,7 +170,8 @@ function goHome(w: Worker, place: Pick<Workplace, 'door'>): void {
 const atDoor = (w: Worker, place: Workplace) => Math.abs(w.dx - place.door.dx) < 0.5 && Math.abs(w.y - place.door.y) < 0.5;
 
 /** Why the worker should stop for now, if they should. */
-export function offDuty(w: Worker, now: TimeOfDay, place: Pick<Workplace, 'dayLabour'>): 'lunch' | 'sleep' | null {
+export function offDuty(w: Worker, now: TimeOfDay, place: Pick<Workplace, 'dayLabour' | 'allHours'>): 'lunch' | 'sleep' | null {
+  if (place.allHours) return null;
   if (!now.daylight) return 'sleep';
   if (!place.dayLabour && now.hour >= LUNCH_AT && now.hour < LUNCH_LATEST && w.lunchDay !== now.day) return 'lunch';
   return null;

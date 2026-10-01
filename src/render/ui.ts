@@ -6,19 +6,19 @@
 //   in world coordinates, scaled by `k` around their anchor so they stay
 //   readable when zoomed out.
 
-import { BUILDINGS, BUILDING_TYPES, ROLES, type Role } from '../game/buildings';
+import { BUILDINGS, BUILDING_TYPES, ROLES, type Role, storageOf } from '../game/buildings';
 import { clock } from '../game/daynight';
 import { buildShortfall, upgradeShortfall, villageStock } from '../game/economy';
 import { demolitionWork } from '../game/demolition';
 import { materialsAllow, siteWork, upgrading } from '../game/site';
-import { isBorrowed } from '../game/farm';
+import { sizeOf, sizeOfBuilding } from '../game/grid';
 import { WOOD_REACH } from '../game/nature';
 import { employees, jobsOf } from '../game/people';
 import { RESOURCES, type Amounts } from '../game/resources';
 import { backOf, mapPoint, streetOf, streetRange } from '../game/streets';
-import { constructionStage, demolitionYield, getBuilding, type Building, type BuildingOption, type ConstructionStage, type World } from '../game/world';
+import { constructionStage, demolitionYield, getBuilding, streetFrom, whyNotBuild, whyNotDemolish, type Building, type BuildingOption, type ConstructionStage, type World } from '../game/world';
 import { BUILDING_ART } from './buildings';
-import { drawBuildingIcon } from './sprites';
+import { drawBuildingIcon, drawBuildingIconGrey } from './sprites';
 import type { Ctx } from './util';
 
 const SERIF = 'Georgia, "Times New Roman", serif';
@@ -157,6 +157,8 @@ function plusMinusIcon(ctx: Ctx, r: Rect, plus: boolean): void {
 export interface HudLayout {
   zoomOut: Rect;
   zoomIn: Rect;
+  /** Start a new village: left of the zoom keys. */
+  newVillage: Rect;
   left: Rect;
   right: Rect;
   build: Rect;
@@ -178,6 +180,7 @@ export function hudLayout(uiW: number, uiH: number): HudLayout {
   return {
     zoomOut: { x: uiW - 12 - z * 2 - 4, y: 12, w: z, h: z },
     zoomIn: { x: uiW - 12 - z, y: 12, w: z, h: z },
+    newVillage: { x: uiW - 12 - z * 2 - 4 - 6 - 64, y: 12, w: 64, h: z },
     left: { x: 16, y: uiH - 16 - b, w: b, h: b },
     right: { x: 16 + b + 14, y: uiH - 16 - b, w: b, h: b },
     build,
@@ -230,6 +233,7 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
   plusMinusIcon(ctx, L.zoomOut, false);
   button(ctx, L.zoomIn, false);
   plusMinusIcon(ctx, L.zoomIn, true);
+  text(ctx, 'New village', L.newVillage.x + L.newVillage.w / 2, L.newVillage.y + L.newVillage.h - 3.5, 9, GOLD, 'center', true);
 
   if (st.touch && !world.menu) {
     button(ctx, L.left, st.leftHeld);
@@ -272,7 +276,7 @@ function drawMiniMap(ctx: Ctx, world: World, r: Rect): void {
   roundRect(ctx, r.x + 1, r.y + 1, r.w - 2, r.h - 2, 6);
   ctx.clip();
 
-  const ends = world.streets.map((s) => {
+  const ends = world.streets.filter((s) => !s.gone).map((s) => {
     const { min, max } = streetRange(world, s.index);
     return [mapPoint(world, min), mapPoint(world, max)] as const;
   });
@@ -310,7 +314,7 @@ function drawMiniMap(ctx: Ctx, world: World, r: Rect): void {
   const lots = world.buildings
     .filter((b) => b.type !== 'intersection')
     .map((b) => {
-      const x = world.plots[b.plotIndex].x;
+      const x = b.x;
       const p = mapPoint(world, x);
       const back = backOf(world.streets[streetOf(x)]?.dir ?? { x: 1, y: 0 });
       return { b, x: sx(p.x + back.x * MAP_LOT), y: sy(p.y + back.y * MAP_LOT) };
@@ -436,7 +440,7 @@ export function buildingMenuLayout(uiW: number, uiH: number, n: number): MenuLay
   };
 }
 
-const OPTION_NAME: Record<BuildingOption, string> = { upgrade: 'Upgrade', demolish: 'Destroy' };
+const OPTION_NAME: Record<BuildingOption, string> = { upgrade: 'Upgrade', demolishSection: 'Destroy this section', demolish: 'Destroy' };
 
 function drawBuildingMenu(ctx: Ctx, world: World, uiW: number, uiH: number): void {
   const menu = world.menu;
@@ -468,15 +472,24 @@ function drawBuildingMenu(ctx: Ctx, world: World, uiW: number, uiH: number): voi
     roundRect(ctx, r.x, r.y, r.w, r.h - 24, 6);
     ctx.clip();
     if (option === 'upgrade' && Object.keys(upgradeShortfall(world, b)).length) ctx.globalAlpha = 0.4;
+    if (option !== 'upgrade' && whyNotDemolish(world, b)) ctx.globalAlpha = 0.4;
     const previewH = r.h - 34;
-    const scale = Math.min(0.6, (r.w - 8) / (def.width * 1.3), previewH / (BUILDING_ART[b.type].height + 20));
-    if (option === 'demolish') {
-      // the building, faded, with a red cross over it
+    // this very building, as it stands: its width (a merged one), look, store and fields
+    const width = sizeOfBuilding(b).w * 25;
+    const like = { seed: b.id * 97, width, upgraded: !!b.upgraded, stock: b.stock, farm: b.farm };
+    const scale = Math.min(0.6, (r.w - 8) / (width * 1.3), previewH / (BUILDING_ART[b.type].height + 20));
+    if (option !== 'upgrade') {
+      // the building, faded, with a red cross over it (a small one, for a section)
       ctx.globalAlpha = 0.45;
-      drawBuildingIcon(ctx, b.type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time);
+      drawBuildingIcon(ctx, b.type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time, like);
       ctx.globalAlpha = 1;
+      const k = option === 'demolishSection' ? 0.55 : 1;
       const cx = r.x + r.w / 2;
       const cy = r.y + (r.h - 24) / 2;
+      ctx.save();
+      ctx.translate(cx, cy);
+      ctx.scale(k, k);
+      ctx.translate(-cx, -cy);
       ctx.strokeStyle = '#c8553d';
       ctx.lineWidth = 5;
       ctx.lineCap = 'round';
@@ -486,7 +499,8 @@ function drawBuildingMenu(ctx: Ctx, world: World, uiW: number, uiH: number): voi
       ctx.moveTo(cx + 18, cy - 18);
       ctx.lineTo(cx - 18, cy + 18);
       ctx.stroke();
-    } else drawBuildingIcon(ctx, b.type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time);
+      ctx.restore();
+    } else drawBuildingIcon(ctx, b.type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time, like);
     ctx.restore();
     const label = `${i + 1}. ${OPTION_NAME[option]}`;
     text(ctx, label, r.x + r.w / 2, r.y + r.h - 8, fitSize(ctx, label, 12, r.w - 6, sel), sel ? GOLD : '#f3ead8', 'center', sel);
@@ -503,12 +517,24 @@ function drawBuildingMenu(ctx: Ctx, world: World, uiW: number, uiH: number): voi
     const time = world.constructionEnabled ? `Builds in ${+(upgrade.buildTime / world.params.buildSpeed).toFixed(1)}s` : 'Builds instantly (construction off)';
     line2 = `Costs ${amounts(upgrade.cost)}` + (short ? ` — need ${amounts(lack)} more` : '') + `   ·   ${time}`;
   } else {
+    // a section is a small one's share of the whole
+    const part = option === 'demolishSection' ? 1 / (b.size ?? 1) : 1;
     const left = demolitionYield(b);
     const rounded: Amounts = {};
-    for (const r of RESOURCES) if (left[r] >= 0.5) rounded[r] = Math.round(left[r]);
-    const secs = +(demolitionWork(b) / world.params.buildSpeed).toFixed(1);
-    line1 = world.constructionEnabled ? `Builders pull it down in ${secs}s; its workers are let go` : 'Pull it down at once (construction off); its workers are let go';
-    line2 = Object.keys(rounded).length ? `Leaves ${amounts(rounded)} on the ground for serfs to carry off` : 'Leaves nothing behind';
+    for (const r of RESOURCES) if (left[r] * part >= 0.5) rounded[r] = Math.round(left[r] * part);
+    const secs = +((demolitionWork(b) * part) / world.params.buildSpeed).toFixed(1);
+    const street = streetFrom(world, b);
+    const why = whyNotDemolish(world, b);
+    if (option === 'demolishSection') {
+      const k = Math.floor((menu.x - (b.x - ((b.size ?? 1) * 75) / 2)) / 75);
+      const middle = k > 0 && k < (b.size ?? 1) - 1;
+      line1 = (world.constructionEnabled ? `Builders pull down the section you are at in ${secs}s` : 'Pull down the section you are at, at once') + (middle ? '; the rest stands as two' : '; the rest stands');
+    } else {
+      line1 = world.constructionEnabled ? `Builders pull it down in ${secs}s` : 'Pull it down at once (construction off)';
+      line1 += street ? '; the street it opened goes with it' : '; its workers are let go';
+    }
+    line2 = why ? `Can't: ${why.toLowerCase()}` : Object.keys(rounded).length ? `Leaves ${amounts(rounded)} on the ground for serfs to carry off` : 'Leaves nothing behind';
+    short = !!why;
   }
   text(ctx, line1, uiW / 2, M.infoY, fitSize(ctx, line1, 14, M.panel.w - 24), '#f3ead8', 'center');
   text(ctx, line2, uiW / 2, M.infoY + 20, fitSize(ctx, line2, 12, M.panel.w - 24), short ? '#e89a7a' : '#cbbfa4', 'center');
@@ -522,7 +548,9 @@ function drawBuildingMenu(ctx: Ctx, world: World, uiW: number, uiH: number): voi
 
 export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number): void {
   if (world.menu?.kind === 'building') return drawBuildingMenu(ctx, world, uiW, uiH);
-  if (!world.menu) return;
+  const menu = world.menu;
+  if (!menu) return;
+  const menuX = menu.x;
   const M = menuLayout(uiW, uiH);
 
   ctx.fillStyle = 'rgba(20,14,8,0.35)';
@@ -545,23 +573,28 @@ export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number):
     }
     roundRect(ctx, r.x, r.y, r.w, r.h - 24, 6);
     ctx.clip();
-    // what the village can't afford is shown faded
-    if (Object.keys(buildShortfall(world, type)).length) ctx.globalAlpha = 0.4;
+    // what doesn't fit here is greyed out; what the village can't afford is shown faded
+    const fits = menu.fits[i];
+    if (fits && Object.keys(buildShortfall(world, type)).length) ctx.globalAlpha = 0.4;
     const previewH = r.h - 34;
     const scale = Math.min(0.6, (r.w - 8) / (def.width * 1.3), previewH / (BUILDING_ART[type].height + 20));
-    drawBuildingIcon(ctx, type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time);
+    if (fits) drawBuildingIcon(ctx, type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time);
+    else drawBuildingIconGrey(ctx, type, r.x + r.w / 2, r.y + r.h - 30, scale);
     ctx.restore();
     const label = `${i + 1}. ${def.name}`;
-    text(ctx, label, r.x + r.w / 2, r.y + r.h - 8, fitSize(ctx, label, 12, r.w - 6, sel), sel ? GOLD : '#f3ead8', 'center', sel);
+    text(ctx, label, r.x + r.w / 2, r.y + r.h - 8, fitSize(ctx, label, 12, r.w - 6, sel), !fits ? '#8a8378' : sel ? GOLD : '#f3ead8', 'center', sel);
   });
 
-  const def = BUILDINGS[BUILDING_TYPES[world.menu.selection]];
+  const def = BUILDINGS[BUILDING_TYPES[menu.selection]];
   text(ctx, def.purpose, uiW / 2, M.infoY, fitSize(ctx, def.purpose, 14, M.panel.w - 24), '#f3ead8', 'center');
   const time = world.constructionEnabled ? `Builds in ${+(def.buildTime / world.params.buildSpeed).toFixed(1)}s` : 'Builds instantly (construction off)';
   const lack = buildShortfall(world, def.type);
   const cost = `Costs ${amounts(def.cost)}` + (Object.keys(lack).length ? ` — need ${amounts(lack)} more` : '');
-  const info = `${cost}   ·   ${time}`;
-  text(ctx, info, uiW / 2, M.infoY + 20, fitSize(ctx, info, 12, M.panel.w - 24), Object.keys(lack).length ? '#e89a7a' : '#cbbfa4', 'center');
+  const { w, d } = sizeOf(def.type);
+  const why = whyNotBuild(world, def.type, menuX);
+  const size = def.type === 'intersection' ? 'a road across' : `${w} × ${d} squares`;
+  const info = `${cost}   ·   ${time}   ·   ${size}` + (why ? `   ·   ${why}` : '');
+  text(ctx, info, uiW / 2, M.infoY + 20, fitSize(ctx, info, 12, M.panel.w - 24), Object.keys(lack).length || why ? '#e89a7a' : '#cbbfa4', 'center');
 
   button(ctx, M.cancel, false);
   text(ctx, 'Cancel', M.cancel.x + M.cancel.w / 2, M.cancel.y + 25, 15, '#f3ead8', 'center', true);
@@ -612,8 +645,9 @@ export function drawBuildingLabel(ctx: Ctx, world: World, b: Building, sx: numbe
   const def = BUILDINGS[b.type];
   const name = b.upgraded && def.upgrade ? def.upgrade.name : def.name;
   const lines = [def.purpose];
-  const stored = RESOURCES.filter((r) => def.storage[r]);
-  if (stored.length) lines.push(`Store: ${stored.map((r) => `${r} ${b.stock[r]}/${def.storage[r]}`).join(' · ')}`);
+  const storage = storageOf(b);
+  const stored = RESOURCES.filter((r) => storage[r]);
+  if (stored.length) lines.push(`Store: ${stored.map((r) => `${r} ${Math.round(b.stock[r])}/${storage[r]}`).join(' · ')}`);
   for (const role of ROLES) {
     const slots = jobsOf(b)[role] ?? 0;
     if (!slots) continue;
@@ -622,12 +656,11 @@ export function drawBuildingLabel(ctx: Ctx, world: World, b: Building, sx: numbe
     lines.push(`${ROLE_NAME[role]}: ${names || 'nobody free to hire'}${slots > 1 ? ` (${staff.length}/${slots})` : ''}`);
   }
   if (b.farm) {
-    // idle borrowed land isn't waiting to be sown, it's spare
-    const n = (st: string) => b.farm!.plots.filter((p) => p.state === st && (st !== 'fallow' || !isBorrowed(p))).length;
+    const n = (st: string) => b.farm!.plots.filter((p) => p.state === st).length;
     lines.push(`Fields: ${n('ripe')} ripe · ${n('growing')} growing · ${n('fallow')} to sow`);
   }
   if (b.type === 'woodcutter') {
-    const x = world.plots[b.plotIndex].x;
+    const x = b.x;
     const near = world.trees.filter((t) => Math.abs(t.x - x) <= WOOD_REACH);
     const n = (st: string) => near.filter((t) => t.state === st).length;
     lines.push(`Woods in reach: ${n('grown')} trees to fell · ${n('growing')} growing`);
@@ -665,7 +698,7 @@ export function drawProgress(ctx: Ctx, world: World, b: Building, sx: number, y:
   const materials =
     RESOURCES.filter((r) => cost[r])
       .map((r) => `${r} ${delivered?.[r] ?? 0}/${cost[r]}`)
-      .join(' · ') + `  ·  ${builders ? `${builders} builder${builders > 1 ? 's' : ''}` : 'no builders (night, or nobody free)'}`;
+      .join(' · ') + `  ·  ${builders ? `${builders} builder${builders > 1 ? 's' : ''}` : 'no builders free'}`;
   ctx.font = `10px ${SERIF}`;
   // box grows with the captions; the bar keeps its fixed width
   const pw = Math.max(w, ctx.measureText(caption).width, ctx.measureText(materials).width) + 12;
@@ -680,6 +713,26 @@ export function drawProgress(ctx: Ctx, world: World, b: Building, sx: number, y:
     ctx.fillRect(sx - w / 2, y - 26, w * b.progress, 6);
     text(ctx, caption, sx, y - 31, 10, '#f3ead8', 'center');
     text(ctx, materials, sx, y - 8, 10, '#cbbfa4', 'center');
+  });
+}
+
+/** Over a building being pulled down: "In demolition", how far it has come down, and who is at it. */
+export function drawDemolitionLabel(ctx: Ctx, world: World, b: Building, sx: number, y: number, k: number): void {
+  const w = 110;
+  const caption = `${BUILDINGS[b.type].name} — In demolition`;
+  const builders = employees(world, b).filter((p) => p.job!.role === 'builder').length;
+  const crew = builders ? `${builders} builder${builders > 1 ? 's' : ''}` : 'no builders free';
+  const down = b.demolition ? 1 - b.progress / b.demolition.from : 1;
+  ctx.font = `10px ${SERIF}`;
+  const pw = Math.max(w, ctx.measureText(caption).width, ctx.measureText(crew).width) + 12;
+  around(ctx, sx, y, k, () => {
+    panel(ctx, sx - pw / 2, y - 44, pw, 44, 0.6);
+    ctx.fillStyle = '#3a2e22';
+    ctx.fillRect(sx - w / 2, y - 26, w, 6);
+    ctx.fillStyle = '#d07a5a';
+    ctx.fillRect(sx - w / 2, y - 26, w * Math.max(0, Math.min(1, down)), 6);
+    text(ctx, caption, sx, y - 31, 10, '#f3ead8', 'center');
+    text(ctx, crew, sx, y - 8, 10, '#cbbfa4', 'center');
   });
 }
 
