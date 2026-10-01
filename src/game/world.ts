@@ -859,7 +859,6 @@ function updateRider(world: World, dt: number, input: MoveInput): void {
   const p = world.params;
   const dir = (input.right ? 1 : 0) - (input.left ? 1 : 0);
   if (dir !== 0) {
-    r.facing = dir as 1 | -1;
     r.vx += dir * p.riderAccel * dt;
     r.vx = Math.max(-p.riderMaxSpeed, Math.min(p.riderMaxSpeed, r.vx));
   } else {
@@ -874,6 +873,9 @@ function updateRider(world: World, dt: number, input: MoveInput): void {
     r.x = Math.max(min, Math.min(max, r.x));
     r.vx = 0;
   }
+  // the horse faces the way it is going: braking, it still faces forward; standing, the way it is asked to go
+  if (r.vx !== 0) r.facing = r.vx > 0 ? 1 : -1;
+  else if (dir !== 0) r.facing = dir as 1 | -1;
   r.gait += Math.abs(r.vx) * dt;
 }
 
