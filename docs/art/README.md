@@ -12,8 +12,16 @@ look: the *Age of Empires II* main-menu village), made with AI-assisted pipeline
 
 ## Status and hand-off (2026-10-01)
 
-Nothing implemented yet. **Next session runs on the user's own PC** (x86-64, with an
-NVIDIA GPU and Blender). The EC2 that hosts the live site can't run Blender (see PLAN §5).
+Nothing implemented yet. **The next session runs on the user's VM `vmsj13`.** Specs:
+x86-64, Ubuntu 22.04, 5 vCPUs (Xeon Platinum 8568Y+), ~13 GB RAM free (shared with a k8s
+cluster), 181 GB disk free, **no GPU**. Consequences:
+- Render with **Cycles on the CPU**, headless (`blender -b`). EEVEE needs a GPU, so it's not used.
+- Run Blender with `nice -n 10` and `--threads 4`, so the VM's other workloads keep a core.
+- AI routes (image→3D, big image or video models) aren't possible there; route P doesn't need
+  them. If needed later, use paid APIs or a GPU rented by the hour.
+
+The EC2 that hosts the live site can't run Blender (see PLAN §5). It only deploys: pull
+`main`, build, copy `dist` to `~/village-game-dist`.
 
 Decisions so far:
 - **Buildings are made procedurally** (route P in PLAN.md): a Python generator lays out the
@@ -21,7 +29,7 @@ Decisions so far:
   only fills gaps.
 - **Non-commercial project.** Non-commercial model licences are OK; Hunyuan3D is still
   excluded (EU territory clause).
-- **Generation and rendering run locally on the user's PC.** No cloud GPUs for now.
+- **Generation and rendering run on the user's own machines** (vmsj13). No cloud GPUs for now.
 - **No corners cut.** The user wants the full pilot, not a throwaway prototype.
 - **Style: not decided yet.** Choose between the AoE2 Definitive Edition menu painting (muted,
   hazy, rich materials), the 1999 storybook illustration (saturated, even light), or the
@@ -38,7 +46,7 @@ Decisions so far:
    the user's approval.
 
 First checks on the new machine:
-- `blender --version`: use Blender 4.5 LTS, x64.
-- `nvidia-smi`
+- `blender --version`: use Blender 4.5 LTS, linux-x64, unpacked under `~/opt/`.
 - `node --version`: Node 22.
+- `gh auth status`, or an SSH key that can push to `david-vendel/village-game`.
 - `npm ci && npm test && npm run build` in the repo.
