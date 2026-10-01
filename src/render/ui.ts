@@ -699,6 +699,26 @@ export function drawProgress(ctx: Ctx, world: World, b: Building, sx: number, y:
   });
 }
 
+/** Over a building being pulled down: "In demolition", how far it has come down, and who is at it. */
+export function drawDemolitionLabel(ctx: Ctx, world: World, b: Building, sx: number, y: number, k: number): void {
+  const w = 110;
+  const caption = `${BUILDINGS[b.type].name} — In demolition`;
+  const builders = employees(world, b).filter((p) => p.job!.role === 'builder').length;
+  const crew = builders ? `${builders} builder${builders > 1 ? 's' : ''}` : 'no builders (night, or nobody free)';
+  const down = b.demolition ? 1 - b.progress / b.demolition.from : 1;
+  ctx.font = `10px ${SERIF}`;
+  const pw = Math.max(w, ctx.measureText(caption).width, ctx.measureText(crew).width) + 12;
+  around(ctx, sx, y, k, () => {
+    panel(ctx, sx - pw / 2, y - 44, pw, 44, 0.6);
+    ctx.fillStyle = '#3a2e22';
+    ctx.fillRect(sx - w / 2, y - 26, w, 6);
+    ctx.fillStyle = '#d07a5a';
+    ctx.fillRect(sx - w / 2, y - 26, w * Math.max(0, Math.min(1, down)), 6);
+    text(ctx, caption, sx, y - 31, 10, '#f3ead8', 'center');
+    text(ctx, crew, sx, y - 8, 10, '#cbbfa4', 'center');
+  });
+}
+
 /** Golden sparkle burst over a building that just finished. */
 export function drawCompletionEffect(ctx: Ctx, sx: number, base: number, height: number, age: number, seed: number): void {
   if (age < 0 || age > 2) return;

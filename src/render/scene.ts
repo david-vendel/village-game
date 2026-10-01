@@ -25,7 +25,7 @@ import { drawSkyBehind, lightAt, tintLand } from './sky';
 import { drawRider } from './horse';
 import { drawVillager, walker } from './people';
 import { drawGroundPile } from './piles';
-import { drawBuildingLabel, drawCompletionEffect, drawPlotPrompt, drawProgress } from './ui';
+import { drawBuildingLabel, drawCompletionEffect, drawDemolitionLabel, drawPlotPrompt, drawProgress } from './ui';
 import { type Ctx, GROUND_Y, ROAD_Y, VIEW_H } from './util';
 
 const BASE = GROUND_Y + 4;
@@ -192,7 +192,8 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   for (const b of world.buildings) {
     const sx = b.x - camX;
     if (!onScreen(b.x)) continue;
-    if (b.site) drawProgress(ctx, world, b, sx, BASE - BUILDING_ART[b.type].height - 20, k);
+    if (b.status === 'demolishing') drawDemolitionLabel(ctx, world, b, sx, BASE - BUILDING_ART[b.type].height - 20, k);
+    else if (b.site) drawProgress(ctx, world, b, sx, BASE - BUILDING_ART[b.type].height - 20, k);
     else if (b.completedAt !== null) drawCompletionEffect(ctx, sx, BASE, BUILDING_ART[b.type].height, world.time - b.completedAt, b.id);
   }
   if (!world.menu) {
