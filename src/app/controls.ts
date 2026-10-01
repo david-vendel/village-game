@@ -25,18 +25,42 @@ const ZOOM_STEP = 1.2;
 
 type Role = 'left' | 'right' | 'pinch' | 'none';
 
+const VIEW_KEY = 'village-game:view';
+const TOP_ZOOM_KEY = 'village-game:top-zoom';
+const stored = (key: string): string | null => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+};
+const store = (key: string, value: string) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // no storage: it just won't be remembered
+  }
+};
+
 export function installControls(world: World, screen: Screen, actions: Actions): Controls {
   const canvas = screen.canvas;
   const keys = new Set<string>();
   const pointers = new Map<number, { role: Role; x: number; y: number }>();
   let pinch: { dist: number; zoom: number } | null = null;
-  let topView = false;
-  let topZoom = 1;
+  // the view from above is a preference, not game state (game/save.ts leaves UI out), so the browser keeps it
+  let topView = stored(VIEW_KEY) === 'top';
+  let topZoom = Number(stored(TOP_ZOOM_KEY)) || 1;
+  const setTopView = (on: boolean) => {
+    topView = on;
+    store(VIEW_KEY, on ? 'top' : 'street');
+  };
   // zooming acts on whichever view is showing
   const zoomNow = () => (topView ? topZoom : screen.vp.zoom);
   const setZoom = (z: number) => {
-    if (topView) topZoom = Math.max(0.25, Math.min(8, z));
-    else screen.setZoom(z);
+    if (topView) {
+      topZoom = Math.max(0.25, Math.min(8, z));
+      store(TOP_ZOOM_KEY, String(topZoom));
+    } else screen.setZoom(z);
   };
   const zoomBy = (f: number) => setZoom(zoomNow() * f);
 
@@ -53,7 +77,7 @@ export function installControls(world: World, screen: Screen, actions: Actions):
     if (e.repeat) return;
 
     if (key === 'Tab') {
-      topView = !topView;
+      setTopView(!topView);
       return;
     }
     if (key === 'c') return actions.toggleConstruction();
@@ -61,7 +85,7 @@ export function installControls(world: World, screen: Screen, actions: Actions):
     if (key === '-' || key === '_') return zoomBy(1 / ZOOM_STEP);
     if (key === '=' || key === '+') return zoomBy(ZOOM_STEP);
     if (key === '0') {
-      if (topView) topZoom = 1;
+      if (topView) setZoom(1);
       else screen.resetZoom();
       return;
     }
@@ -142,7 +166,7 @@ export function installControls(world: World, screen: Screen, actions: Actions):
       const L = hudLayout(uiW, uiH);
       const dir = screen.touch ? dirAt(ux, uy) : null;
       if (hit(L.zoomOut, ux, uy)) zoomBy(1 / ZOOM_STEP);
-      else if (hit(L.map, ux, uy)) topView = !topView;
+      else if (hit(L.map, ux, uy)) setTopView(!topView);
       else if (hit(L.zoomIn, ux, uy)) zoomBy(ZOOM_STEP);
       else if (dir) role = dir;
       else if (screen.touch && actions.atCrossroads() && hit(L.turnUp, ux, uy)) actions.turn('up');
