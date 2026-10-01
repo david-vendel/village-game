@@ -13,7 +13,7 @@ import { canDemolish, canUpgrade, crossroadAt, getBuilding, plotAt, type Buildin
 import { drawBackground, drawForeground, drawHaze, drawSideRoad, drawStreetEnds, type View } from './background';
 import { BUILDING_LINE_DIST, distAt, drawOtherGround, eyeOf, standingOn, TREE_LINE_DIST } from './plane';
 import { BUILDING_ART, type DrawArgs } from './buildings';
-import { drawConstruction, drawConstructionBehind, drawConstructionFront, drawUpgrade } from './construction';
+import { drawConstruction, drawConstructionBehind, drawConstructionFront, drawDemolition, drawUpgrade } from './construction';
 import { drawWorker } from './farm';
 import { type Figure, figureOf } from './figure';
 import { drawLandGrid } from './grid';
@@ -111,7 +111,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     if (!onScreen(world.plots[b.plotIndex].x, 400)) continue;
     const a = args(b);
     if (b.status === 'done') BUILDING_ART[b.type].behind?.(ctx, a);
-    else drawConstructionBehind(ctx, b.type, a, b.progress);
+    else if (!b.demolition) drawConstructionBehind(ctx, b.type, a, b.progress);
   }
 
   // then everything standing behind this street's buildings, far to near: trees and quarries, the other
@@ -143,7 +143,8 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   for (const b of world.buildings) {
     if (!onScreen(world.plots[b.plotIndex].x)) continue;
     const a = args(b);
-    if (upgrading(b)) drawUpgrade(ctx, b.type, a, b.progress);
+    if (b.demolition && b.demolition.from >= 1) drawDemolition(ctx, b.type, a, b.progress); // one still being built comes down through its stages
+    else if (upgrading(b)) drawUpgrade(ctx, b.type, a, b.progress);
     else if (b.status === 'done') BUILDING_ART[b.type].draw(ctx, a);
     else drawConstruction(ctx, b.type, a, b.progress);
   }
@@ -158,7 +159,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     if (!onScreen(world.plots[b.plotIndex].x, 300)) continue;
     const a = args(b);
     if (b.status === 'done') BUILDING_ART[b.type].front?.(ctx, a);
-    else drawConstructionFront(ctx, b.type, a, b.progress);
+    else if (!b.demolition) drawConstructionFront(ctx, b.type, a, b.progress);
   }
 
   // everyone on the street and the land in front of it, far to near, so

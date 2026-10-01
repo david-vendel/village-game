@@ -124,6 +124,34 @@ export function drawUpgrade(ctx: Ctx, type: BuildingType, a: DrawArgs, progress:
   scaffolding(ctx, a, left, W, a.base - Math.min(H, 150) * 0.78);
 }
 
+/**
+ * A building being pulled down: the building as it stands, taken away from
+ * the top down as the work goes on (`left`: 1 untouched, 0 gone), a pale
+ * broken edge where the builders are at it, down to the foundation stones.
+ */
+export function drawDemolition(ctx: Ctx, type: BuildingType, a: DrawArgs, left: number): void {
+  const W = BUILDINGS[type].width;
+  const H = BUILDING_ART[type].height;
+  const x0 = a.x - W / 2;
+  const standing = (H + 60) * clamp01(left);
+  const top = a.base - standing;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x0 - 120, top, W + 280, standing + 40);
+  ctx.clip();
+  BUILDING_ART[type].draw(ctx, a);
+  ctx.restore();
+  if (left < 1 && standing < H + 60) {
+    // the broken top, ragged, with dust
+    ctx.globalAlpha = 0.5;
+    for (let x = x0; x < x0 + W; x += 6) rect(ctx, x, top - 1 - hash(a.seed, x) * 3, 6, 3, '#d8ccb0');
+    ctx.globalAlpha = 1;
+  }
+  // the foundation is the last to go
+  const fh = 10 * clamp01(left * 4);
+  if (fh > 0) rect(ctx, x0, a.base - fh, W, fh, '#a89c88');
+}
+
 /** Poles and boards round the building, and a pulley hoisting a stone while someone is building. */
 function scaffolding(ctx: Ctx, a: DrawArgs, left: number, W: number, frameTop: number): void {
   const sTop = frameTop - 16;

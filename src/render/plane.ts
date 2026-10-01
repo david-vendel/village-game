@@ -18,7 +18,7 @@ import { laidOut, onSite, upgrading } from '../game/site';
 import { backOf, crossings, groundPoint, mapPoint, SIDE_ROAD_HALF, streetOf, streetRange, type Street, type Vec } from '../game/streets';
 import { getBuilding, type Building, type World } from '../game/world';
 import { BUILDING_ART, type DrawArgs } from './buildings';
-import { drawConstruction, drawUpgrade } from './construction';
+import { drawConstruction, drawDemolition, drawUpgrade } from './construction';
 import { drawWorker, farmerScale } from './farm';
 import { figureOf } from './figure';
 import { GROUND_REF_Y, HORIZON_Y } from './ground';
@@ -191,7 +191,8 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
       vpX: 0,
     };
     add(lot(b, x), BUILDINGS[b.type].width, () => {
-      if (upgrading(b)) drawUpgrade(ctx, b.type, a, b.progress);
+      if (b.demolition && b.demolition.from >= 1) drawDemolition(ctx, b.type, a, b.progress); // one still being built comes down through its stages
+    else if (upgrading(b)) drawUpgrade(ctx, b.type, a, b.progress);
       else if (b.status === 'done') BUILDING_ART[b.type].draw(ctx, a);
       else drawConstruction(ctx, b.type, a, b.progress);
     });
