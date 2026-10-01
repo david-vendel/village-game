@@ -10,7 +10,7 @@
 // on another street is reached along the road, round the corner (`Nav`).
 
 import type { TimeOfDay } from './daynight';
-import { ROAD_Y, type Spot } from './layout';
+import { behindRoad, ROAD_Y, yAt, type Spot } from './layout';
 import type { Load } from './resources';
 
 /** A job at a workplace: what to do (its own vocabulary, e.g. 'sow') and to which of its things. */
@@ -67,6 +67,8 @@ export interface Workplace {
    * where they stand (the world does that), instead of waiting at the door.
    */
   temporary?: boolean;
+  /** Multiplies the walking speed, loaded and empty-handed (default 1). */
+  walkSpeed?: number;
   /** The front door, where workers go in and out and wait for work. */
   door: Spot;
   /** The next job for this worker (not one in `taken`, which others are on), with where to do it. */
@@ -239,14 +241,16 @@ export function updateWorker(w: Worker, place: Workplace, dt: number, now: TimeO
     // bound for another street: along the road to the corner first
     const leg = nav?.route(nav.x + w.dx, nav.x + task.toDx);
     const corner = leg?.turnTo !== undefined ? { dx: leg.x - nav!.x, y: ROAD_Y, next: leg.turnTo - nav!.x } : null;
+    // walking on the ground: y is a depth across the street, so the step is measured in ground px (layout.ts behindRoad)
     const ddx = (corner ? corner.dx : task.toDx) - w.dx;
-    const ddy = (corner ? corner.y : task.toY) - w.y;
+    const depth = behindRoad(w.y);
+    const ddy = behindRoad(corner ? corner.y : task.toY) - depth;
     const d = Math.hypot(ddx, ddy);
-    const step = (w.carrying ? WALK_SPEED : WALK_SPEED_EMPTY) * dt;
+    const step = (w.carrying ? WALK_SPEED : WALK_SPEED_EMPTY) * (place.walkSpeed ?? 1) * dt;
     if (Math.abs(ddx) > 0.5) w.facing = ddx > 0 ? 1 : -1;
     if (d > step) {
       w.dx += (ddx / d) * step;
-      w.y += (ddy / d) * step;
+      w.y = yAt(depth + (ddy / d) * step);
       w.stride += step;
       return;
     }

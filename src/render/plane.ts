@@ -22,20 +22,22 @@ import { drawConstruction, drawUpgrade } from './construction';
 import { drawWorker, farmerScale } from './farm';
 import { figureOf } from './figure';
 import { GROUND_REF_Y, HORIZON_Y } from './ground';
-import { drawQuarry, drawTreeAt } from './nature';
+import { beingFelled, drawQuarry, drawTreeAt } from './nature';
 import { drawVillager, walker } from './people';
 import { type Ctx, mix } from './util';
 
 const SPAN = GROUND_REF_Y - HORIZON_Y;
 /** Distance from the camera of ground at depth y of the street being looked at. */
-const distAt = (y: number) => (EYE_DIST * SPAN) / (y - HORIZON_Y);
+export const distAt = (y: number) => (EYE_DIST * SPAN) / (y - HORIZON_Y);
 const ROAD_DIST = distAt(ROAD_Y);
 /** Nothing nearer the camera than this is drawn (it is below the bottom of the screen anyway). */
 const NEAR = 150;
 /** Things this far off are too small to make out. */
 const FAR = 9000;
-/** Pictures further than this are behind the tree line of the street being looked at. */
+/** Pictures further than this are behind the tree line of the street being looked at… */
 export const TREE_LINE_DIST = distAt(TREE_Y);
+/** …and further than this behind its buildings. */
+export const BUILDING_LINE_DIST = distAt(BASE_Y - 4);
 
 /** The camera: on the map in front of the middle of the view, looking along `back` of the street. */
 export interface Eye {
@@ -133,9 +135,9 @@ export interface Standing {
 }
 
 /**
- * Everything standing on the other streets, far to near, as pictures scaled by
- * distance: buildings and building sites, crossroads' fingerposts, trees, the
- * quarries (when the main street is not the one being looked at) and people.
+ * Everything standing on the plane except this street's buildings and people,
+ * far to near, as pictures scaled by distance: the other streets' buildings,
+ * building sites, crossroads' fingerposts and people, and every tree and quarry.
  */
 export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
   const out: Standing[] = [];
@@ -200,17 +202,14 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
     if (!b || !elsewhere(c.x) || world.plots[b.plotIndex].x === c.x) continue;
     add(ground(world, c.x, BASE_Y), 80, () => BUILDING_ART.intersection.draw(ctx, { x: 0, base: 0, time: world.time, seed: b.id * 97 }));
   }
-  for (const t of world.trees) {
-    if (!elsewhere(t.x)) continue;
-    add(ground(world, t.x, TREE_Y), 60, () => drawTreeAt(ctx, world, t, 0, 0, 1));
-  }
-  // a quarry's crag rises over the middle of its land, seen from the other streets
-  if (eye.street !== 0) {
-    QUARRIES.forEach((q, i) => {
-      const r = quarryLand(q);
-      add({ x: q.x, y: (r.y0 + r.y1) / 2 }, 320, () => drawQuarry(ctx, 0, 0, 1, i));
-    });
-  }
+  // every tree, wherever it stands (this street's too: they stand at all depths)
+  const felling = beingFelled(world);
+  for (const t of world.trees) add(ground(world, t.x, t.y), 60, () => drawTreeAt(ctx, world, t, 0, 0, 1, felling));
+  // a quarry's crag rises from the front of its land as seen from the main street, over the middle of it from elsewhere
+  QUARRIES.forEach((q, i) => {
+    const r = quarryLand(q);
+    add({ x: q.x, y: eye.street === 0 ? r.y0 : (r.y0 + r.y1) / 2 }, 320, () => drawQuarry(ctx, 0, 0, 1, i));
+  });
   // people at work, and those strolling, wherever they are
   for (const p of world.people) {
     const b = p.job && getBuilding(world, p.job.buildingId);

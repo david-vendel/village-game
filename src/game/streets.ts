@@ -27,7 +27,7 @@
 // the buildings stand, lie to its left (`backOf`), and a new street runs off
 // into what lay behind the old one.
 
-import { behindRoad, FIRST_PLOT_X, PLOT_SPACING, QUARRIES, quarryLand, STREET_LENGTH } from './layout';
+import { behindRoad, FIRST_PLOT_X, PLOT_SPACING, QUARRIES, quarryLand, STREET_BAND_HALF, STREET_LENGTH } from './layout';
 import type { World } from './world';
 
 /** Distance in x between the starts of neighbouring streets (more than a street's length). */
@@ -38,15 +38,10 @@ export const PLOTS_PER_STREET = Math.ceil((STREET_LENGTH - 200 - FIRST_PLOT_X) /
 export const CROSS_PLOT = 12;
 /** Half the width of a road running into the street at a crossroads (px). */
 export const SIDE_ROAD_HALF = 30;
-/**
- * Half the width of a street's whole band across the ground: its road, the
- * fields in front of it and the woods behind it (px). Where another street
- * crosses, nothing of that street's own (fields, trees) lies within it.
- */
-export const STREET_BAND_HALF = 125;
+/** A street's band across the ground (layout.ts): where another street crosses, none of this one's fields lie within it. */
+export { STREET_BAND_HALF };
 /** How far past its first and last plot a street runs on (px). */
 const STREET_END = 180;
-
 export interface Vec {
   x: number;
   y: number;
@@ -119,6 +114,26 @@ export function onQuarryLand(p: Vec, margin = 0): boolean {
     return p.x > r.x0 - margin && p.x < r.x1 + margin && p.y > r.y0 - margin && p.y < r.y1 + margin;
   });
 }
+
+/** Map point d map px behind the middle of the road at world x (in front for negative d). */
+export function streetPoint(world: World, x: number, d: number): Vec {
+  const s = world.streets[streetOf(x)] ?? world.streets[0];
+  const p = onMap(s, x);
+  const b = backOf(s.dir);
+  return { x: p.x + b.x * d, y: p.y + b.y * d };
+}
+
+/** Map point p seen from street i: the world x along it, and how far behind its road (d). */
+export function fromStreet(world: World, i: number, p: Vec): { x: number; d: number } {
+  const s = world.streets[i];
+  const dx = p.x - s.origin.x;
+  const dy = p.y - s.origin.y;
+  const b = backOf(s.dir);
+  return { x: streetStart(i) + dx * s.dir.x + dy * s.dir.y, d: dx * b.x + dy * b.y };
+}
+
+/** How far a street runs past its last plot, and so how clear of the rocks it stops. */
+export const STREET_END_RUN = STREET_END;
 
 /** Map point of plot k of street s. */
 export const plotPoint = (s: Street, k: number) => onMap(s, plotX(s.index, k));

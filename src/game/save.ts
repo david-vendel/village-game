@@ -20,16 +20,16 @@
 import { BUILDING_TYPES, BUILDINGS, ROLES, type BuildingType, type Role } from './buildings';
 import { createFarm, repairFarm, type FarmState, type FieldPlot } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
-import { FIELD_ROWS, type FieldZone } from './layout';
+import { FIELD_ROWS, TREE_Y, type FieldZone } from './layout';
 import { BUILDERS_PER_SITE, createSite, workSpots, type Site } from './site';
 import { transportHub } from './transport';
 import { employees, laneY, nameFor, openings, type Animal, type Job, type Look, type Person, type Stroll } from './people';
 import { RESOURCES, type Load, type Resource, type Stock } from './resources';
 import type { Worker, WorkerTask } from './worker';
-import { createForest, onRoad, type Tree } from './nature';
+import { clearLand, createForest, type Tree } from './nature';
 import { createWorld, layStreet, WORLD_WIDTH, type Building, type Rider, type World } from './world';
 
-export const SAVE_VERSION = 13;
+export const SAVE_VERSION = 14;
 
 /** How often (s) the village used to collect goods from stores (until v9); old migrations need it. */
 const OLD_COLLECT_EVERY = 30;
@@ -343,6 +343,14 @@ const MIGRATIONS: Record<number, (world: unknown) => unknown> = {
     if (w) w.branches = [];
     return world;
   },
+  // v14: trees stand anywhere on the land, each at its depth too; until now all stood on the tree line
+  13: (world) => {
+    const w = typeof world === 'object' && world !== null ? (world as Raw) : undefined;
+    for (const t of Array.isArray(w?.trees) ? (w.trees as unknown[]) : []) {
+      if (typeof t === 'object' && t !== null) (t as Raw).y = TREE_Y;
+    }
+    return world;
+  },
 };
 
 /** Snapshot the world. The result shares nothing with the live world. */
@@ -451,8 +459,8 @@ function build(saved: SavedWorld): World {
     if (b.type !== 'farm' || b.status !== 'done') delete b.farm;
     else if (!b.farm) b.farm = createFarm({ spots: farmFieldSpots(world, b) });
   }
-  // no tree stands where another street crosses (saves from before streets had bands)
-  world.trees = world.trees.filter((t) => !onRoad(world, t.x));
+  // no tree stands on a road, a building, a field or a quarry
+  clearLand(world);
   // re-lay fields under the current land rules (crops carry over), and make
   // sure what was loaded obeys the farm's rules
   syncFarmFields(world);
@@ -595,7 +603,7 @@ function person(v: unknown, path: string): Person {
 
 function tree(v: unknown, path: string): Tree {
   const t = obj(v, path);
-  return { id: int(t.id, `${path}.id`), x: num(t.x, `${path}.x`), state: oneOf(t.state, ['growing', 'grown', 'stump'] as const, `${path}.state`), age: num(t.age, `${path}.age`) };
+  return { id: int(t.id, `${path}.id`), x: num(t.x, `${path}.x`), y: num(t.y, `${path}.y`), state: oneOf(t.state, ['growing', 'grown', 'stump'] as const, `${path}.state`), age: num(t.age, `${path}.age`) };
 }
 
 function animal(v: unknown, path: string): Animal {

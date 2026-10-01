@@ -33,6 +33,13 @@ export const EYE_DIST = 400;
 const eyeDist = (y: number) => (EYE_DIST * (BASE_Y - HORIZON_Y)) / (y - HORIZON_Y);
 /** How far behind the middle of the road (map px) ground at depth y lies (negative: in front of it). */
 export const behindRoad = (y: number) => eyeDist(y) - eyeDist(ROAD_Y);
+/** The depth y of ground lying d map px behind the middle of the road (the inverse of behindRoad). */
+export const yAt = (d: number) => HORIZON_Y + (EYE_DIST * (BASE_Y - HORIZON_Y)) / (d + eyeDist(ROAD_Y));
+/**
+ * Half the width of a street's whole band across the ground (map px): its
+ * road, the lots and fields along it. Streets on the grid lie two bands apart.
+ */
+export const STREET_BAND_HALF = 125;
 
 // --- Farm (x relative to the farm's plot centre, y in world units) ---------------
 
@@ -244,13 +251,14 @@ export const QUARRY_W = 280;
 export const QUARRY_Y = TREE_Y + 1;
 /**
  * The land a quarry takes behind the main street (map px; the main street runs
- * along y = 0, its lots to the north): from just behind the tree line, QUARRY_W
- * wide and QUARRY_DEEP deep. No street, field or tree is in it.
+ * along y = 0, its lots to the north): whole land-grid cells (CELL_W square),
+ * from the edge of the main street's band back, about QUARRY_W wide and
+ * QUARRY_DEEP deep. No street, building, field or tree is on it.
  */
-export const QUARRY_DEEP = 260;
+export const QUARRY_DEEP = 10 * CELL_W;
 export function quarryLand(q: { x: number }): { x0: number; x1: number; y0: number; y1: number } {
-  const y0 = behindRoad(QUARRY_Y) - 4;
-  return { x0: q.x - QUARRY_W / 2, x1: q.x + QUARRY_W / 2, y0, y1: y0 + QUARRY_DEEP };
+  const snap = (x: number, up: boolean) => GRID_X0 + (up ? Math.ceil : Math.floor)((x - GRID_X0) / CELL_W) * CELL_W;
+  return { x0: snap(q.x - QUARRY_W / 2, false), x1: snap(q.x + QUARRY_W / 2, true), y0: STREET_BAND_HALF, y1: STREET_BAND_HALF + QUARRY_DEEP };
 }
 /** Places along a quarry's face where a stonecutter works (dx from its centre). */
 export const QUARRY_SPOTS: readonly number[] = [-46, 0, 46];

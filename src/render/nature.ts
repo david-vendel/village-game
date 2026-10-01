@@ -9,7 +9,7 @@ import { depthScale, groundX } from './ground';
 import { circle, type Ctx, ellipse, hash, line, poly, rect, shade } from './util';
 
 /** Seconds of felling done on each tree someone is chopping, as a share of the job. */
-function beingFelled(world: World): Map<number, number> {
+export function beingFelled(world: World): Map<number, number> {
   const out = new Map<number, number>();
   for (const p of world.people) {
     const t = p.job?.worker.task;

@@ -61,7 +61,8 @@ const MUTATORS = [
   'turnAtCrossroads',
   'layStreet',
   'branchStreet',
-  'clearRoad',
+  'clearLand',
+  'plantWoods',
   'updateFarm', // (gone; kept so it can't come back into render)
   'setFieldSpots',
   'syncFarmFields',

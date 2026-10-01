@@ -17,11 +17,11 @@ import { buildShortfall, putAway, takeFromWarehouses, upgradeShortfall, WAREHOUS
 import { createFarm, DEFAULT_WORK, farmWorkplace, updateCrops, type FarmState } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
 import { FIRST_PLOT_X, PLOT_SPACING, STREET_LENGTH } from './layout';
-import { clearRoad, createForest, onRoad, gatherWorkplace, isGatherHut, updateForest, type Tree } from './nature';
+import { clearLand, plantWoods, gatherWorkplace, isGatherHut, updateForest, type Tree } from './nature';
 import { employees, laneY, nameFor, openings, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
 import { builderPositions, builders, createSite, siteWork, siteWorkplace, upgrading, type Site } from './site';
 import { RESOURCES, stockOf, type Stock } from './resources';
-import { CROSS_PLOT, mainStreet, newStreet, onQuarryLand, STREET_BAND_HALF, plotPoint, plotX, PLOTS_PER_STREET, route, streetOf, streetRange, streetsAt, turnFacing, type Junction, type Street } from './streets';
+import { CROSS_PLOT, mainStreet, newStreet, onQuarryLand, STREET_BAND_HALF, STREET_END_RUN, plotPoint, plotX, PLOTS_PER_STREET, route, streetOf, streetRange, streetsAt, turnFacing, type Junction, type Street } from './streets';
 import { eatAtTaverns } from './tavern';
 import { serfPositions, transportHub, transportWorkplace } from './transport';
 import { createWorker, currentJob, offDuty, updateWorker, type Nav, type Worker, type Workplace } from './worker';
@@ -45,6 +45,8 @@ export interface WorldParams {
   riderDecel: number; // px/s²
   /** Construction speed multiplier: 2 builds twice as fast. */
   buildSpeed: number;
+  /** Builders' walking speed multiplier, loaded and empty-handed. */
+  builderWalk: number;
   /** How fast the time of day runs: 2 makes days half as long (see daynight.ts). */
   timeSpeed: number;
   /** Hours of the 24 the sun spends below the horizon, 0..12. */
@@ -59,6 +61,7 @@ export const DEFAULT_PARAMS: WorldParams = {
   riderAccel: RIDER_ACCEL,
   riderDecel: RIDER_DECEL,
   buildSpeed: 1,
+  builderWalk: 2,
   timeSpeed: 1,
   nightHours: 8,
   ...DEFAULT_WORK,
@@ -245,7 +248,7 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
       }
     }
     staff(world);
-    world.trees = createForest(WORLD_WIDTH, () => rand(world), () => world.nextId++);
+    plantWoods(world, 0, () => rand(world));
   }
   return world;
 }
@@ -301,8 +304,9 @@ export function placeBuilding(
   if (instant && type === 'farm') b.farm = createFarm({ spots: farmFieldSpots(world, b) });
   plot.buildingId = b.id;
   if (instant && type === 'intersection') openStreet(world, b);
-  // the new footprint may cover land neighbouring farms were using
+  // the new footprint may cover land neighbouring farms were using; trees standing on it are cut down
   syncFarmFields(world);
+  clearLand(world);
   world.events.push({ kind: 'placed', buildingId: b.id });
   if (instant) world.events.push({ kind: 'completed', buildingId: b.id });
   return b;
@@ -375,6 +379,8 @@ function complete(world: World, b: Building): void {
     openStreet(world, b);
     syncFarmFields(world);
   }
+  // nothing grows on the farm's fields
+  if (b.type === 'farm') clearLand(world);
   world.events.push({ kind: 'completed', buildingId: b.id });
 }
 
@@ -397,7 +403,7 @@ export function layStreet(world: World, b: Building): Street {
     for (let k = CROSS_PLOT + step; k >= 0 && k < PLOTS_PER_STREET; k += step) {
       const meet = streetsAt(world, street.dir, plotPoint(street, k));
       // it stops short of the rocks, and of a street along the same line
-      if (meet.along || onQuarryLand(plotPoint(street, k), STREET_BAND_HALF)) break;
+      if (meet.along || onQuarryLand(plotPoint(street, k), Math.max(STREET_BAND_HALF, STREET_END_RUN))) break;
       if (meet.crossing) {
         const plot = plotOf(world, meet.crossing.street, meet.crossing.k);
         const there = getBuilding(world, plot.buildingId);
@@ -430,16 +436,10 @@ function makeJunction(world: World, plot: Plot): Building {
 
 /** A crossroads is finished: its road runs off into a new street, with woods of its own. */
 function openStreet(world: World, b: Building): void {
-  const known = world.junctions.length;
   const street = layStreet(world, b);
-  // roads are cut through the woods where the new street meets the others, and its own woods grow along it
-  for (const j of world.junctions.slice(known)) {
-    clearRoad(world, j.a);
-    clearRoad(world, j.b);
-  }
-  const { min, max } = streetRange(world, street.index);
-  const x0 = plotX(street.index, 0) - FIRST_PLOT_X;
-  world.trees.push(...createForest(WORLD_WIDTH, () => rand(world), () => world.nextId++, x0).filter((t) => t.x > min && t.x < max && !onRoad(world, t.x)));
+  // the new road is cut through the woods, and woods of its own grow along it
+  clearLand(world);
+  plantWoods(world, street.index, () => rand(world));
 }
 
 /**

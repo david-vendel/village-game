@@ -15,6 +15,8 @@ export interface Controls {
   touchHeld(): { left: boolean; right: boolean };
   /** Whether the village is shown from above (Tab, or a tap on the small map). */
   topView(): boolean;
+  /** The view from above has its own zoom, apart from the street view's. */
+  topZoom(): number;
 }
 
 const GAME_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'Enter', 'Escape', 'Tab', 'w', 'a', 's', 'd']);
@@ -28,6 +30,14 @@ export function installControls(world: World, screen: Screen, actions: Actions):
   const pointers = new Map<number, { role: Role; x: number; y: number }>();
   let pinch: { dist: number; zoom: number } | null = null;
   let topView = false;
+  let topZoom = 1;
+  // zooming acts on whichever view is showing
+  const zoomNow = () => (topView ? topZoom : screen.vp.zoom);
+  const setZoom = (z: number) => {
+    if (topView) topZoom = Math.max(0.25, Math.min(8, z));
+    else screen.setZoom(z);
+  };
+  const zoomBy = (f: number) => setZoom(zoomNow() * f);
 
   // --- Keyboard -----------------------------------------------------------------
 
@@ -47,9 +57,13 @@ export function installControls(world: World, screen: Screen, actions: Actions):
     }
     if (key === 'c') return actions.toggleConstruction();
     if (key === 'm') return actions.toggleSound();
-    if (key === '-' || key === '_') return screen.zoomBy(1 / ZOOM_STEP);
-    if (key === '=' || key === '+') return screen.zoomBy(ZOOM_STEP);
-    if (key === '0') return screen.resetZoom();
+    if (key === '-' || key === '_') return zoomBy(1 / ZOOM_STEP);
+    if (key === '=' || key === '+') return zoomBy(ZOOM_STEP);
+    if (key === '0') {
+      if (topView) topZoom = 1;
+      else screen.resetZoom();
+      return;
+    }
 
     if (world.menu) {
       if (key === 'ArrowLeft' || key === 'a') actions.moveSelection(-1);
@@ -103,7 +117,7 @@ export function installControls(world: World, screen: Screen, actions: Actions):
 
   function startPinchIfReady(): void {
     const ps = pinchPointers();
-    pinch = ps.length === 2 ? { dist: Math.hypot(ps[0].x - ps[1].x, ps[0].y - ps[1].y), zoom: screen.vp.zoom } : null;
+    pinch = ps.length === 2 ? { dist: Math.hypot(ps[0].x - ps[1].x, ps[0].y - ps[1].y), zoom: zoomNow() } : null;
   }
 
   canvas.addEventListener('pointerdown', (e) => {
@@ -124,9 +138,9 @@ export function installControls(world: World, screen: Screen, actions: Actions):
     } else {
       const L = hudLayout(uiW, uiH);
       const dir = screen.touch ? dirAt(ux, uy) : null;
-      if (hit(L.zoomOut, ux, uy)) screen.zoomBy(1 / ZOOM_STEP);
+      if (hit(L.zoomOut, ux, uy)) zoomBy(1 / ZOOM_STEP);
       else if (hit(L.map, ux, uy)) topView = !topView;
-      else if (hit(L.zoomIn, ux, uy)) screen.zoomBy(ZOOM_STEP);
+      else if (hit(L.zoomIn, ux, uy)) zoomBy(ZOOM_STEP);
       else if (dir) role = dir;
       else if (screen.touch && actions.atCrossroads() && hit(L.turnUp, ux, uy)) actions.turn('up');
       else if (screen.touch && actions.atCrossroads() && hit(L.turnDown, ux, uy)) actions.turn('down');
@@ -148,7 +162,7 @@ export function installControls(world: World, screen: Screen, actions: Actions):
       p.role = dirAt(ux, uy) ?? p.role;
     } else if (p.role === 'pinch' && pinch) {
       const ps = pinchPointers();
-      if (ps.length === 2 && pinch.dist > 0) screen.setZoom(pinch.zoom * (Math.hypot(ps[0].x - ps[1].x, ps[0].y - ps[1].y) / pinch.dist));
+      if (ps.length === 2 && pinch.dist > 0) setZoom(pinch.zoom * (Math.hypot(ps[0].x - ps[1].x, ps[0].y - ps[1].y) / pinch.dist));
     }
   });
 
@@ -164,7 +178,7 @@ export function installControls(world: World, screen: Screen, actions: Actions):
     'wheel',
     (e) => {
       e.preventDefault();
-      screen.zoomBy(Math.exp(-e.deltaY * 0.0015));
+      zoomBy(Math.exp(-e.deltaY * 0.0015));
     },
     { passive: false },
   );
@@ -178,5 +192,6 @@ export function installControls(world: World, screen: Screen, actions: Actions):
     }),
     touchHeld: () => ({ left: held('left'), right: held('right') }),
     topView: () => topView,
+    topZoom: () => topZoom,
   };
 }

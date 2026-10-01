@@ -1,12 +1,13 @@
 // The woods and the quarries behind the street, and the huts that work them.
 //
-// Trees stand along the tree line (TREE_Y), each at its own world x. A
-// sapling grows for TREE_GROW seconds into a grown tree; a woodcutter fells
-// grown trees, leaving a stump that rots away after STUMP_TIME. New saplings
-// sprout on their own now and then, wherever there is room.
-//
-// Every street has woods along it; where another street crosses it the trees
-// are cut down across that street's whole band, and none grow there again (onRoad).
+// Trees stand anywhere on the land with room (treeRoom): in clumps behind the
+// streets and out in front, never on a road, a building, a field or a quarry,
+// nor crowding each other. Each has its place on the map, kept as a world x
+// along a street and a depth y across it. A sapling grows for TREE_GROW
+// seconds into a grown tree; a woodcutter walks out to a grown tree and fells
+// it, leaving a stump that rots away after STUMP_TIME. New saplings sprout on
+// their own now and then, mostly near grown trees. Land taken by a building, a
+// field or a road is cleared of trees (clearLand).
 //
 // The quarries (QUARRIES) are rocky hills that come down to the tree line:
 // a stonecutter walks to the face and cuts blocks out of it, as many as
@@ -20,16 +21,17 @@
 
 import { BUILDINGS } from './buildings';
 import { putAway, storeSpot } from './economy';
-import { CHOP_SPOT, PILE_UNIT, QUARRIES, TREE_Y, QUARRY_SPOTS, QUARRY_W, QUARRY_Y, STONECUTTER_DOOR, STREET_LENGTH, WOODCUTTER_DOOR } from './layout';
+import { BACK_FIELD, BASE_Y, behindRoad, CHOP_SPOT, FIELD_ROWS, PILE_UNIT, QUARRIES, QUARRY_SPOTS, QUARRY_W, QUARRY_Y, ROAD_BOTTOM, STAND_Y, STONECUTTER_DOOR, WOODCUTTER_DOOR, yAt } from './layout';
 import { room, type Load } from './resources';
-import { crossings, groundPoint, onQuarryLand, STREET_BAND_HALF, streetDist, streetRange } from './streets';
+import { fromStreet, groundPoint, onQuarryLand, SIDE_ROAD_HALF, streetDist, streetOf, streetPoint, streetRange, type Vec } from './streets';
 import type { JobTicket, Workplace } from './worker';
 import type { Building, World } from './world';
 
 export interface Tree {
   id: number;
-  /** World x of the trunk. */
+  /** Where the trunk stands: world x along a street, and depth y across it (layout.ts behindRoad). */
   x: number;
+  y: number;
   state: 'growing' | 'grown' | 'stump';
   /** Seconds since it sprouted (growing), or since it was felled (stump). */
   age: number;
@@ -51,13 +53,9 @@ export const WOOD_REACH = 900;
 export const CHOP_TIME = 10;
 export const CUT_TIME = 12;
 
-/** Whether world x is inside a quarry (no trees grow there). */
+/** Whether world x is inside a quarry's stretch of the main street's tree line (old saves' woods). */
 function inQuarry(x: number): boolean {
   return QUARRIES.some((q) => Math.abs(x - q.x) < QUARRY_W / 2 + 20);
-}
-
-function roomFor(trees: readonly Tree[], x: number): boolean {
-  return !inQuarry(x) && trees.every((t) => Math.abs(t.x - x) >= TREE_GAP);
 }
 
 /** Grown fraction 0..1 (a stump counts as grown: it is what is left of one). */
@@ -65,43 +63,116 @@ export function treeGrowth(t: Tree): number {
   return t.state === 'growing' ? Math.min(1, t.age / TREE_GROW) : 1;
 }
 
-/** Trees keep this far (px) from the middle of a street crossing theirs: clear of its road, fields and woods. */
-const ROAD_CLEAR = STREET_BAND_HALF;
+/** How much room (map px) a trunk keeps from a road, a building, a field or the rocks. */
+const TRUNK_ROOM = 10;
+/** Depths (map px behind the middle of the road) of the road and its verges, and of the building lots. */
+const ROAD_BAND = { from: behindRoad(ROAD_BOTTOM) - TRUNK_ROOM, to: behindRoad(BASE_Y) };
+const LOT_BAND = { from: behindRoad(BASE_Y) - TRUNK_ROOM, to: behindRoad(BACK_FIELD.back) + TRUNK_ROOM };
+
+/** Where tree t stands on the map. */
+export const treePoint = (world: World, t: Tree): Vec => groundPoint(world, t.x, t.y);
 
 /**
- * Whether no tree can stand at world x on its street's tree line: where another
- * street crosses (or a crossroads is being built), or on a quarry's land.
+ * Whether a tree can stand at map point p: not on a road (nor a crossroads
+ * being built), a building, a farm's field or a quarry's land, and (unless
+ * `crowd` is false) not crowding another tree.
  */
-export function onRoad(world: World, x: number): boolean {
-  if (onQuarryLand(groundPoint(world, x, TREE_Y), 16)) return true;
-  const near = (at: number) => Math.abs(at - x) < ROAD_CLEAR;
-  return crossings(world).some((c) => near(c.x)) || world.buildings.some((b) => b.type === 'intersection' && near(world.plots[b.plotIndex].x));
+export function treeRoom(world: World, p: Vec, crowd = true, not?: Tree): boolean {
+  if (onQuarryLand(p, TRUNK_ROOM)) return false;
+  const seen = world.streets.map((s) => fromStreet(world, s.index, p));
+  for (const s of world.streets) {
+    const { x, d } = seen[s.index];
+    const { min, max } = streetRange(world, s.index);
+    if (x > min - TRUNK_ROOM && x < max + TRUNK_ROOM && d > ROAD_BAND.from && d < ROAD_BAND.to) return false;
+  }
+  for (const b of world.buildings) {
+    const bx = world.plots[b.plotIndex].x;
+    const { x, d } = seen[streetOf(bx)] ?? { x: Infinity, d: Infinity };
+    // a crossroads being built: its road will run off here
+    if (b.type === 'intersection') {
+      if (b.status !== 'done' && Math.abs(x - bx) < SIDE_ROAD_HALF + TRUNK_ROOM && d > 0) return false;
+      continue;
+    }
+    if (Math.abs(x - bx) < BUILDINGS[b.type].width / 2 + TRUNK_ROOM && d > LOT_BAND.from && d < LOT_BAND.to) return false;
+    for (const f of b.farm?.plots ?? []) {
+      const row = FIELD_ROWS[f.zone][f.row];
+      const near = behindRoad(row.near) - TRUNK_ROOM;
+      const far = behindRoad(row.far) + TRUNK_ROOM;
+      if (Math.abs(x - (bx + f.dx)) < f.width / 2 + TRUNK_ROOM && d > near && d < far) return false;
+    }
+  }
+  if (crowd) {
+    for (const t of world.trees) {
+      if (t === not) continue;
+      const q = treePoint(world, t);
+      if (Math.hypot(q.x - p.x, q.y - p.y) < TREE_GAP) return false;
+    }
+  }
+  return true;
 }
 
-/** Cut the trees down where a road runs off at world x (they leave stumps, which rot away). */
-export function clearRoad(world: World, x: number): void {
-  for (const t of world.trees) {
-    if (t.state !== 'stump' && Math.abs(t.x - x) < ROAD_CLEAR) {
-      t.state = 'stump';
-      t.age = 0;
+/** Trees are cut down wherever the land is taken (a building, a field, a road): nothing grows on top of anything. */
+export function clearLand(world: World): void {
+  world.trees = world.trees.filter((t) => treeRoom(world, treePoint(world, t), false));
+}
+
+/**
+ * How far behind (or, negative, in front of) a street woods grow: in front
+ * only as far as where the street is looked at from (a depth y stands for no
+ * more; layout.ts behindRoad), beyond its fields.
+ */
+const WOODS = { behind: [140, 900], front: [-320, -200] } as const;
+
+/** A new tree d map px behind street x's road at world x, if there is room for it there. */
+function sprout(world: World, x: number, d: number, grown: boolean, rand: () => number): boolean {
+  const s = streetOf(x);
+  const { min, max } = streetRange(world, s);
+  if (x < min || x > max || !world.streets[s]) return false;
+  if (d < WOODS.front[0]) return false;
+  const p = streetPoint(world, x, d);
+  if (!treeRoom(world, p)) return false;
+  const young = !grown || rand() < 0.2;
+  world.trees.push({ id: world.nextId++, x, y: yAt(d), state: young ? 'growing' : 'grown', age: young && grown ? rand() * TREE_GROW : 0 });
+  return true;
+}
+
+/**
+ * Woods along street i: clumps of trees here and there, most behind it, some
+ * out in front (beyond the land the view looks across), most of them grown.
+ */
+export function plantWoods(world: World, street: number, rand: () => number): void {
+  const { min, max } = streetRange(world, street);
+  const clumps = Math.round((max - min) / 450);
+  for (let c = 0; c < clumps; c++) {
+    const cx = min + rand() * (max - min);
+    const band = rand() < 0.75 ? WOODS.behind : WOODS.front;
+    const cd = band[0] + rand() * (band[1] - band[0]);
+    const n = 3 + Math.floor(rand() * 7);
+    for (let i = 0; i < n; i++) {
+      const a = rand() * Math.PI * 2;
+      const r = rand() * 120;
+      sprout(world, cx + Math.cos(a) * r, cd + Math.sin(a) * r, true, rand);
     }
   }
 }
 
-/** The woods at the start: an uneven line of trees along a street (starting at world x x0), most of them grown. */
-export function createForest(width: number, rand: () => number, nextId: () => number, x0 = 0): Tree[] {
-  const trees: Tree[] = [];
+/** The woods at the start of old saves: an uneven line of trees along the main street's tree line (save.ts migrations). */
+export function createForest(width: number, rand: () => number, nextId: () => number, x0 = 0): Array<Omit<Tree, 'y'>> {
+  const trees: Array<Omit<Tree, 'y'>> = [];
   for (let x = x0 + 60; x < x0 + width - 60; x += 70) {
     if (rand() < 0.3) continue;
     const tx = x + rand() * 40;
-    if (!roomFor(trees, tx)) continue;
+    if (inQuarry(tx) || trees.some((t) => Math.abs(t.x - tx) < TREE_GAP)) continue;
     const young = rand() < 0.2;
     trees.push({ id: nextId(), x: tx, state: young ? 'growing' : 'grown', age: young ? rand() * TREE_GROW : 0 });
   }
   return trees;
 }
 
-/** Trees grow, stumps rot, and now and then a sapling sprouts somewhere with room, along any street. */
+/**
+ * Trees grow, stumps rot, and now and then a sapling sprouts: mostly near a
+ * grown tree (woods spread), sometimes anywhere along a street with room.
+ */
 export function updateForest(world: World, dt: number, rand: () => number): void {
   for (const t of world.trees) {
     t.age += dt;
@@ -109,12 +180,19 @@ export function updateForest(world: World, dt: number, rand: () => number): void
   }
   world.trees = world.trees.filter((t) => t.state !== 'stump' || t.age < STUMP_TIME);
   const streets = world.streets.length;
-  if (world.trees.length < MAX_TREES * streets && rand() < dt / SPROUT_EVERY) {
-    const along = rand();
-    // (along the main street as far as the woods go; along another only where the street is)
-    const { min, max } = streets > 1 ? streetRange(world, Math.floor(rand() * streets)) : { min: 60, max: STREET_LENGTH - 60 };
-    const x = min + along * (max - min);
-    if (roomFor(world.trees, x) && !onRoad(world, x)) world.trees.push({ id: world.nextId++, x, state: 'growing', age: 0 });
+  if (world.trees.length >= MAX_TREES * streets || rand() >= dt / SPROUT_EVERY) return;
+  const grown = world.trees.filter((t) => t.state === 'grown');
+  if (grown.length && rand() < 0.75) {
+    // a seed falls near a grown tree
+    const parent = grown[Math.floor(rand() * grown.length)];
+    const a = rand() * Math.PI * 2;
+    const r = TREE_GAP + rand() * 70;
+    sprout(world, parent.x + Math.cos(a) * r, behindRoad(parent.y) + Math.sin(a) * r, false, rand);
+  } else {
+    const s = Math.floor(rand() * streets);
+    const { min, max } = streetRange(world, s);
+    const band = rand() < 0.75 ? WOODS.behind : WOODS.front;
+    sprout(world, min + rand() * (max - min), band[0] + rand() * (band[1] - band[0]), false, rand);
   }
 }
 
@@ -148,7 +226,8 @@ export function gatherWorkplace(world: World, b: Building & { type: GatherHut })
   const spot = (job: JobTicket) => {
     if (action === 'chop') {
       const t = tree(job.target);
-      return t ? { dx: t.x + CHOP_SPOT.dx - x, y: CHOP_SPOT.y } : null;
+      // beside the trunk, a step nearer the viewer
+      return t ? { dx: t.x + CHOP_SPOT.dx - x, y: yAt(behindRoad(t.y) - 5) } : null;
     }
     const q = QUARRIES[job.target];
     return q ? { dx: q.x + (QUARRY_SPOTS[job.slot ?? 0] ?? 0) - x, y: QUARRY_Y + 3 } : null;
@@ -163,9 +242,11 @@ export function gatherWorkplace(world: World, b: Building & { type: GatherHut })
       if (action === 'chop') {
         const busy = new Set(taken.map((j) => j.target));
         let best: Tree | null = null;
+        /** The walk from world x `from` (on the road) out to tree t: along the streets, then across. */
+        const walk = (from: number, t: Tree) => streetDist(world, from, t.x) + Math.abs(behindRoad(t.y) - behindRoad(STAND_Y));
         for (const t of world.trees) {
-          if (t.state !== 'grown' || busy.has(t.id) || streetDist(world, x, t.x) > WOOD_REACH) continue;
-          if (!best || streetDist(world, here, t.x) < streetDist(world, here, best.x)) best = t;
+          if (t.state !== 'grown' || busy.has(t.id) || walk(x, t) > WOOD_REACH) continue;
+          if (!best || walk(here, t) < walk(here, best)) best = t;
         }
         if (best) job = { action, target: best.id };
       } else {

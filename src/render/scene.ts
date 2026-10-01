@@ -10,13 +10,12 @@ import { laidOut, onSite, upgrading } from '../game/site';
 import { crossings, streetOf, streetRange } from '../game/streets';
 import { canUpgrade, crossroadAt, getBuilding, plotAt, type Building, type World } from '../game/world';
 import { drawBackground, drawForeground, drawHaze, drawSideRoad, drawStreetEnds, type View } from './background';
-import { drawOtherGround, eyeOf, standingOn, TREE_LINE_DIST } from './plane';
+import { BUILDING_LINE_DIST, distAt, drawOtherGround, eyeOf, standingOn, TREE_LINE_DIST } from './plane';
 import { BUILDING_ART, type DrawArgs } from './buildings';
 import { drawConstruction, drawConstructionBehind, drawConstructionFront, drawUpgrade } from './construction';
 import { drawWorker } from './farm';
 import { type Figure, figureOf } from './figure';
 import { drawLandGrid } from './grid';
-import { drawQuarries, drawTrees } from './nature';
 import { groundX } from './ground';
 import { drawSkyBehind, lightAt, tintLand } from './sky';
 import { drawRider } from './horse';
@@ -66,20 +65,12 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   const street = streetOf(world.rider.x);
   if (street > 0) drawStreetEnds(ctx, v, streetRange(world, street));
   const onScreen = (x: number, margin = 280) => x - camX > -margin && x - camX < viewW + margin;
-  // the rest of the village on the plane: the other streets' roads and fields, then everything standing
-  // on them that is further off than this street's woods; the haze of distance over it
+  // the ground first: the other streets' roads and fields on the plane, and a road still being laid at a crossroads
   drawOtherGround(ctx, world, eye);
-  const elsewhere = standingOn(ctx, world, eye);
-  for (const o of elsewhere) if (o.z >= TREE_LINE_DIST) o.draw();
-  drawHaze(ctx, v);
-  // a road still being laid at a crossroads
   for (const b of world.buildings) {
     const x = world.plots[b.plotIndex].x;
     if (b.type === 'intersection' && b.status !== 'done' && onScreen(x)) drawSideRoad(ctx, v, x, 0.15 + 0.85 * b.progress);
   }
-  // the woods and the quarries along the tree line, behind everything on the street
-  drawQuarries(ctx, camX, viewW);
-  drawTrees(ctx, world, camX, viewW);
 
   /** Screen x of something standing on the ground at world x and depth y (ground.ts). */
   const onGround = (x: number, y: number) => groundX(x - camX, y, viewW / 2);
@@ -106,10 +97,6 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     const x = b ? world.plots[b.plotIndex].x : 0;
     return b && onScreen(x + p.job!.worker.dx, 300) ? [{ w: p.job!.worker, fig: figureOf(p), x }] : [];
   });
-  /** Draw workers whose y satisfies `pred` (depth decides which layer they are in). */
-  const farmers = (pred: (y: number) => boolean) => {
-    for (const { w, fig, x } of atWork) if (pred(w.y)) drawAtWork(w, fig, x);
-  };
   // they walk on the ground, so they follow its perspective like the fields do
   const drawAtWork = (w: Worker, fig: Figure, x: number) => drawWorker(ctx, w, fig, groundX(x + w.dx - camX, w.y, viewW / 2), w.y, world.time);
   // the unemployed and the animals stroll the street, each at their own depth
@@ -122,8 +109,24 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     if (b.status === 'done') BUILDING_ART[b.type].behind?.(ctx, a);
     else drawConstructionBehind(ctx, b.type, a, b.progress);
   }
-  // farmers out in the back fields are hidden by the farmhouse when behind it
-  farmers((y) => y < BASE - 4);
+
+  // then everything standing behind this street's buildings, far to near: trees and quarries, the other
+  // streets and their people, and this street's people out behind it (in the back fields, at the woods);
+  // the haze of distance over what is beyond this street's lots
+  const elsewhere = standingOn(ctx, world, eye);
+  const behind = [
+    ...elsewhere.filter((o) => o.z >= BUILDING_LINE_DIST),
+    ...atWork.filter(({ w }) => w.y < BASE - 4).map(({ w, fig, x }) => ({ z: distAt(w.y), y: w.y, draw: () => drawAtWork(w, fig, x) })),
+  ].sort((a, b) => b.z - a.z);
+  let hazed = false;
+  for (const o of behind) {
+    if (!hazed && o.z < TREE_LINE_DIST) {
+      drawHaze(ctx, v);
+      hazed = true;
+    }
+    o.draw();
+  }
+  if (!hazed) drawHaze(ctx, v);
 
   // empty plot markers
   for (const p of world.plots) {
@@ -162,8 +165,8 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
       .filter((who) => onScreen(who.stroll.x))
       .map((who) => ({ y: who.stroll.y, draw: () => drawVillager(ctx, walker(who), onGround(who.stroll.x, who.stroll.y), who.stroll.y, world.time) })),
     { y: ROAD_Y, draw: () => drawRider(ctx, world.rider, onGround(world.rider.x, ROAD_Y), ROAD_Y, world.time) },
-    // nearer things on the other streets (where they run past this one): sorted in by where they stand on screen
-    ...elsewhere.filter((o) => o.z < TREE_LINE_DIST),
+    // nearer things (trees in front, the other streets where they run past this one): sorted in by where they stand on screen
+    ...elsewhere.filter((o) => o.z < BUILDING_LINE_DIST),
   ];
   for (const s of standing.sort((a, b) => a.y - b.y)) s.draw();
 

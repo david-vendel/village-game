@@ -34,9 +34,9 @@ export interface FrameView {
   toasts: Toast[];
   /** Overlay the land grid. */
   showGrid: boolean;
-  /** Show the village from above instead of from the street; `zoom` scales it. */
+  /** Show the village from above instead of from the street, at its own zoom. */
   topView: boolean;
-  zoom: number;
+  topZoom: number;
 }
 
 export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: FrameView): void {
@@ -46,7 +46,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   if (v.topView) {
     ctx.setTransform(v.uiScale, 0, 0, v.uiScale, 0, 0);
-    drawTopView(ctx, world, v.uiW, v.uiH, v.zoom);
+    drawTopView(ctx, world, v.uiW, v.uiH, v.topZoom, v.showGrid);
   } else {
   ctx.setTransform(v.worldScale, 0, 0, v.worldScale, 0, v.offsetY);
   drawScene(ctx, world, {

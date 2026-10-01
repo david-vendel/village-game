@@ -56,7 +56,7 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
 | --- | --- |
 | Change how a building looks, or its drawn height | `render/buildings.ts` (`BUILDING_ART`) |
 | Change sky, sun, moon, stars, clouds, night darkness | `render/sky.ts` |
-| Change hills, castle, trees, road, grass | `render/background.ts` |
+| Change hills, castle, road, grass | `render/background.ts` (trees: `render/nature.ts`, placed by `render/plane.ts`) |
 | Change day length, working hours, lunch | `game/daynight.ts` |
 | Change crops, fields, the farmer's look or animation, the sheaf pile | `render/farm.ts` |
 | Change the horse/rider, villagers | `render/horse.ts`, `render/people.ts` |
@@ -153,6 +153,13 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   lift it, like a summer far north; 0 is the midnight sun. `timeOfDay` gives villagers what they plan
   by: daylight (enough light to work: from half an hour after sunrise to half an hour before
   sunset, `WORK_MARGIN`), day number, hour, and game hours per second.
+- `nature.ts`: the woods and the quarries. Trees stand anywhere on the land with room (`treeRoom`):
+  in clumps behind the streets and a little in front, never on a road, a building's lot, a field or a
+  quarry, nor crowding each other; each keeps its place as a world x along a street and a depth y.
+  Land that gets taken (a building, a farm's fields, a new road) is cleared (`clearLand`). Saplings
+  sprout mostly near grown trees. A woodcutter walks out to the nearest grown tree in reach (along the
+  streets, then across the land) and fells it; a stonecutter cuts at the face of the nearest quarry.
+  Workers walk at real ground speed: depth y is turned into ground px for every step (`worker.ts`).
 - `streets.ts`: the street network. A crossroads (the `intersection` building, 10 wood) opens a
   new street across its own at right angles, crossing it at the new street's middle plot
   (`CROSS_PLOT`). Each street is still a line with its own stretch of world x (street i starts at
@@ -215,10 +222,11 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   timber frame → walls → roof. The finished art is revealed bottom-up behind scaffolding.
 - `grid.ts`: the land-grid debug overlay (tuning panel → "land grid", or `?grid=1`): cells tinted
   by use (building footprint red, field green), plot boundaries dashed.
-- `topview.ts`: the village from above (Tab, or the small map's spot on screen): the plane north up
-  around the rider, with streets, fields, the quarries' rocky land, roofs on their lots (sites as
-  frames filling in, the mill's sails turning), trees, and people (stepping, carrying their loads),
-  chickens and the rider moving about. Zoom works as in the street view.
+- `topview.ts`: the village from above (Tab, or the small map's spot on screen), at its own zoom: the
+  plane north up around the rider, with streets, fields, the quarries' rocky land, roofs exactly on
+  their footprint cells, sites as frames filling in, the mill's sails turning, trees where they stand,
+  and people (stepping, carrying their loads), chickens and the rider moving about. With the land
+  grid on it shows every street's cells by use, the quarries' cells and each plot's lot.
 - `ground.ts`: the ground perspective (the camera's, with the horizon on screen at `HORIZON_Y`;
   plane.ts uses the same projection for the rest of the village). Anything lying or standing on the land (fields, the land
   grid, ruts and stones in the road, the grass edge, foreground grass, the farmer, villagers and
