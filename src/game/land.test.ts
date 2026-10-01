@@ -43,7 +43,7 @@ describe('land grid', () => {
     const a = placeBuilding(w, 1000, 'farm', { free: true })!;
     // right beside it is fine, half over it is not
     expect(whyNotBuild(w, 'farm', a.x + 150)).toBeNull();
-    expect(whyNotBuild(w, 'farm', a.x + 75)).toMatch(/in the way/);
+    expect(whyNotBuild(w, 'farm', a.x + 25)).toMatch(/in the way/);
     expect(whyNotHere(w, 'farm', 1640)).toBeNull(); // the rocks start behind the lots
     // a crossroads: right up to its road, but not on it
     const x = w.plots[32].x;

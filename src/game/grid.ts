@@ -104,11 +104,20 @@ export function footprintOf(b: Building): Footprint | null {
   return b.type === 'intersection' && b.status !== 'constructing' ? null : footprintAt(b.type, b.x, b.size);
 }
 
-/** World x a building of this type stands at when wanted at x: starting at a cell 3n + 1, its middle as near x as can be. */
+/** Whether world x is on a cell 3n + 1 along its street: where a building can start. */
+export const atBlockStart = (x: number) => (((alongCell(x) - 1) % BLOCK) + BLOCK) % BLOCK === 0;
+
+/** World x of the cell 3n + 1 starting the block of three cells world x is in. */
+export function blockStartX(x: number): number {
+  const i0 = BLOCK * Math.floor((alongCell(x) - 1) / BLOCK) + 1;
+  return streetStart(streetOf(x)) + (i0 + 0.5) * CELL_W;
+}
+
+/** World x a building of this type stands at when wanted at x: starting at the cell 3n + 1 of the block x is in. */
 export function siteX(type: BuildingType, x: number): number {
   const { w } = sizeOf(type);
   const start = streetStart(streetOf(x));
-  const i0 = BLOCK * Math.round(((x - start) / CELL_W - w / 2 - 1) / BLOCK) + 1;
+  const i0 = BLOCK * Math.floor((alongCell(x) - 1) / BLOCK) + 1;
   return start + (i0 + w / 2) * CELL_W;
 }
 

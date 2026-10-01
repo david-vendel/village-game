@@ -17,7 +17,7 @@ import { buildShortfall, putAway, takeFromWarehouses, upgradeShortfall, WAREHOUS
 import { createFarm, DEFAULT_WORK, farmWorkplace, updateCrops, type FarmState } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
 import { BLOCK, CELL_W, FIRST_PLOT_X, PLOT_SPACING, STREET_LENGTH } from './layout';
-import { footprintOf, roadBlocked, siteX, sizeOfBuilding, whyNotHere } from './grid';
+import { atBlockStart, blockStartX, footprintOf, roadBlocked, siteX, sizeOfBuilding, whyNotHere } from './grid';
 import { clearLand, plantWoods, gatherWorkplace, isGatherHut, updateForest, type Tree } from './nature';
 import { employees, laneY, nameFor, openings, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
 import { builderPositions, builders, createSite, siteWork, siteWorkplace, upgrading, type Site } from './site';
@@ -184,15 +184,15 @@ export function rand(world: World): number {
 
 /** The starting village: where each building stands along the main street (world x), and what it is. */
 const STARTING_VILLAGE: Array<[number, BuildingType]> = [
-  [1675, 'warehouse'],
   [925, 'house'],
   [1000, 'house'],
-  [1187.5, 'well'],
-  [1412.5, 'tavern'],
-  [1925, 'house'],
-  [2425, 'farm'],
-  [3175, 'chapel'],
-  [4412.5, 'house'],
+  [1150, 'well'],
+  [1300, 'tavern'],
+  [1600, 'warehouse'],
+  [1900, 'house'],
+  [2350, 'farm'],
+  [3100, 'chapel'],
+  [4375, 'house'],
 ];
 
 export interface CreateWorldOptions {
@@ -302,10 +302,10 @@ function crossroadsPlot(world: World, x: number): Plot | null {
   return plot && !plot.off && plot.street === street ? plot : null;
 }
 
-/** Where a building of this type goes when the rider wants it at world x: on whole cells; a crossroads at the nearest crossroads place. */
+/** Where a building of this type goes when wanted at world x: starting at the cell 3n + 1 of x's block; a crossroads on that block's plot. */
 export function placeAt(world: World, type: BuildingType, x: number): number | null {
   if (type !== 'intersection') return siteX(type, x);
-  return crossroadsPlot(world, x)?.x ?? null;
+  return crossroadsPlot(world, blockStartX(x) + CELL_W)?.x ?? null;
 }
 
 /** Why a building of this type can't be built where the rider wants it (world x), or null if it can. */
@@ -718,8 +718,8 @@ function turnOnto(world: World, c: { x: number }, facing: 1 | -1): boolean {
 
 // --- Build menu ------------------------------------------------------------
 
-/** Whether anything at all could be built where the rider wants it (world x). */
-export const roomToBuild = (world: World, x: number) => BUILDING_TYPES.some((t) => !whyNotBuild(world, t, x));
+/** Whether anything at all could be built where the rider is (world x): only on a cell 3n + 1, where buildings start. */
+export const roomToBuild = (world: World, x: number) => atBlockStart(x) && BUILDING_TYPES.some((t) => !whyNotBuild(world, t, x));
 
 /**
  * Open the menu where the rider is: on a building, upgrade it (when it can
@@ -735,7 +735,7 @@ export function openMenu(world: World): boolean {
     const options: BuildingOption[] = canUpgrade(b) ? ['upgrade', 'demolish'] : ['demolish'];
     world.menu = { kind: 'building', buildingId: b.id, options, selection: 0 };
   } else {
-    const fits = BUILDING_TYPES.map((t) => !whyNotBuild(world, t, x));
+    const fits = BUILDING_TYPES.map((t) => atBlockStart(x) && !whyNotBuild(world, t, x));
     if (!fits.includes(true)) return false;
     world.menu = { kind: 'build', x, selection: fits[world.lastSelection] ? world.lastSelection : fits.indexOf(true) };
   }

@@ -69,7 +69,7 @@ describe('build menu', () => {
   it('builds at an empty plot, and offers what can be done to a building', () => {
     const w = emptyWorld();
     placeBuilding(w, 2912.5, 'warehouse', { instant: true, free: true })!.stock = stockOf({ wood: 300, stone: 300 });
-    w.rider.x = w.plots[8].x + 10;
+    w.rider.x = w.plots[8].x - 25; // a cell 3n + 1, where a building starts
     expect(openMenu(w)).toBe(true);
     moveMenu(w, 2);
     const b = confirmMenu(w);
@@ -79,16 +79,19 @@ describe('build menu', () => {
     expect(w.menu?.kind).toBe('building');
   });
 
-  it('opens anywhere along the street: there are no plots to ride to', () => {
+  it('opens only on a cell 3n + 1, where buildings start', () => {
     const w = emptyWorld();
-    w.rider.x = (w.plots[0].x + w.plots[4].x) / 2;
+    w.rider.x = w.plots[4].x - 25;
     expect(openMenu(w)).toBe(true);
     expect(w.menu?.kind).toBe('build');
+    closeMenu(w);
+    w.rider.x = w.plots[4].x;
+    expect(openMenu(w)).toBe(false);
   });
 
   it('selection wraps and is remembered after cancelling', () => {
     const w = emptyWorld();
-    w.rider.x = w.plots[0].x;
+    w.rider.x = w.plots[0].x - 25;
     openMenu(w);
     moveMenu(w, -1);
     expect(w.menu!.selection).toBe(BUILDING_TYPES.length - 1);
@@ -99,7 +102,7 @@ describe('build menu', () => {
 
   it('rider cannot move while the menu is open', () => {
     const w = emptyWorld();
-    w.rider.x = w.plots[0].x;
+    w.rider.x = w.plots[0].x - 25;
     openMenu(w);
     const x = w.rider.x;
     runFor(w, 1, { left: false, right: true });
