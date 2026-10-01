@@ -98,8 +98,9 @@ an asset was made.
   never train a LoRA on it, and never put it in a reference set that gets copied from.
   Style LoRAs train only on **our own approved outputs**.
 - **Check each model's licence before use.** TRELLIS.2 is MIT; Qwen-Image is Apache-2.0;
-  FLUX.2 klein 4B is Apache-2.0; Wan 2.2 is Apache-2.0. FLUX.2 dev is non-commercial, and
-  Hunyuan3D excludes the EU. Record the model and version per asset in the manifest.
+  FLUX.2 klein 4B is Apache-2.0; Wan 2.2 is Apache-2.0. FLUX.2 dev and klein 9B are
+  non-commercial, which is allowed since this is a non-commercial project (§5). Hunyuan3D
+  excludes the EU, so it's out. Record the model and version per asset in the manifest.
 
 ---
 
@@ -246,18 +247,48 @@ the rest of WP4–WP8 in parallel → WP10 → WP9.
 
 ---
 
-## 5. Compute, cost and where it runs
-- Generation needs GPUs. TRELLIS.2 and FLUX-class models need roughly 24–48 GB of VRAM;
-  Wan 2.2 14B needs about 80 GB (the 5B model fits in 24 GB). Rent cloud GPUs (A100/H100/L40S)
-  or use pay-per-call APIs.
-- **This EC2 box (aarch64, small) is not suitable for generation.** It's fine for the game,
-  the validator and Blender CPU renders of small batches.
-- The pipeline lives in `tools/art-pipeline/`. Large sources (references, .blend files,
-  meshes) go in LFS or object storage, not in git. Only the packed outputs go in
-  `public/assets/`.
-- Rough scale: about 14 buildings × (2 views + variants + stages) plus 3 looks × 8 trades ×
-  about 12 clips × 2 facings plus backdrops. That's about 1–3k rendered frames, which are
-  cheap. The expensive part is human review, so the automated gates matter.
+## 5. Decisions so far, and hardware
+
+**Decided by the user (2026-10-01):**
+- **Non-commercial project.** Non-commercial model licences are therefore allowed: FLUX.2 [dev],
+  FLUX.2 [klein] 9B. Record the licence per asset anyway (`source.models`). If the game ever
+  goes commercial, assets made with non-commercial models must be remade, and the manifest says which.
+- **Hunyuan3D stays excluded.** Its licence excludes the EU, UK and South Korea by territory,
+  whatever the use. **TRELLIS.2 (MIT) is the 3D model.**
+- **Generation runs on the user's own computer** (local GPU), not rented cloud GPUs.
+  Tooling must use ComfyUI or plain Python with quantised (GGUF/FP8) weights where needed, and
+  run one model at a time (load, run batch, unload).
+
+**Graphics memory (VRAM) needed per tool, as reported for 2026 builds.** System RAM: 32 GB is
+workable, 64 GB comfortable (offloading spills into it). Disk: ~150–250 GB for models and caches.
+NVIDIA (CUDA) is strongly preferred; Apple Silicon works for some tools via community ports, slower.
+
+| Tool | 8 GB | 12 GB | 16 GB | 24 GB+ |
+| --- | --- | --- | --- | --- |
+| TRELLIS.2 (image → 3D) | no | 512³ only, tight | 512³–1024³ (peak ~6.4 GB at 1024 res; officially "24 GB+") | ✔ (official minimum) |
+| FLUX.2 [klein] 4B (generate/edit) | ✔ FP8 / GGUF | ✔ | ✔ | ✔ |
+| FLUX.2 [klein] 9B | INT4 only | ✔ FP8 (~10 GB) | ✔ | ✔ |
+| FLUX.2 [dev] 32B (best quality, multi-reference) | no | no | GGUF Q3/Q2 + offload, slow | ✔ GGUF Q4 (~19 GB) |
+| Qwen-Image-Edit-2511 | Q2 (low quality) | ✔ GGUF Q4_0 (~12 GB) | ✔ Q4_K_M/Q5 (~13–14 GB) | ✔ FP8 (~20 GB) |
+| Wan 2.2 14B image→video (fallback animation) | GGUF + speed LoRA, slow | ✔ GGUF | ✔ GGUF Q5/Q6 | ✔ |
+| SAM 3, Marigold V2, UniRig, matting | ✔ | ✔ | ✔ | ✔ |
+| Blender render harness (Cycles GPU) | ✔ (small scenes) | ✔ | ✔ | ✔ |
+
+So: **16 GB covers the whole pipeline** (with FLUX.2 klein 9B or Qwen-Image-Edit as the image
+model instead of FLUX.2 dev). **24 GB** adds FLUX.2 dev and full-resolution TRELLIS.2. **12 GB** works with
+smaller quants and lower 3D resolution. Below 12 GB, use the 4B image model and expect to
+rent a GPU for TRELLIS.2.
+
+Sources: [TRELLIS.2 model card](https://huggingface.co/microsoft/TRELLIS.2-4B), [TRELLIS.2 run report](https://medium.com/@ammanakhtar8/one-image-in-3d-out-free-open-source-i-ran-trellis-2-3f7f5ed8e96c),
+[FLUX.2 dev VRAM](https://willitrunai.com/image-models/flux-2-dev), [FLUX.2 klein VRAM](https://willitrunai.com/blog/flux-2-klein-9b-vram-requirements),
+[Qwen-Image-Edit-2511 VRAM](https://lilting.ch/en/articles/qwen-image-edit-2511-local-specs), [Wan 2.2 low VRAM](https://www.runflow.io/blog/comfyui-wan-2-2-image-to-video).
+
+Other notes:
+- The pipeline lives in `tools/art-pipeline/`. Large sources (references, .blend files, meshes)
+  stay out of git (LFS or local storage); only packed outputs go in `public/assets/`.
+- **This EC2 box is not for generation.** It runs the game, the validator and small Blender renders.
+- Rough scale: about 1–3k rendered frames in total. The expensive part is human review,
+  hence the automated gates.
 
 ## 6. Risks
 | Risk | Mitigation |
