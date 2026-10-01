@@ -68,6 +68,7 @@ export function demolitionWorkplace(world: World, b: Building): Workplace {
   const front = { dx: 0, y: STAND_Y };
   return {
     dayLabour: true,
+    allHours: true,
     temporary: true,
     walkSpeed: world.params.builderWalk,
     door: front,

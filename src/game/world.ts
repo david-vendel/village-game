@@ -771,11 +771,10 @@ export function workplaceOf(world: World, b: Building, role: Role): Workplace | 
   return null;
 }
 
-/** Hire for open jobs; construction sites and errands only hire while it's light enough to work. */
+/** Hire for open jobs; builders and serfs work day and night. */
 function staff(world: World): void {
-  const dayLabour = timeOfDay(world).daylight;
   const hub = transportHub(world);
-  const openingsOf = (b: Building) => (b === hub ? (dayLabour ? { serf: serfPositions(world) } : {}) : openings(b, builderPositions(world, b), dayLabour));
+  const openingsOf = (b: Building) => (b === hub ? { serf: serfPositions(world) } : openings(b, builderPositions(world, b), true));
   staffBuildings(world, (b, role, who) => newWorker(world, b, role, who), openingsOf);
 }
 

@@ -681,7 +681,7 @@ export function drawProgress(ctx: Ctx, world: World, b: Building, sx: number, y:
   const materials =
     RESOURCES.filter((r) => cost[r])
       .map((r) => `${r} ${delivered?.[r] ?? 0}/${cost[r]}`)
-      .join(' · ') + `  ·  ${builders ? `${builders} builder${builders > 1 ? 's' : ''}` : 'no builders (night, or nobody free)'}`;
+      .join(' · ') + `  ·  ${builders ? `${builders} builder${builders > 1 ? 's' : ''}` : 'no builders free'}`;
   ctx.font = `10px ${SERIF}`;
   // box grows with the captions; the bar keeps its fixed width
   const pw = Math.max(w, ctx.measureText(caption).width, ctx.measureText(materials).width) + 12;
@@ -704,7 +704,7 @@ export function drawDemolitionLabel(ctx: Ctx, world: World, b: Building, sx: num
   const w = 110;
   const caption = `${BUILDINGS[b.type].name} — In demolition`;
   const builders = employees(world, b).filter((p) => p.job!.role === 'builder').length;
-  const crew = builders ? `${builders} builder${builders > 1 ? 's' : ''}` : 'no builders (night, or nobody free)';
+  const crew = builders ? `${builders} builder${builders > 1 ? 's' : ''}` : 'no builders free';
   const down = b.demolition ? 1 - b.progress / b.demolition.from : 1;
   ctx.font = `10px ${SERIF}`;
   const pw = Math.max(w, ctx.measureText(caption).width, ctx.measureText(crew).width) + 12;

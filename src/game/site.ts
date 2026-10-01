@@ -208,6 +208,7 @@ export function siteWorkplace(world: World, b: Building, buildSpeed: number): Wo
   const laidAt = (k: number) => total(site.laid[k] ?? {});
   return {
     dayLabour: true,
+    allHours: true,
     // nothing to build with and nothing to fetch: let go, rather than wait at the site
     temporary: true,
     walkSpeed: world.params.builderWalk,

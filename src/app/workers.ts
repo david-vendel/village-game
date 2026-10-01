@@ -43,7 +43,7 @@ function activity(world: World, p: Person): string {
   const w = p.job.worker;
   const t = w.task;
   const here = whereAt(world, x + w.dx);
-  const off = offDuty(w, timeOfDay(world), { dayLabour: p.job.role === 'builder' || p.job.role === 'serf' });
+  const off = offDuty(w, timeOfDay(world), { dayLabour: p.job.role === 'builder' || p.job.role === 'serf', allHours: p.job.role === 'builder' || p.job.role === 'serf' });
   const warehouse = (id: number) => {
     const wh = getBuilding(world, id);
     return wh ? `the ${nameOf(wh)}` : 'a storage yard';

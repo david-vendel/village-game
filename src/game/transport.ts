@@ -21,7 +21,7 @@
 // after each errand a serf takes another if one is waiting, and otherwise is
 // let go where they stand and strolls again. A serf who is not carrying
 // anything is hired away for a lasting job (the mill's miller) before any
-// more errands (people.ts). Like builders, serfs work in daylight only.
+// more errands (people.ts). Like builders, serfs work day and night.
 
 import { BUILDINGS } from './buildings';
 import { putAway, storeSpot, tripLoad, warehouses } from './economy';
@@ -238,6 +238,7 @@ export function transportWorkplace(world: World, hub: Building): Workplace {
   const x = xOf(world, hub);
   return {
     dayLabour: true,
+    allHours: true,
     temporary: true,
     door: { dx: 0, y: STAND_Y },
     nextJob(w) {
