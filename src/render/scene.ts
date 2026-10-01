@@ -11,7 +11,7 @@ import { laidOut, onSite, upgrading } from '../game/site';
 import { crossings, streetOf, streetRange } from '../game/streets';
 import { BUILDING_TYPES } from '../game/buildings';
 import { blockStartX, sizeOfBuilding } from '../game/grid';
-import { BLOCK, CELL_W } from '../game/layout';
+import { CELL_W } from '../game/layout';
 import { buildingAt, canDemolish, canUpgrade, crossroadAt, getBuilding, roomToBuild, type Building, type World } from '../game/world';
 import { drawBackground, drawForeground, drawHaze, drawSideRoad, drawStreetEnds, type View } from './background';
 import { BUILDING_LINE_DIST, distAt, drawOtherGround, eyeOf, standingOn, TREE_LINE_DIST } from './plane';
@@ -21,14 +21,14 @@ import { drawBuilding } from './sprites';
 import { drawConstruction, drawConstructionBehind, drawConstructionFront, drawDemolition, drawUpgrade } from './construction';
 import { drawWorker } from './farm';
 import { type Figure, figureOf } from './figure';
-import { drawLandGrid, drawSitePreview } from './grid';
+import { drawBlockGlow, drawLandGrid, drawSitePreview } from './grid';
 import { groundX } from './ground';
 import { drawSkyBehind, lightAt, tintLand } from './sky';
 import { drawRider } from './horse';
 import { drawVillager, walker } from './people';
 import { drawGroundPile } from './piles';
 import { drawBuildingLabel, drawCompletionEffect, drawDemolitionLabel, drawPlotPrompt, drawProgress } from './ui';
-import { type Ctx, GROUND_Y, rect, ROAD_Y, VIEW_H } from './util';
+import { type Ctx, GROUND_Y, ROAD_Y, VIEW_H } from './util';
 
 const BASE = GROUND_Y + 4;
 
@@ -139,13 +139,8 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   }
   if (!hazed) drawHaze(ctx, v);
 
-  // a little stake at every cell 3n + 1 along this street where something could be built
-  if (!world.menu) {
-    const { min, max } = streetRange(world, street);
-    for (let at = blockStartX(Math.max(min, camX - 100)); at < Math.min(max, camX + viewW + 100); at += BLOCK * CELL_W) {
-      if (roomToBuild(world, at)) blockMarker(ctx, onGround(at, BASE), BASE);
-    }
-  }
+  // the block of three cells the rider has stopped in, gently lit, if something could be built there
+  if (!world.menu && Math.abs(world.rider.vx) < 5 && !buildingAt(world, world.rider.x) && roomToBuild(world, world.rider.x)) drawBlockGlow(ctx, world.rider.x, camX, viewW, world.time);
   // where the building chosen in the menu would stand: its cells on the ground, green where it fits
   if (world.menu?.kind === 'build') drawSitePreview(ctx, world, BUILDING_TYPES[world.menu.selection], world.menu.x, camX, viewW);
 
@@ -209,7 +204,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   }
   if (!world.menu) {
     const b = buildingAt(world, world.rider.x);
-    const sx = (b?.x ?? blockStartX(world.rider.x)) - camX;
+    const sx = (b?.x ?? blockStartX(world.rider.x) + CELL_W) - camX;
     // anywhere something fits, once the rider stops, they can build
     if (!b) {
       if (Math.abs(world.rider.vx) < 5 && roomToBuild(world, world.rider.x)) drawPlotPrompt(ctx, sx, BASE, world.time, sv.promptLabel, k);
@@ -218,17 +213,6 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
       drawBuildingLabel(ctx, world, b, sx, BASE - BUILDING_ART[b.type].height - 18, k, viewW, canUpgrade(b) ? sv.upgradeLabel : canDemolish(b) ? sv.destroyLabel : null, turn);
     }
   }
-}
-
-/** A little stake with a pennant: a building could start here (a cell 3n + 1). */
-function blockMarker(ctx: Ctx, x: number, base: number): void {
-  rect(ctx, x - 1, base - 18, 2, 18, '#6b4c30');
-  ctx.fillStyle = '#c9a24a';
-  ctx.beginPath();
-  ctx.moveTo(x + 1, base - 18);
-  ctx.lineTo(x + 10, base - 15);
-  ctx.lineTo(x + 1, base - 12);
-  ctx.fill();
 }
 
 /** Warm colour grade + soft vignette for a painterly finish. */

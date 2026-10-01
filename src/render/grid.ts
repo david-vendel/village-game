@@ -6,8 +6,8 @@
 // chosen in the build menu would take (drawSitePreview).
 
 import { BUILDINGS, type BuildingType } from '../game/buildings';
-import { cellKey, cellName, footprintAt, landUse, streetCell, type LandUse } from '../game/grid';
-import { CELL_W, rowFar, rowNear, yAt } from '../game/layout';
+import { blockStartX, cellKey, cellName, footprintAt, landUse, streetCell, type LandUse } from '../game/grid';
+import { BLOCK, CELL_W, LOT_ROW, rowFar, rowNear, yAt } from '../game/layout';
 import { streetOf, streetStart } from '../game/streets';
 import { placeAt, whyNotBuild, type World } from '../game/world';
 import { groundX } from './ground';
@@ -74,6 +74,22 @@ export function drawLandGrid(ctx: Ctx, world: World, camX: number, viewW: number
       }
     }
   }
+  ctx.restore();
+}
+
+/** A soft glow on the block of three cells world x is in, in its lot rows: where the rider could build. */
+export function drawBlockGlow(ctx: Ctx, x: number, camX: number, viewW: number, time: number): void {
+  const at = blockStartX(x);
+  const street = streetOf(at);
+  const i0 = Math.round((at - streetStart(street)) / CELL_W - 0.5);
+  ctx.save();
+  ctx.globalAlpha = 0.75 + 0.25 * Math.sin(time * 2.5);
+  block(ctx, street, i0, i0 + BLOCK - 1, LOT_ROW, LOT_ROW + 1, camX, viewW / 2);
+  ctx.fillStyle = 'rgba(255,224,150,0.22)';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,232,170,0.55)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
   ctx.restore();
 }
 

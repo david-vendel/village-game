@@ -9,7 +9,8 @@
 
 import { VIEW_H } from '../game/layout';
 
-export const ZOOM_MAX = 1;
+/** How far in the street view can zoom: past 1 it closes in on the street, the ground kept at the bottom of the screen. */
+export const ZOOM_MAX = 1.6;
 /** Narrow (portrait) screens start zoomed out until this much street is visible. */
 const MIN_DEFAULT_VIEW_W = 460;
 /** UI is laid out for at least this many UI units across / down. */
@@ -45,7 +46,7 @@ export function bottomPad(cw: number, ch: number, touch: boolean): number {
 
 export function defaultZoom(cw: number, ch: number, touch = false): number {
   const sceneH = ch - bottomPad(cw, ch, touch);
-  return Math.min(ZOOM_MAX, cw / (sceneH / VIEW_H) / MIN_DEFAULT_VIEW_W);
+  return Math.min(1, cw / (sceneH / VIEW_H) / MIN_DEFAULT_VIEW_W);
 }
 
 export function zoomRange(cw: number, ch: number, touch = false): [number, number] {

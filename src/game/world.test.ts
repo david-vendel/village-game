@@ -8,6 +8,7 @@ import {
   createWorld,
   moveMenu,
   openMenu,
+  placeAt,
   placeBuilding,
   buildingAt,
   RIDER_MAX_SPEED,
@@ -79,14 +80,12 @@ describe('build menu', () => {
     expect(w.menu?.kind).toBe('building');
   });
 
-  it('opens only on a cell 3n + 1, where buildings start', () => {
+  it('opens on any cell of a block of three, the building starting at its cell 3n + 1', () => {
     const w = emptyWorld();
-    w.rider.x = w.plots[4].x - 25;
+    w.rider.x = w.plots[4].x + 20; // the block's last cell
     expect(openMenu(w)).toBe(true);
     expect(w.menu?.kind).toBe('build');
-    closeMenu(w);
-    w.rider.x = w.plots[4].x;
-    expect(openMenu(w)).toBe(false);
+    expect(placeAt(w, 'farm', w.rider.x)).toBe(w.plots[4].x - 25 + (BUILDINGS.farm.width - 25) / 2);
   });
 
   it('selection wraps and is remembered after cancelling', () => {

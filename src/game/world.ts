@@ -17,7 +17,7 @@ import { buildShortfall, putAway, takeFromWarehouses, upgradeShortfall, WAREHOUS
 import { createFarm, DEFAULT_WORK, farmWorkplace, updateCrops, type FarmState } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
 import { BLOCK, CELL_W, FIRST_PLOT_X, PLOT_SPACING, STREET_LENGTH } from './layout';
-import { atBlockStart, blockStartX, footprintOf, roadBlocked, siteX, sizeOfBuilding, whyNotHere } from './grid';
+import { blockStartX, footprintOf, roadBlocked, siteX, sizeOfBuilding, whyNotHere } from './grid';
 import { clearLand, plantWoods, gatherWorkplace, isGatherHut, updateForest, type Tree } from './nature';
 import { employees, laneY, nameFor, openings, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
 import { builderPositions, builders, createSite, siteWork, siteWorkplace, upgrading, type Site } from './site';
@@ -718,8 +718,8 @@ function turnOnto(world: World, c: { x: number }, facing: 1 | -1): boolean {
 
 // --- Build menu ------------------------------------------------------------
 
-/** Whether anything at all could be built where the rider is (world x): only on a cell 3n + 1, where buildings start. */
-export const roomToBuild = (world: World, x: number) => atBlockStart(x) && BUILDING_TYPES.some((t) => !whyNotBuild(world, t, x));
+/** Whether anything at all could be built in the block of three cells the rider is in (world x): buildings start at its cell 3n + 1. */
+export const roomToBuild = (world: World, x: number) => BUILDING_TYPES.some((t) => !whyNotBuild(world, t, x));
 
 /**
  * Open the menu where the rider is: on a building, upgrade it (when it can
@@ -735,7 +735,7 @@ export function openMenu(world: World): boolean {
     const options: BuildingOption[] = canUpgrade(b) ? ['upgrade', 'demolish'] : ['demolish'];
     world.menu = { kind: 'building', buildingId: b.id, options, selection: 0 };
   } else {
-    const fits = BUILDING_TYPES.map((t) => atBlockStart(x) && !whyNotBuild(world, t, x));
+    const fits = BUILDING_TYPES.map((t) => !whyNotBuild(world, t, x));
     if (!fits.includes(true)) return false;
     world.menu = { kind: 'build', x, selection: fits[world.lastSelection] ? world.lastSelection : fits.indexOf(true) };
   }
