@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "assets:check": "tsx tools/assets/check.ts",
-    "assets:export": "tsx tools/assets/export.ts"
+    "assets:export": "tsx tools/assets/export.ts",
+    "sim": "tsx tools/sim.ts"
   },
   "devDependencies": {
     "@napi-rs/canvas": "^1.0.10",

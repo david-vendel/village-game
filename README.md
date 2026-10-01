@@ -10,6 +10,8 @@ npm run dev        # play in the browser
 npm test           # logic tests + layer-boundary checks (headless)
 npm run typecheck  # whole project, plus src/game alone without browser APIs
 npm run build      # typecheck + static build into dist/ (only approved art assets)
+npm run sim -- tests/scenarios/houses-merge.scn   # play a scenario headless, the village as text
+npm run sim -- -e "new empty; free on; construction off; build farm at s0:40; map"
 npm run assets:check   # validate public/assets against docs/art/ASSET_SPEC.md
 npm run assets:export  # export today's procedural farm as placeholder assets (format test)
 ```

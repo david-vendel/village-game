@@ -1,0 +1,26 @@
+# Two farms side by side, a crossroads just past them, and a farm on the new
+# street close by: it faces another way, and the fields share out the land.
+new empty
+free on
+construction off
+build farm at s0:40
+build farm next
+build crossroads at s0:55
+expect streets 2
+streets
+ride #3
+turn up
+expect rider s1
+ride +3
+build farm here
+expect at s1:133 farm done
+expect fields at s0:40 24
+expect fields at s1:133 24
+# squeezed between the other two, the middle farm has only the land in front of the road
+expect fields at s0:46 15
+list
+map
+map ids
+
+# Nothing more fits between the middle farm and the new street.
+expect cannot build house at s0:52 in the way

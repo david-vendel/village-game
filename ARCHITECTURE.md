@@ -18,6 +18,8 @@ src/render   everything you see              imports src/game + src/render
    ▲
    │ renderFrame(), layouts
 src/app      input, screen/zoom, actions     main.ts wires it all into the loop
+
+src/sim      the game as text, headless       imports only src/game (like render, reads state; its scripts play the game)
 ```
 
 | Layer | Owns | Must not |
@@ -77,6 +79,8 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
 | Save something new, or change the save format | `game/save.ts` (bump `SAVE_VERSION` and extend the validator; older saves are discarded, not migrated) |
 | Change where/when the game is saved | `app/persistence.ts` |
 | Change zoom behaviour or screen scaling | `app/viewport.ts`, `app/screen.ts` |
+| Try a situation out, or test a flow, without graphics | a script in `tests/scenarios/*.scn` (`npm run sim -- <file>`); commands in `sim/scenario.ts` |
+| Add a rule every world must keep | `checkInvariants` in `sim/textmap.ts` |
 
 ## Files
 
@@ -204,6 +208,26 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   under the current rules (plots and field layout are derived, not stored; a job at a building
   that doesn't offer it is dropped). It refuses corrupt or newer saves with a reason instead of
   throwing. Not saved: the open menu, pending events, and tuning knobs (the URL owns those).
+
+### `src/sim`: the game as text
+The whole game can be played and looked at without graphics, instantly: the text is a view of the
+same state, and the same geometry (`grid.ts` `landUse`, `footprintOf`, `fieldCell`), that the
+renderer draws, so a layout that is right in text is right on screen.
+- `textmap.ts`: `renderMap`, the land grid from above, north up, one character per cell (roads
+  `=` `|`, crossings `+`, rocks `#`, a letter per building type, upper case standing and lower
+  case being built, fields `,` `_` `"` `*` by state, the rider `@`; `ids` mode gives each building
+  its own letter and its fields the lower case, to show which is which, e.g. merged houses);
+  `listBuildings`, `listStreets`, `summary`; and `checkInvariants`, the rules every world keeps
+  (no two buildings on a cell, nothing on a road or the rocks, buildings start at a cell 3n + 1,
+  every field on free land and one farm's, within reach; small houses and yards side by side are
+  merged; roads cross only at a crossroads; every job at a building that is there).
+- `scenario.ts`: `runScenario`, a script played one command a line through the game's own
+  functions (`build farm at s0:40`, `build house next`, `ride #last`, `turn up`, `build farm
+  here` through the build menu as the player does, `run until built`, `map ids`, `expect …`).
+  Places are `s<street>:<cell along it>`. The rules are checked after every command and every
+  few simulated seconds while running. `tools/sim.ts` is the command line (`npm run sim`).
+  `tests/scenarios.test.ts` plays every `tests/scenarios/*.scn`: no failure allowed, and the
+  output must match its `.out` snapshot (update with `npx vitest run tests/scenarios.test.ts -u`).
 
 ### `src/render`: graphics
 - `index.ts`: the renderer's public API: `renderFrame()` (world pass, then screen UI pass),

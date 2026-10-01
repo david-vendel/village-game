@@ -1,0 +1,98 @@
+# Two farms side by side, a crossroads just past them, and a farm on the new
+# street close by: it faces another way, and the fields share out the land.
+> new empty
+> free on
+> construction off
+> build farm at s0:40
+  #1 farm at s0:40-45, done
+> build farm next
+  #2 farm at s0:46-51, done
+> build crossroads at s0:55
+  #3 intersection at s0:55-57, done
+> expect streets 2
+  ok: 2 streets
+> streets
+  s0  runs east (lots on its north side), cells 10..252
+  s1  runs north (lots on its west side), cells 10..252, from crossroads #3
+    crossroads #3: s0:56 = s1:131 (cell A56)
+> ride #3
+  rider: s0:56 facing +
+> turn up
+  rider: s1:131 facing +
+> expect rider s1
+  ok: the rider is on s1
+> ride +3
+  rider: s1:134 facing +
+> build farm here
+  #63 farm at s1:133-138, done
+> expect at s1:133 farm done
+  ok: #63 farm at s1:133-138, done
+> expect fields at s0:40 24
+  ok: #1 has 24 fields
+> expect fields at s1:133 24
+  ok: #63 has 24 fields
+# squeezed between the other two, the middle farm has only the land in front of the road
+> expect fields at s0:46 15
+  ok: #2 has 15 fields
+> list
+  #1  farm  s0:40-45  done  fields=24 (grass 24, fallow 0, growing 0, ripe 0)
+  #2  farm  s0:46-51  done  fields=15 (grass 15, fallow 0, growing 0, ripe 0)
+  #3  intersection  s0:55-57  done
+  #63  farm  s1:133-138  done  fields=24 (grass 24, fallow 0, growing 0, ripe 0)
+> map
+             40        50        60
+       |  |  |  |  |  |  |  |  |  | 
+    O ......................|||..###
+    N ......................|||..###
+    M ......................|||..###
+    L ....................,.|||..###
+    K ...................,,,|||..###
+    J ...................,,,|||..###
+    I ...................,,,|||,.###
+    H ...................FFF|||,,###
+    G ...................FFF|||,,###
+    F ...................FFF|||,,###
+    E ...,,,,FFFFFFFFFFFFFFF|||,,...
+    D ...,,,,FFFFFFFFFFFFFFF|@|,,...
+    C ....,,,FFFFFFFFFFFFFFF|||,,...
+    B ======================+++=====
+    A ======================+++=====
+   -A ======================+++=====
+   -B ......,,,,,,,,,,,,,,,.|||.....
+   -C .......,,,,,,,,,,,,,,.|||.....
+   -D ......................|||.....
+   -E ......................|||.....
+   -F ......................|||.....
+  
+    F farm  I intersection
+    = | road  + crossing  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
+> map ids
+             40        50        60
+       |  |  |  |  |  |  |  |  |  | 
+    O ......................|||..###
+    N ......................|||..###
+    M ......................|||..###
+    L ....................d.|||..###
+    K ...................ddd|||..###
+    J ...................ddd|||..###
+    I ...................ddd|||d.###
+    H ...................DDD|||dd###
+    G ...................DDD|||dd###
+    F ...................DDD|||dd###
+    E ...aaaaAAAAAABBBBBBDDD|||dd...
+    D ...aaaaAAAAAABBBBBBDDD|@|dd...
+    C ....aaaAAAAAABBBBBBDDD|||dd...
+    B ======================+++=====
+    A ======================+++=====
+   -A ======================+++=====
+   -B ......aaaaaaabbbbbbbd.|||.....
+   -C .......aaaaaabbbbbbbb.|||.....
+   -D ......................|||.....
+   -E ......................|||.....
+   -F ......................|||.....
+  
+    A=#1 farm  B=#2 farm  C=#3 intersection  D=#63 farm
+    = | road  + crossing  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
+# Nothing more fits between the middle farm and the new street.
+> expect cannot build house at s0:52 in the way
+  ok: can't build house at s0:52: The Farm is in the way

@@ -1,0 +1,37 @@
+# Three small houses side by side become one large house; a fourth stays its own.
+new empty
+free on
+construction off
+build house at s0:40
+build house next
+build house next
+expect count house 1
+expect at s0:40 house size 3 done
+build house next
+expect count house 2
+map ids
+
+# Pulling down the middle section of a large house leaves two small ones.
+new empty
+free on
+construction off
+build house at s0:40
+build house next
+build house next
+demolish section at s0:43
+run 1s
+expect count house 2
+expect at s0:40 house size 1
+expect at s0:46 house size 1
+map ids
+
+# With builders: three houses built side by side merge as each one is finished.
+new village
+build house at s0:79
+build house next
+build house next
+expect at s0:79 house constructing
+run until built
+expect at s0:79 house size 3 done
+expect at s0:85 house size 1 done
+map ids D60:-C99
