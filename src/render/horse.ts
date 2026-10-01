@@ -109,12 +109,12 @@ export function drawRider(ctx: Ctx, rider: Rider, screenX: number, groundY: numb
   const stride = strideAt(rider.vx);
   const phase = rider.gait / stride;
   const trot = speed > 0.6;
-  const stance = gallop ? 0.26 : trot ? 0.38 : 0.5;
+  const stance = gallop ? 0.3 : trot ? 0.38 : 0.5;
   const liftH = gallop ? 10 : trot ? 5.5 : 3.2;
 
   // the body rises and falls twice a cycle (as each diagonal pair or each end pushes off);
-  // galloping, it leaps once a stride, all four hooves off the ground at the top
-  const bob = !moving ? 0 : gallop ? (0.5 - 0.5 * Math.cos(phase * Math.PI * 2)) * 5 : (0.5 - 0.5 * Math.cos(phase * Math.PI * 4)) * (trot ? 1.5 : 0.7);
+  // galloping, it bounds higher with each hoof's push
+  const bob = !moving ? 0 : gallop ? (0.5 - 0.5 * Math.cos(phase * Math.PI * 4)) * 3.2 : (0.5 - 0.5 * Math.cos(phase * Math.PI * 4)) * (trot ? 1.5 : 0.7);
   const breathe = Math.sin(time * 2.1) * 0.25;
   // the head swings with the walk; idle, slow nods, an occasional deeper dip, and a hoof pawing now and then
   const nod = moving ? Math.sin(phase * Math.PI * 4 + 0.6) * (trot ? 0.04 : 0.08) - speed * 0.12 : Math.sin(time * 0.9) * 0.08 + Math.max(0, Math.sin(time * 0.37) - 0.8) * 1.4;
@@ -127,7 +127,7 @@ export function drawRider(ctx: Ctx, rider: Rider, screenX: number, groundY: numb
   ctx.globalAlpha = 1;
   ctx.scale(rider.facing, 1);
   // galloping, the body rocks: rearing up into each leap, diving out of it
-  if (gallop) ctx.rotate(Math.sin(phase * Math.PI * 2 - 0.8) * 0.07);
+  if (gallop) ctx.rotate(Math.sin(phase * Math.PI * 4 - 0.8) * 0.04);
 
   // dust kicked up at speed
   if (speed > 0.4) {
@@ -140,8 +140,8 @@ export function drawRider(ctx: Ctx, rider: Rider, screenX: number, groundY: numb
     ctx.globalAlpha = 1;
   }
 
-  // walk: left hind, left fore, right hind, right fore; trot: diagonal pairs; gallop: the hinds, then the fores, then a leap
-  const off = gallop ? { lh: 0, rh: 0.08, lf: 0.3, rf: 0.38 } : trot ? { lh: 0, rf: 0, rh: 0.5, lf: 0.5 } : { lh: 0, lf: 0.25, rh: 0.5, rf: 0.75 };
+  // walk and gallop: left hind, left fore, right hind, right fore, each leg on its own beat; trot: diagonal pairs
+  const off = gallop ? { lh: 0, lf: 0.25, rh: 0.5, rf: 0.75 } : trot ? { lh: 0, rf: 0, rh: 0.5, lf: 0.5 } : { lh: 0, lf: 0.25, rh: 0.5, rf: 0.75 };
   const hoof = (leg: LegDef, o: number, far: boolean, lift = 0) => {
     if (moving) return hoofAt(leg.x + (far ? 1.5 : 0), (((phase + o) % 1) + 1) % 1, stance, liftH, stride);
     return { x: leg.x + (far ? 2.5 : -0.5) + (lift ? 2 : 0), lift };

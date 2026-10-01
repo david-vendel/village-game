@@ -258,10 +258,10 @@ export function createSound(initialVolume = 0.6): Sound {
     const speed = Math.min(1, Math.abs(r.vx) / RIDER_MAX_SPEED);
     if (speed < 0.02 || r.gait === prev) return;
     // same footfall pattern as render/horse.ts: 4-beat walk, 2-beat trot, and the gallop's
-    // drum roll of four quick beats and then the silence of the leap, louder
+    // four even beats, each leg on its own, louder
     const gallop = galloping(r.vx);
     const trot = speed > 0.6;
-    const beats = gallop ? [0, 0.08, 0.3, 0.38] : trot ? [0, 0.5] : [0, 0.25, 0.5, 0.75];
+    const beats = gallop ? [0, 0.25, 0.5, 0.75] : trot ? [0, 0.5] : [0, 0.25, 0.5, 0.75];
     const stride = strideAt(r.vx);
     const a = prev / stride;
     const b = r.gait / stride;
