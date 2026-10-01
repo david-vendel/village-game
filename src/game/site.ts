@@ -151,6 +151,8 @@ function underway(world: World, b: Building): { carried: Stock; fetching: Stock 
  * build with, a load on the pile, a load still to fetch from somewhere that has it.
  */
 export function builderPositions(world: World, b: Building): number {
+  // pulling down: one at each work spot
+  if (b.status === 'demolishing') return b.progress > 0 ? Math.min(BUILDERS_PER_SITE, workSpots(b.type).length) : 0;
   const site = b.site;
   if (!site) return 0;
   const busy = builders(world, b).map((p) => p.job!.worker).filter((w) => currentJob(w) || w.carrying);

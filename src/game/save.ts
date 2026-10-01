@@ -24,14 +24,14 @@ import { FIELD_ROWS, TREE_Y, type FieldZone } from './layout';
 import { BUILDERS_PER_SITE, createSite, workSpots, type Site } from './site';
 import { transportHub } from './transport';
 import { employees, laneY, nameFor, openings, type Animal, type Job, type Look, type Person, type Stroll } from './people';
-import { RESOURCES, type Load, type Resource, type Stock } from './resources';
+import { RESOURCES, stockOf, type Load, type Resource, type Stock } from './resources';
 import type { Worker, WorkerTask } from './worker';
 import { clearLand, createForest, type Tree } from './nature';
 import type { Pile } from './piles';
 import { streetOf } from './streets';
 import { createWorld, layStreet, WORLD_WIDTH, type Building, type Rider, type World } from './world';
 
-export const SAVE_VERSION = 15;
+export const SAVE_VERSION = 16;
 
 /** How often (s) the village used to collect goods from stores (until v9); old migrations need it. */
 const OLD_COLLECT_EVERY = 30;
@@ -360,6 +360,8 @@ const MIGRATIONS: Record<number, (world: unknown) => unknown> = {
     if (w) w.piles = [];
     return world;
   },
+  // v16: buildings can be being pulled down (status 'demolishing', with a demolition record); none were
+  15: (world) => world,
 };
 
 /** Snapshot the world. The result shares nothing with the live world. */
@@ -455,9 +457,14 @@ function build(saved: SavedWorld): World {
   // being upgraded, only; an upgrade only to buildings that have one
   for (const b of world.buildings) {
     const upgrade = BUILDINGS[b.type].upgrade;
-    if (!upgrade || b.status !== 'done') delete b.upgraded;
+    if (!upgrade || b.status === 'constructing') delete b.upgraded;
     if (b.status === 'done' && (!upgrade || b.upgraded)) delete b.site;
-    else if (b.status !== 'done') b.site ??= createSite(b.type);
+    else if (b.status === 'constructing') b.site ??= createSite(b.type);
+    // one being pulled down has no site, and knows how far it has to go
+    if (b.status === 'demolishing') {
+      delete b.site;
+      b.demolition ??= { work: BUILDINGS[b.type].buildTime / 2, from: Math.max(b.progress, 1e-3), left: stockOf() };
+    } else delete b.demolition;
   }
   // a job must be at a building that offers it (its own jobs once finished,
   // builders while a site); otherwise the person is out of work
@@ -552,7 +559,7 @@ function building(v: unknown, path: string): Building {
     type: oneOf<BuildingType>(b.type, BUILDING_TYPES, `${path}.type`),
     plotIndex: int(b.plotIndex, `${path}.plotIndex`),
     progress: Math.min(1, Math.max(0, num(b.progress, `${path}.progress`))),
-    status: oneOf(b.status, ['constructing', 'done'] as const, `${path}.status`),
+    status: oneOf(b.status, ['constructing', 'done', 'demolishing'] as const, `${path}.status`),
     completedAt: b.completedAt === null ? null : num(b.completedAt, `${path}.completedAt`),
     stock: stock(b.stock, `${path}.stock`),
   };
@@ -560,6 +567,10 @@ function building(v: unknown, path: string): Building {
   if (b.junction !== undefined && bool(b.junction, `${path}.junction`) && out.type === 'intersection') out.junction = true;
   if (b.site !== undefined) out.site = site(b.site, `${path}.site`, out.type);
   if (b.farm !== undefined) out.farm = farm(b.farm, `${path}.farm`);
+  if (b.demolition !== undefined) {
+    const d = obj(b.demolition, `${path}.demolition`);
+    out.demolition = { work: Math.max(0, num(d.work, `${path}.demolition.work`)), from: Math.min(1, Math.max(1e-3, num(d.from, `${path}.demolition.from`))), left: stock(d.left, `${path}.demolition.left`) };
+  }
   return out;
 }
 

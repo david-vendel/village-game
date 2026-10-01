@@ -90,9 +90,12 @@ export function jobsOf(b: Building): Partial<Record<Role, number>> {
 
 /**
  * Jobs a building offers now: its own once finished; builders while it's a
- * construction site (a finished building being upgraded offers both).
+ * construction site (a finished building being upgraded offers both), or
+ * while it is being pulled down.
  */
 export function openings(b: Building, buildersPerSite: number, dayLabour: boolean): Partial<Record<Role, number>> {
+  // one being pulled down needs only builders
+  if (b.status === 'demolishing') return dayLabour ? { builder: buildersPerSite } : {};
   const own = b.status === 'done' ? jobsOf(b) : {};
   return b.site && dayLabour ? { ...own, builder: buildersPerSite } : own;
 }

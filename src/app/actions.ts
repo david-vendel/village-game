@@ -95,7 +95,7 @@ export function createActions(world: World, notify: Notify, isTouch: () => boole
         if (menu.options[menu.selection] === 'demolish') {
           demolish(world, b);
           sound.ui('toggle');
-          notify(`The ${name} is pulled down; serfs will carry off what is left`);
+          notify(world.constructionEnabled ? `Builders will pull the ${name} down` : `The ${name} is pulled down; serfs will carry off what is left`);
           return;
         }
         const upgrade = BUILDINGS[b.type].upgrade!;

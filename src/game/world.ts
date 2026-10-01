@@ -20,8 +20,9 @@ import { FIRST_PLOT_X, PLOT_SPACING, STREET_LENGTH } from './layout';
 import { clearLand, plantWoods, gatherWorkplace, isGatherHut, updateForest, type Tree } from './nature';
 import { employees, laneY, nameFor, openings, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
 import { builderPositions, builders, createSite, siteWork, siteWorkplace, upgrading, type Site } from './site';
-import { dropOnGround, PILE_GAP, type Pile } from './piles';
-import { RESOURCES, stockOf, type Amounts, type Stock } from './resources';
+import { demolitionWork, demolitionWorkplace, dropAll, materialsIn, tearDown, type Demolition } from './demolition';
+import { dropOnGround, type Pile } from './piles';
+import { RESOURCES, stockOf, type Stock } from './resources';
 import { CROSS_PLOT, lotOnQuarry, mainStreet, newStreet, plotPoint, roadOnQuarry, plotX, PLOTS_PER_STREET, route, streetOf, streetRange, streetsAt, turnFacing, type Junction, type Street, type Vec } from './streets';
 import { eatAtTaverns } from './tavern';
 import { serfPositions, transportHub, transportWorkplace } from './transport';
@@ -80,7 +81,8 @@ export interface Plot {
   off?: true;
 }
 
-export type BuildingStatus = 'constructing' | 'done';
+/** Being built, standing, or being pulled down (demolition.ts). */
+export type BuildingStatus = 'constructing' | 'done' | 'demolishing';
 
 export interface Building {
   id: number;
@@ -99,6 +101,8 @@ export interface Building {
   upgraded?: true;
   /** A crossroads made where a new street met an old one (not built from the menu). */
   junction?: true;
+  /** While being pulled down: how far it has to go (demolition.ts). */
+  demolition?: Demolition;
   /** Fields — farms only, once finished. */
   farm?: FarmState;
 }
@@ -344,47 +348,54 @@ export function upgradeBuilding(world: World, b: Building): boolean {
 
 /** Whether a building can be pulled down: anything but a crossroads (the streets run through it). */
 export function canDemolish(b: Building): boolean {
-  return b.type !== 'intersection';
+  return b.type !== 'intersection' && b.status !== 'demolishing';
 }
 
 /** What pulling a building down leaves lying: its materials (built in or brought to its site) and its store. */
 export function demolitionYield(b: Building): Stock {
-  const left = stockOf();
-  const add = (a: Amounts) => {
-    for (const r of RESOURCES) left[r] += a[r] ?? 0;
-  };
-  const def = BUILDINGS[b.type];
-  if (b.status === 'done') add(def.cost);
-  if (b.upgraded && def.upgrade) add(def.upgrade.cost);
-  if (b.site) add(b.site.delivered);
-  add(b.stock);
+  const left = materialsIn(b);
+  for (const r of RESOURCES) left[r] += b.stock[r];
   return left;
 }
 
 /**
- * Pull a building down. Its materials (what it cost, or what was brought to
- * its site so far) and everything in its store are left lying on the ground
- * in front of its plot, for serfs to carry off (piles.ts); its workers put
- * down whatever they carry and are let go. Returns what was left lying.
+ * Start pulling a building down: builders take it apart in half the time it
+ * took to build (demolition.ts), its materials left on the ground in front of
+ * it as it comes down, for serfs to carry off (piles.ts). What is in its store
+ * is put out on the ground at once, and its workers put down whatever they
+ * carry and are let go. With construction off it comes down at once.
+ * Returns whether it started.
  */
-export function demolish(world: World, b: Building): Stock {
-  if (!canDemolish(b)) return stockOf();
+export function demolish(world: World, b: Building): boolean {
+  if (!canDemolish(b)) return false;
   const x = world.plots[b.plotIndex].x;
-  const left = demolitionYield(b);
   for (const p of employees(world, b)) {
     const w = p.job!.worker;
     if (w.carrying) dropOnGround(world, x + w.dx, w.carrying);
     release(world, p);
   }
+  dropAll(world, x, b.stock);
+  b.demolition = { work: demolitionWork(b), from: b.status === 'done' ? 1 : Math.max(b.progress, 1e-3), left: materialsIn(b) };
+  b.stock = stockOf();
+  b.progress = b.demolition.from;
+  b.status = 'demolishing';
+  delete b.site;
+  delete b.farm;
+  if (world.menu?.plotIndex === b.plotIndex) world.menu = null;
+  // a farm's fields are gone with it
+  syncFarmFields(world);
+  if (!world.constructionEnabled) tearDown(world, b, Infinity);
+  return true;
+}
+
+/** A building is down: its plot is free again. */
+function pulledDown(world: World, b: Building): void {
+  for (const p of employees(world, b)) release(world, p);
   world.buildings = world.buildings.filter((o) => o !== b);
   world.plots[b.plotIndex].buildingId = null;
-  if (world.menu?.plotIndex === b.plotIndex) world.menu = null;
-  const kinds = RESOURCES.filter((r) => left[r] > 1e-9);
-  kinds.forEach((r, i) => dropOnGround(world, x + (i - (kinds.length - 1) / 2) * PILE_GAP, { resource: r, amount: left[r] }));
   // its land is free again for the neighbouring farms' fields
   syncFarmFields(world);
   world.events.push({ kind: 'demolished', buildingId: b.id });
-  return left;
 }
 
 /**
@@ -603,6 +614,8 @@ export function update(world: World, dt: number, input: MoveInput): void {
   updateWorkers(world, dt);
   // a site whose builders have done all the work is finished
   for (const b of world.buildings) if (b.site && b.progress >= 1) complete(world, b);
+  // and one being pulled down that is down is gone
+  for (const b of [...world.buildings]) if (b.status === 'demolishing' && b.progress <= 1e-9) pulledDown(world, b);
   updateStrolls(world, dt, () => rand(world));
 }
 
@@ -612,6 +625,7 @@ export function update(world: World, dt: number, input: MoveInput): void {
  * is a site for them, and its usual workplace for everyone else).
  */
 export function workplaceOf(world: World, b: Building, role: Role): Workplace | null {
+  if (b.status === 'demolishing') return role === 'builder' ? demolitionWorkplace(world, b) : null;
   if (b.site && (b.status !== 'done' || role === 'builder')) return siteWorkplace(world, b, world.params.buildSpeed);
   if (b.farm) return farmWorkplace(b.farm, b.stock, world.params);
   const recipe = BUILDINGS[b.type].makes;

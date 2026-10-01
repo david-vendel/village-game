@@ -9,6 +9,7 @@
 import { BUILDINGS, BUILDING_TYPES, ROLES, type Role } from '../game/buildings';
 import { clock } from '../game/daynight';
 import { buildShortfall, upgradeShortfall, villageStock } from '../game/economy';
+import { demolitionWork } from '../game/demolition';
 import { materialsAllow, siteWork, upgrading } from '../game/site';
 import { isBorrowed } from '../game/farm';
 import { WOOD_REACH } from '../game/nature';
@@ -504,7 +505,8 @@ function drawBuildingMenu(ctx: Ctx, world: World, uiW: number, uiH: number): voi
     const left = demolitionYield(b);
     const rounded: Amounts = {};
     for (const r of RESOURCES) if (left[r] >= 0.5) rounded[r] = Math.round(left[r]);
-    line1 = 'Pull it down; its workers are let go';
+    const secs = +(demolitionWork(b) / world.params.buildSpeed).toFixed(1);
+    line1 = world.constructionEnabled ? `Builders pull it down in ${secs}s; its workers are let go` : 'Pull it down at once (construction off); its workers are let go';
     line2 = Object.keys(rounded).length ? `Leaves ${amounts(rounded)} on the ground for serfs to carry off` : 'Leaves nothing behind';
   }
   text(ctx, line1, uiW / 2, M.infoY, fitSize(ctx, line1, 14, M.panel.w - 24), '#f3ead8', 'center');
