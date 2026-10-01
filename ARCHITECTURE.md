@@ -259,6 +259,9 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
 
 ## Not done yet / ideas
 
+- Realistic art: planned, not started. See [docs/art/](docs/art/README.md) for the plan, the
+  work packages, and the asset format spec that sprite-based art must follow.
+
 - Wood and stone can't be produced yet (no woodcutter or quarry), so the starting warehouse is
   all there is.  New people don't arrive
   (houses could house newcomers), and there is no way to fire or reassign a worker.

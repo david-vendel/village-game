@@ -1,0 +1,202 @@
+{
+  "$schema": "./asset-manifest.schema.json",
+  "specVersion": 1,
+  "unitsPerMeter": 20,
+  "assets": {
+    "building.farm": {
+      "kind": "building",
+      "footprintWidth": 200,
+      "views": {
+        "street": {
+          "size": [300, 180],
+          "anchor": [150, 168],
+          "tiers": [2, 4],
+          "layers": {
+            "color": "building/farm/street/default/color@{tier}x.webp",
+            "shadow": "building/farm/street/default/shadow@{tier}x.webp",
+            "emissive": "building/farm/street/default/emissive@{tier}x.webp",
+            "normal": "building/farm/street/default/normal@{tier}x.webp",
+            "depth": "building/farm/street/default/depth@{tier}x.png"
+          },
+          "depthRange": [-40, 120],
+          "points": { "door": [138, 160], "smoke:0": [176, 30] }
+        },
+        "roadsideL": {
+          "size": [260, 180],
+          "anchor": [120, 168],
+          "tiers": [2, 4],
+          "layers": { "color": "building/farm/roadsideL/default/color@{tier}x.webp", "shadow": "building/farm/roadsideL/default/shadow@{tier}x.webp" }
+        }
+      },
+      "variants": {
+        "upgraded": {
+          "views": {
+            "street": {
+              "size": [300, 180],
+              "anchor": [150, 168],
+              "tiers": [2, 4],
+              "layers": {
+                "color": "building/farm/street/upgraded/color@{tier}x.webp",
+                "shadow": "building/farm/street/upgraded/shadow@{tier}x.webp",
+                "emissive": "building/farm/street/upgraded/emissive@{tier}x.webp"
+              },
+              "points": { "door": [138, 160], "smoke:0": [176, 30] }
+            }
+          }
+        }
+      },
+      "construction": {
+        "mode": "stages",
+        "stages": {
+          "staking": { "street": { "size": [300, 180], "anchor": [150, 168], "tiers": [2, 4], "layers": { "color": "building/farm/street/stage-staking/color@{tier}x.webp" } } },
+          "foundation": { "street": { "size": [300, 180], "anchor": [150, 168], "tiers": [2, 4], "layers": { "color": "building/farm/street/stage-foundation/color@{tier}x.webp" } } },
+          "frame": { "street": { "size": [300, 180], "anchor": [150, 168], "tiers": [2, 4], "layers": { "color": "building/farm/street/stage-frame/color@{tier}x.webp" } } },
+          "walls": { "street": { "size": [300, 180], "anchor": [150, 168], "tiers": [2, 4], "layers": { "color": "building/farm/street/stage-walls/color@{tier}x.webp" } } },
+          "roof": { "street": { "size": [300, 180], "anchor": [150, 168], "tiers": [2, 4], "layers": { "color": "building/farm/street/stage-roof/color@{tier}x.webp" } } }
+        }
+      },
+      "source": {
+        "method": "render3d",
+        "models": [{ "name": "TRELLIS.2", "version": "2025-12", "licence": "MIT" }],
+        "references": [{ "file": "refs/farmstead-zilina-01.jpg", "licence": "own photo" }],
+        "author": "agent:WP4",
+        "date": "2026-10-01"
+      }
+    },
+
+    "building.mill": {
+      "kind": "building",
+      "footprintWidth": 130,
+      "views": {
+        "street": {
+          "size": [180, 270],
+          "anchor": [90, 262],
+          "tiers": [2, 4],
+          "layers": { "color": "building/mill/street/default/color@{tier}x.webp", "shadow": "building/mill/street/default/shadow@{tier}x.webp" },
+          "points": { "door": [86, 254] }
+        }
+      },
+      "construction": { "mode": "reveal" },
+      "parts": [
+        {
+          "name": "sails",
+          "image": {
+            "size": [200, 200],
+            "anchor": [100, 100],
+            "tiers": [2, 4],
+            "layers": { "color": "building/mill/street/part-sails/color@{tier}x.webp" }
+          },
+          "pivot": [86, 112],
+          "z": "front",
+          "animate": { "type": "rotate", "radPerSecond": 0.9 }
+        }
+      ],
+      "source": { "method": "render3d", "models": [{ "name": "TRELLIS.2", "licence": "MIT" }] }
+    },
+
+    "person.peasant.farmer": {
+      "kind": "person",
+      "height": 36,
+      "variants": 4,
+      "clips": {
+        "idle": {
+          "driver": { "type": "time", "fps": 8 },
+          "loop": true,
+          "facings": {
+            "right": { "frameSize": [40, 44], "anchor": [20, 42], "tiers": [2, 4], "frames": 8, "grid": [8, 4], "layers": { "color": "person/peasant.farmer/idle/right/color@{tier}x.webp", "mask": "person/peasant.farmer/idle/right/mask@{tier}x.png", "shadow": "person/peasant.farmer/idle/right/shadow@{tier}x.webp" } },
+            "left": { "frameSize": [40, 44], "anchor": [20, 42], "tiers": [2, 4], "frames": 8, "grid": [8, 4], "layers": { "color": "person/peasant.farmer/idle/left/color@{tier}x.webp", "mask": "person/peasant.farmer/idle/left/mask@{tier}x.png" } }
+          }
+        },
+        "walk": {
+          "driver": { "type": "distance", "uPerCycle": 40 },
+          "loop": true,
+          "events": { "step": [0, 6] },
+          "facings": {
+            "right": {
+              "frameSize": [40, 44], "anchor": [20, 42], "tiers": [2, 4], "frames": 12, "grid": [12, 4],
+              "layers": { "color": "person/peasant.farmer/walk/right/color@{tier}x.webp", "mask": "person/peasant.farmer/walk/right/mask@{tier}x.png" },
+              "contact": ["LR", "L", "L", "L", "L", "", "LR", "R", "R", "R", "R", ""]
+            }
+          }
+        },
+        "walk.carry.sheaf": {
+          "driver": { "type": "distance", "uPerCycle": 36 },
+          "loop": true,
+          "events": { "step": [0, 6] },
+          "facings": {
+            "right": { "frameSize": [44, 52], "anchor": [22, 50], "tiers": [2, 4], "frames": 12, "grid": [12, 4], "layers": { "color": "person/peasant.farmer/walk.carry.sheaf/right/color@{tier}x.webp", "mask": "person/peasant.farmer/walk.carry.sheaf/right/mask@{tier}x.png" } }
+          }
+        },
+        "work.scythe": {
+          "driver": { "type": "time", "fps": 12 },
+          "loop": true,
+          "events": { "swish": [7] },
+          "facings": {
+            "right": {
+              "frameSize": [64, 48], "anchor": [24, 46], "tiers": [2, 4], "frames": 14, "grid": [14, 4],
+              "layers": { "color": "person/peasant.farmer/work.scythe/right/color@{tier}x.webp", "mask": "person/peasant.farmer/work.scythe/right/mask@{tier}x.png" },
+              "points": { "handR": [[30, 26], [31, 26], [33, 27], [35, 28], [37, 30], [39, 32], [41, 34], [42, 35], [40, 33], [37, 31], [34, 29], [32, 27], [31, 26], [30, 26]] }
+            }
+          }
+        }
+      },
+      "source": {
+        "method": "render3d",
+        "models": [{ "name": "TRELLIS.2", "licence": "MIT" }, { "name": "UniRig", "licence": "MIT" }],
+        "notes": "motions retargeted from library clips; see tools/art-pipeline/motions.md"
+      }
+    },
+
+    "rider.king": {
+      "kind": "rider",
+      "clips": {
+        "idle": { "driver": { "type": "time", "fps": 8 }, "loop": true, "facings": { "right": { "frameSize": [110, 110], "anchor": [55, 106], "tiers": [2, 4], "frames": 12, "grid": [6, 2], "layers": { "color": "rider/king/idle/right/color@{tier}x.webp", "shadow": "rider/king/idle/right/shadow@{tier}x.webp" } } } },
+        "walk": { "driver": { "type": "distance", "uPerCycle": 48 }, "loop": true, "events": { "hoof": [0, 3, 6, 9] }, "facings": { "right": { "frameSize": [110, 110], "anchor": [55, 106], "tiers": [2, 4], "frames": 12, "grid": [6, 2], "layers": { "color": "rider/king/walk/right/color@{tier}x.webp" } } } },
+        "trot": { "driver": { "type": "distance", "uPerCycle": 48 }, "loop": true, "events": { "hoof": [0, 6] }, "facings": { "right": { "frameSize": [110, 110], "anchor": [55, 106], "tiers": [2, 4], "frames": 12, "grid": [6, 2], "layers": { "color": "rider/king/trot/right/color@{tier}x.webp" } } } }
+      },
+      "source": { "method": "render3d", "models": [{ "name": "TRELLIS.2", "licence": "MIT" }, { "name": "UniRig", "licence": "MIT" }] }
+    },
+
+    "item.grain": {
+      "kind": "item",
+      "states": {
+        "default": [
+          { "size": [16, 26], "anchor": [8, 26], "tiers": [2, 4], "layers": { "color": "item/grain/default/0/color@{tier}x.webp", "shadow": "item/grain/default/0/shadow@{tier}x.webp" } },
+          { "size": [16, 26], "anchor": [8, 26], "tiers": [2, 4], "layers": { "color": "item/grain/default/1/color@{tier}x.webp", "shadow": "item/grain/default/1/shadow@{tier}x.webp" } }
+        ]
+      },
+      "source": { "method": "gen2d", "models": [{ "name": "Qwen-Image-Edit", "version": "2511", "licence": "Apache-2.0" }] }
+    },
+
+    "field.back": {
+      "kind": "field",
+      "states": {
+        "grass": [{ "size": [25, 30], "anchor": [0, 30], "tiers": [2, 4], "layers": { "color": "field/back/grass/0/color@{tier}x.webp" } }],
+        "tilled": [{ "size": [25, 30], "anchor": [0, 30], "tiers": [2, 4], "layers": { "color": "field/back/tilled/0/color@{tier}x.webp" } }],
+        "ripe": [{ "size": [25, 30], "anchor": [0, 30], "tiers": [2, 4], "layers": { "color": "field/back/ripe/0/color@{tier}x.webp" } }]
+      },
+      "crops": {
+        "ripe": [{ "size": [25, 22], "anchor": [0, 22], "tiers": [2, 4], "layers": { "color": "field/back/ripe/crops-0/color@{tier}x.webp" } }]
+      },
+      "source": { "method": "gen2d", "models": [{ "name": "FLUX.2 klein 4B", "licence": "Apache-2.0" }] }
+    },
+
+    "backdrop.castle": {
+      "kind": "backdrop",
+      "parallax": 0.14,
+      "layerX": 1050,
+      "anchorY": 300,
+      "image": { "size": [420, 260], "anchor": [210, 260], "tiers": [1, 2], "layers": { "color": "backdrop/castle/color@{tier}x.webp" } },
+      "source": { "method": "render3d", "models": [{ "name": "TRELLIS.2", "licence": "MIT" }] }
+    },
+
+    "backdrop.farHills": {
+      "kind": "backdrop",
+      "parallax": 0.24,
+      "tileWidth": 1600,
+      "anchorY": 420,
+      "image": { "size": [1600, 160], "anchor": [0, 160], "tiers": [1, 2], "layers": { "color": "backdrop/farHills/color@{tier}x.webp" } },
+      "source": { "method": "gen2d", "models": [{ "name": "Qwen-Image", "licence": "Apache-2.0" }, { "name": "Qwen-Image-Layered", "licence": "Apache-2.0" }] }
+    }
+  }
+}

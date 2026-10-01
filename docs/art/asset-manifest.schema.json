@@ -1,0 +1,266 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://github.com/david-vendel/village-game/docs/art/asset-manifest.schema.json",
+  "title": "Village Crown asset manifest (spec v1)",
+  "description": "See docs/art/ASSET_SPEC.md. Units are world units (20 u = 1 m); positions are from the image's top-left; y down.",
+  "type": "object",
+  "required": ["specVersion", "unitsPerMeter", "assets"],
+  "additionalProperties": false,
+  "properties": {
+    "$schema": { "type": "string" },
+    "specVersion": { "const": 1 },
+    "unitsPerMeter": { "const": 20 },
+    "assets": {
+      "type": "object",
+      "propertyNames": { "pattern": "^(building|person|rider|animal|item|field|nature|backdrop|ground)\\.[a-zA-Z0-9.]+$" },
+      "additionalProperties": { "$ref": "#/definitions/asset" }
+    }
+  },
+  "definitions": {
+    "vec2": { "type": "array", "items": { "type": "number" }, "minItems": 2, "maxItems": 2 },
+    "path": { "type": "string", "pattern": "^[A-Za-z0-9_./{}@-]+\\.(webp|png|avif)$" },
+    "tiers": {
+      "type": "array",
+      "items": { "enum": [1, 2, 4] },
+      "minItems": 1,
+      "uniqueItems": true,
+      "contains": { "const": 2 }
+    },
+    "layers": {
+      "description": "Pixel-aligned render passes of one image (ASSET_SPEC §6).",
+      "type": "object",
+      "required": ["color"],
+      "additionalProperties": false,
+      "properties": {
+        "color": { "$ref": "#/definitions/path" },
+        "shadow": { "$ref": "#/definitions/path" },
+        "emissive": { "$ref": "#/definitions/path" },
+        "normal": { "$ref": "#/definitions/path" },
+        "albedo": { "$ref": "#/definitions/path" },
+        "ao": { "$ref": "#/definitions/path" },
+        "depth": { "$ref": "#/definitions/path" },
+        "mask": { "$ref": "#/definitions/path" }
+      }
+    },
+    "points": {
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-zA-Z]+(:[a-zA-Z0-9]+)?$" },
+      "additionalProperties": { "$ref": "#/definitions/vec2" }
+    },
+    "image": {
+      "description": "One static image: size and anchor in world units, its layers, and named points.",
+      "type": "object",
+      "required": ["size", "anchor", "tiers", "layers"],
+      "additionalProperties": false,
+      "properties": {
+        "size": { "$ref": "#/definitions/vec2" },
+        "anchor": { "$ref": "#/definitions/vec2" },
+        "tiers": { "$ref": "#/definitions/tiers" },
+        "layers": { "$ref": "#/definitions/layers" },
+        "points": { "$ref": "#/definitions/points" },
+        "depthRange": { "$ref": "#/definitions/vec2", "description": "World units mapped to 0 and 65535 in the depth layer." }
+      }
+    },
+    "views": {
+      "type": "object",
+      "propertyNames": { "enum": ["street", "roadsideL", "roadsideR", "side", "backdrop"] },
+      "additionalProperties": { "$ref": "#/definitions/image" }
+    },
+    "part": {
+      "type": "object",
+      "required": ["name", "image", "pivot", "z", "animate"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "view": { "enum": ["street", "roadsideL", "roadsideR"], "default": "street" },
+        "image": { "$ref": "#/definitions/image" },
+        "pivot": { "$ref": "#/definitions/vec2", "description": "Where the part's own anchor goes, in the body image's frame." },
+        "z": { "enum": ["behind", "front"] },
+        "animate": {
+          "oneOf": [
+            { "type": "object", "required": ["type", "radPerSecond"], "additionalProperties": false, "properties": { "type": { "const": "rotate" }, "radPerSecond": { "type": "number" } } },
+            { "type": "object", "required": ["type", "amplitude", "period"], "additionalProperties": false, "properties": { "type": { "const": "swing" }, "amplitude": { "type": "number" }, "period": { "type": "number", "exclusiveMinimum": 0 } } },
+            { "type": "object", "required": ["type", "min", "max", "hz"], "additionalProperties": false, "properties": { "type": { "const": "emissivePulse" }, "min": { "type": "number", "minimum": 0 }, "max": { "type": "number" }, "hz": { "type": "number", "exclusiveMinimum": 0 } } },
+            { "type": "object", "required": ["type", "clip"], "additionalProperties": false, "properties": { "type": { "const": "loop" }, "clip": { "$ref": "#/definitions/sheet" } } },
+            { "type": "object", "required": ["type"], "additionalProperties": false, "properties": { "type": { "const": "static" } } }
+          ]
+        }
+      }
+    },
+    "driver": {
+      "oneOf": [
+        { "type": "object", "required": ["type", "fps"], "additionalProperties": false, "properties": { "type": { "const": "time" }, "fps": { "type": "number", "exclusiveMinimum": 0 } } },
+        { "type": "object", "required": ["type", "uPerCycle"], "additionalProperties": false, "properties": { "type": { "const": "distance" }, "uPerCycle": { "type": "number", "exclusiveMinimum": 0 } } },
+        { "type": "object", "required": ["type"], "additionalProperties": false, "properties": { "type": { "const": "progress" } } }
+      ]
+    },
+    "sheet": {
+      "description": "A sprite sheet: equal frames, row-major.",
+      "type": "object",
+      "required": ["frameSize", "anchor", "tiers", "frames", "grid", "layers"],
+      "additionalProperties": false,
+      "properties": {
+        "frameSize": { "$ref": "#/definitions/vec2" },
+        "anchor": { "$ref": "#/definitions/vec2" },
+        "tiers": { "$ref": "#/definitions/tiers" },
+        "frames": { "type": "integer", "minimum": 1 },
+        "grid": { "type": "array", "items": { "type": "integer", "minimum": 1 }, "minItems": 2, "maxItems": 2 },
+        "layers": { "$ref": "#/definitions/layers" },
+        "points": {
+          "description": "Per-frame named points (array length = frames).",
+          "type": "object",
+          "additionalProperties": { "type": "array", "items": { "$ref": "#/definitions/vec2" } }
+        },
+        "contact": {
+          "description": "Per-frame foot contact: 'L', 'R', 'LR' or ''.",
+          "type": "array",
+          "items": { "enum": ["", "L", "R", "LR"] }
+        }
+      }
+    },
+    "clip": {
+      "type": "object",
+      "required": ["driver", "loop", "facings"],
+      "additionalProperties": false,
+      "properties": {
+        "driver": { "$ref": "#/definitions/driver" },
+        "loop": { "type": "boolean" },
+        "events": {
+          "type": "object",
+          "additionalProperties": { "type": "array", "items": { "type": "integer", "minimum": 0 } }
+        },
+        "facings": {
+          "type": "object",
+          "required": ["right"],
+          "additionalProperties": false,
+          "properties": {
+            "right": { "$ref": "#/definitions/sheet" },
+            "left": { "$ref": "#/definitions/sheet" }
+          }
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": ["method"],
+      "additionalProperties": false,
+      "properties": {
+        "method": { "enum": ["render3d", "gen2d", "photo", "video", "hand", "procedural-export"] },
+        "models": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "licence"],
+            "additionalProperties": false,
+            "properties": { "name": { "type": "string" }, "version": { "type": "string" }, "licence": { "type": "string" } }
+          }
+        },
+        "references": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["file", "licence"],
+            "additionalProperties": false,
+            "properties": { "file": { "type": "string" }, "licence": { "type": "string" }, "attribution": { "type": "string" } }
+          }
+        },
+        "author": { "type": "string" },
+        "approvedBy": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "notes": { "type": "string" }
+      }
+    },
+    "stageSet": {
+      "type": "object",
+      "propertyNames": { "enum": ["staking", "foundation", "frame", "walls", "roof"] },
+      "additionalProperties": { "$ref": "#/definitions/views" }
+    },
+    "asset": {
+      "type": "object",
+      "required": ["kind", "source"],
+      "properties": {
+        "kind": { "enum": ["building", "person", "rider", "animal", "item", "field", "nature", "backdrop", "ground"] },
+        "source": { "$ref": "#/definitions/source" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "kind": { "const": "building" } } },
+          "then": {
+            "required": ["footprintWidth", "views", "construction"],
+            "properties": {
+              "footprintWidth": { "type": "number", "exclusiveMinimum": 0 },
+              "views": { "$ref": "#/definitions/views", "required": ["street"] },
+              "variants": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "object",
+                  "required": ["views"],
+                  "additionalProperties": false,
+                  "properties": { "views": { "$ref": "#/definitions/views" } }
+                }
+              },
+              "construction": {
+                "oneOf": [
+                  { "type": "object", "required": ["mode"], "additionalProperties": false, "properties": { "mode": { "const": "reveal" } } },
+                  { "type": "object", "required": ["mode", "stages"], "additionalProperties": false, "properties": { "mode": { "const": "stages" }, "stages": { "$ref": "#/definitions/stageSet" } } }
+                ]
+              },
+              "parts": { "type": "array", "items": { "$ref": "#/definitions/part" } },
+              "behind": { "$ref": "#/definitions/image" },
+              "front": { "$ref": "#/definitions/image" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "enum": ["person", "rider", "animal"] } } },
+          "then": {
+            "required": ["clips"],
+            "properties": {
+              "height": { "type": "number", "exclusiveMinimum": 0, "description": "Standing height in u (people: 34-38)." },
+              "variants": { "type": "integer", "minimum": 1, "description": "Baked identities; clip sheets hold them as extra rows, one block of rows per variant, in order." },
+              "clips": {
+                "type": "object",
+                "required": ["idle", "walk"],
+                "propertyNames": { "pattern": "^(idle|walk|trot|peck|walk\\.carry\\.(sack|basket|log|stone|sheaf)|door\\.(in|out)|work\\.[a-z]+)$" },
+                "additionalProperties": { "$ref": "#/definitions/clip" }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "enum": ["item", "field", "nature"] } } },
+          "then": {
+            "required": ["states"],
+            "properties": {
+              "states": {
+                "description": "State name -> list of variant images (item: one state 'default').",
+                "type": "object",
+                "additionalProperties": { "type": "array", "minItems": 1, "items": { "$ref": "#/definitions/image" } }
+              },
+              "crops": {
+                "type": "object",
+                "description": "field only: tall crop layer per state, anchored on the strip's near edge.",
+                "additionalProperties": { "type": "array", "items": { "$ref": "#/definitions/image" } }
+              },
+              "felling": { "$ref": "#/definitions/clip" }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "kind": { "enum": ["backdrop", "ground"] } } },
+          "then": {
+            "required": ["parallax", "image"],
+            "properties": {
+              "parallax": { "type": "number", "minimum": 0 },
+              "image": { "$ref": "#/definitions/image" },
+              "tileWidth": { "type": "number", "exclusiveMinimum": 0, "description": "Seamless strip period in u; omit for a hero sprite." },
+              "anchorY": { "type": "number", "description": "World y of the image's bottom edge at zoom 1." },
+              "layerX": { "type": "number", "description": "Hero sprites: x in the layer's own coordinates." },
+              "variants": { "type": "array", "items": { "$ref": "#/definitions/image" } }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
