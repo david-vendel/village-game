@@ -11,14 +11,12 @@ import { installTuning } from './app/tuning';
 import { installWorkersPanel } from './app/workers';
 import { update } from './game/world';
 import { sizePanelButtons } from './app/panel';
-import { type ArtMode, cameraX, HUD_BUTTON, loadArt, renderFrame, set3d, showArtPreview, type Toast } from './render';
+import { type ArtMode, cameraX, HUD_BUTTON, loadArt, renderFrame, showArtPreview, type Toast } from './render';
 
 // ?art=procedural ignores sprite assets; ?art=preview shows the asset contact sheet instead of the game
 const artParam = new URLSearchParams(location.search).get('art');
 const art: ArtMode = artParam === 'procedural' || artParam === 'preview' ? artParam : 'auto';
 await loadArt({ mode: art, approvedOnly: import.meta.env.PROD });
-// buildings with a 3D model are drawn in real-time 3D (?3d=0 keeps them 2D)
-set3d(art === 'auto' && new URLSearchParams(location.search).get('3d') !== '0');
 if (art === 'preview') showArtPreview();
 else await play();
 
@@ -76,7 +74,7 @@ async function play(): Promise<void> {
     sizePanelButtons((HUD_BUTTON * vp.uiScale) / screen.dpr);
 
     const held = controls.touchHeld();
-    renderFrame(ctx, world, { ...vp, camX, touch: screen.touch, leftHeld: held.left, rightHeld: held.right, toasts, showGrid: display.grid, topView: controls.topView(), topZoom: controls.topZoom(), hover: controls.hover(), fps: display.fps ? fps : undefined });
+    renderFrame(ctx, world, { ...vp, camX, touch: screen.touch, leftHeld: held.left, rightHeld: held.right, toasts, showGrid: display.grid, topView: controls.topView(), topZoom: controls.topZoom(), hover: controls.hover(), view3d: art === 'auto' && controls.view3d(), fps: display.fps ? fps : undefined });
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);

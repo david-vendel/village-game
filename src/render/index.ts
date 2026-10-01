@@ -4,11 +4,11 @@
 
 import { buildingAt, canDemolish, crossroadAt, roomToBuild, type World } from '../game/world';
 import { drawScene } from './scene';
+import { set3d } from './world3d';
 import { drawTopView } from './topview';
 import { drawBuildMenu, drawHud, drawToasts, drawTurnFade, type Toast } from './ui';
 
 export { artMode, loadArt, type ArtMode } from './assets';
-export { set3d } from './world3d';
 export { showArtPreview } from './preview';
 export { cameraX } from './scene';
 export { galloping, STRIDE as HORSE_STRIDE, strideAt } from './horse';
@@ -42,11 +42,14 @@ export interface FrameView {
   topZoom: number;
   /** Where the mouse is (canvas px), if over the canvas: the grid names the cell under it, buildings show their info box. */
   hover?: { x: number; y: number } | null;
+  /** Buildings in real-time 3D (else 2D art); the HUD's 2D · 3D button shows which. */
+  view3d: boolean;
   /** Frames per second and the slowest frame (ms) lately, shown when given (the panel's "frame rate"). */
   fps?: { fps: number; worstMs: number };
 }
 
 export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: FrameView): void {
+  set3d(v.view3d);
   // world, zoomed and anchored near the bottom of the screen
   // start transparent: the sky is composited behind the land (see sky.ts)
   ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -84,6 +87,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
     canBuild: here ? canDemolish(here) : roomToBuild(world, world.rider.x),
     canTurn: !world.menu && !!crossroadAt(world),
     topView: v.topView,
+    view3d: v.view3d,
   });
   drawToasts(ctx, v.toasts, world.time, v.uiW);
   drawBuildMenu(ctx, world, v.uiW, v.uiH);

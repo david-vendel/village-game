@@ -19,6 +19,8 @@ export interface Controls {
   topView(): boolean;
   /** The view from above has its own zoom, apart from the street view's. */
   topZoom(): number;
+  /** Buildings in real-time 3D (true) or as 2D art: the 2D · 3D button, V, or ?3d=0 / ?3d=1. */
+  view3d(): boolean;
   /** Where the mouse is over the canvas (canvas px), if it is. */
   hover(): { x: number; y: number } | null;
 }
@@ -32,6 +34,7 @@ type Role = 'left' | 'right' | 'pinch' | 'none';
 const DOUBLE_TAP_MS = 300;
 const VIEW_KEY = 'village-game:view';
 const TOP_ZOOM_KEY = 'village-game:top-zoom';
+const VIEW3D_KEY = 'village-game:view3d';
 const stored = (key: string): string | null => {
   try {
     return localStorage.getItem(key);
@@ -54,6 +57,13 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
   let pinch: { dist: number; zoom: number } | null = null;
   // the view from above is a preference, not game state (game/save.ts leaves UI out), so the browser keeps it
   let topView = stored(VIEW_KEY) === 'top';
+  // 2D or 3D buildings: a preference the browser keeps; the address can set it for a link
+  const view3dParam = new URLSearchParams(location.search).get('3d');
+  let view3d = view3dParam === '0' ? false : view3dParam === '1' ? true : stored(VIEW3D_KEY) !== '2d';
+  const toggleView3d = () => {
+    view3d = !view3d;
+    store(VIEW3D_KEY, view3d ? '3d' : '2d');
+  };
   let topZoom = Number(stored(TOP_ZOOM_KEY)) || 1;
   const setTopView = (on: boolean) => {
     topView = on;
@@ -97,6 +107,7 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
       return;
     }
     if (key === 'c') return actions.toggleConstruction();
+    if (key === 'v') return toggleView3d();
     if (key === 'm') return actions.toggleSound();
     if (key === '-' || key === '_') return zoomBy(1 / ZOOM_STEP);
     if (key === '=' || key === '+') return zoomBy(ZOOM_STEP);
@@ -191,6 +202,7 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
       const dir = screen.touch ? dirAt(ux, uy) : null;
       if (hit(L.zoomOut, ux, uy)) zoomBy(1 / ZOOM_STEP);
       else if (hit(L.newVillage, ux, uy)) newVillage();
+      else if (hit(L.view3d, ux, uy)) toggleView3d();
       else if (hit(L.map, ux, uy)) setTopView(!topView);
       else if (hit(L.zoomIn, ux, uy)) zoomBy(ZOOM_STEP);
       else if (dir) role = dir;
@@ -271,5 +283,6 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
     topView: () => topView,
     topZoom: () => topZoom,
     hover: () => hover,
+    view3d: () => view3d,
   };
 }
