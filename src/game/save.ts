@@ -26,7 +26,7 @@ import { transportHub } from './transport';
 import { employees, laneY, nameFor, openings, type Animal, type Job, type Look, type Person, type Stroll } from './people';
 import { RESOURCES, type Load, type Resource, type Stock } from './resources';
 import type { Worker, WorkerTask } from './worker';
-import { createForest, type Tree } from './nature';
+import { createForest, onRoad, type Tree } from './nature';
 import { createWorld, layStreet, WORLD_WIDTH, type Building, type Rider, type World } from './world';
 
 export const SAVE_VERSION = 13;
@@ -451,6 +451,8 @@ function build(saved: SavedWorld): World {
     if (b.type !== 'farm' || b.status !== 'done') delete b.farm;
     else if (!b.farm) b.farm = createFarm({ spots: farmFieldSpots(world, b) });
   }
+  // no tree stands where another street crosses (saves from before streets had bands)
+  world.trees = world.trees.filter((t) => !onRoad(world, t.x));
   // re-lay fields under the current land rules (crops carry over), and make
   // sure what was loaded obeys the farm's rules
   syncFarmFields(world);

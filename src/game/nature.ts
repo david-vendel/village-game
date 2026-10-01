@@ -5,8 +5,8 @@
 // grown trees, leaving a stump that rots away after STUMP_TIME. New saplings
 // sprout on their own now and then, wherever there is room.
 //
-// Every street has woods along it; where a road runs off at a crossroads the
-// trees are cut down for it, and none grow there again (onRoad).
+// Every street has woods along it; where another street crosses it the trees
+// are cut down across that street's whole band, and none grow there again (onRoad).
 //
 // The quarries (QUARRIES) are rocky hills that come down to the tree line:
 // a stonecutter walks to the face and cuts blocks out of it, as many as
@@ -22,7 +22,7 @@ import { BUILDINGS } from './buildings';
 import { putAway, storeSpot } from './economy';
 import { CHOP_SPOT, PILE_UNIT, QUARRIES, QUARRY_SPOTS, QUARRY_W, QUARRY_Y, STONECUTTER_DOOR, STREET_LENGTH, WOODCUTTER_DOOR } from './layout';
 import { room, type Load } from './resources';
-import { crossings, SIDE_ROAD_HALF, streetDist, streetRange } from './streets';
+import { crossings, STREET_BAND_HALF, streetDist, streetRange } from './streets';
 import type { JobTicket, Workplace } from './worker';
 import type { Building, World } from './world';
 
@@ -65,8 +65,8 @@ export function treeGrowth(t: Tree): number {
   return t.state === 'growing' ? Math.min(1, t.age / TREE_GROW) : 1;
 }
 
-/** Trees keep this far (px) from the middle of a road running off at a crossroads. */
-const ROAD_CLEAR = SIDE_ROAD_HALF + 28;
+/** Trees keep this far (px) from the middle of a street crossing theirs: clear of its road, fields and woods. */
+const ROAD_CLEAR = STREET_BAND_HALF;
 
 /** Whether world x is where a road runs off at a crossroads (built or being built), so no tree stands there. */
 export function onRoad(world: World, x: number): boolean {

@@ -38,6 +38,12 @@ export const PLOTS_PER_STREET = Math.ceil((STREET_LENGTH - 200 - FIRST_PLOT_X) /
 export const CROSS_PLOT = 12;
 /** Half the width of a road running into the street at a crossroads (px). */
 export const SIDE_ROAD_HALF = 30;
+/**
+ * Half the width of a street's whole band across the ground: its road, the
+ * fields in front of it and the woods behind it (px). Where another street
+ * crosses, nothing of that street's own (fields, trees) lies within it.
+ */
+export const STREET_BAND_HALF = 125;
 /** How far past its first and last plot a street runs on (px). */
 const STREET_END = 180;
 

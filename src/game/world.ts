@@ -432,7 +432,10 @@ function openStreet(world: World, b: Building): void {
   const known = world.junctions.length;
   const street = layStreet(world, b);
   // roads are cut through the woods where the new street meets the others, and its own woods grow along it
-  for (const j of world.junctions.slice(known)) clearRoad(world, j.a);
+  for (const j of world.junctions.slice(known)) {
+    clearRoad(world, j.a);
+    clearRoad(world, j.b);
+  }
   const { min, max } = streetRange(world, street.index);
   const x0 = plotX(street.index, 0) - FIRST_PLOT_X;
   world.trees.push(...createForest(WORLD_WIDTH, () => rand(world), () => world.nextId++, x0).filter((t) => t.x > min && t.x < max && !onRoad(world, t.x)));

@@ -26,9 +26,14 @@ export function drawTrees(ctx: Ctx, world: World, camX: number, viewW: number): 
   for (const t of world.trees) {
     const sx = groundX(t.x - camX, TREE_Y, vpX);
     if (sx < -80 || sx > viewW + 80) continue;
-    if (t.state === 'stump') stump(ctx, sx, TREE_Y, k, t.id);
-    else tree(ctx, t, sx, TREE_Y, k * (0.25 + 0.75 * treeGrowth(t)), felling.get(t.id), world.time);
+    drawTreeAt(ctx, world, t, sx, TREE_Y, k, felling);
   }
+}
+
+/** One tree (or stump) standing at (x, y), drawn at scale k. */
+export function drawTreeAt(ctx: Ctx, world: World, t: Tree, x: number, y: number, k: number, felling = beingFelled(world)): void {
+  if (t.state === 'stump') stump(ctx, x, y, k, t.id);
+  else tree(ctx, t, x, y, k * (0.25 + 0.75 * treeGrowth(t)), felling.get(t.id), world.time);
 }
 
 /** A round-crowned tree or a tall poplar, by its id, sized `s`; shuddering under the axe while being felled. */
@@ -69,7 +74,14 @@ export function drawQuarries(ctx: Ctx, camX: number, viewW: number): void {
     const x = groundX(q.x - camX, QUARRY_Y, vpX);
     const half = (QUARRY_W / 2) * k;
     if (x + half < -40 || x - half > viewW + 40) return;
-    const y = QUARRY_Y;
+    drawQuarry(ctx, x, QUARRY_Y, k, qi);
+  });
+}
+
+/** Quarry qi's crag and face, its foot at (x, y), drawn at scale k. */
+export function drawQuarry(ctx: Ctx, x: number, y: number, k: number, qi: number): void {
+  {
+    const half = (QUARRY_W / 2) * k;
     const seed = qi * 31 + 7;
     // the crag: a ragged outline, lit from the left
     const pts: number[] = [x - half, y];
@@ -115,5 +127,5 @@ export function drawQuarries(ctx: Ctx, camX: number, viewW: number): void {
       const bx = x - fw / 2 - 16 * k + hash(seed, 60 + i) * (fw + 32 * k);
       rect(ctx, bx, y - 6 * k, 9 * k, 6 * k, shade('#b8ae9c', -hash(seed, 70 + i) * 0.2));
     }
-  });
+  }
 }

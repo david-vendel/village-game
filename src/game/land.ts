@@ -4,14 +4,14 @@
 // up to the next building, in front of the road any land within reach that is
 // closer to them than to another farm — including the land in front of the
 // neighbouring lots, which a farm borrows only when its own land is all in use.
-// Where a road runs off at a crossroads, no field is sown across it: a
-// crossroads covers its cells on both of its streets, behind the road and in front of it.
+// Where another street crosses, no field is sown across its band (its road,
+// fields and woods: STREET_BAND_HALF), behind the road or in front of it.
 
 import { BUILDINGS } from './buildings';
 import { fieldSpots, footprintHalfCells, setFieldSpots, type FieldSpot } from './farm';
 import { employees } from './people';
 import { CELL_W, FIELD_REACH, FIELD_ROWS, GRID_X0, type FieldZone } from './layout';
-import { crossings, SIDE_ROAD_HALF } from './streets';
+import { crossings, STREET_BAND_HALF } from './streets';
 import type { Building, World } from './world';
 
 export type CellUse =
@@ -61,12 +61,12 @@ function buildingCells(world: World): Array<number | null> {
   return cells;
 }
 
-/** Cells in front of the road that a road running off at a crossroads crosses. */
+/** Cells that a street crossing this one covers with its road, fields and woods. */
 function roadCells(world: World, count: number): boolean[] {
   const road = new Array<boolean>(count).fill(false);
   const xs = [...crossings(world).map((c) => c.x), ...world.buildings.filter((b) => b.type === 'intersection').map((b) => world.plots[b.plotIndex].x)];
   for (const x of xs) {
-    for (let k = Math.max(0, cellAt(x - SIDE_ROAD_HALF * 1.6)); k <= Math.min(count - 1, cellAt(x + SIDE_ROAD_HALF * 1.6)); k++) road[k] = true;
+    for (let k = Math.max(0, cellAt(x - STREET_BAND_HALF)); k <= Math.min(count - 1, cellAt(x + STREET_BAND_HALF)); k++) road[k] = true;
   }
   return road;
 }
@@ -101,7 +101,7 @@ function ownerGrid(world: World): { built: Array<number | null>; owner: Record<F
   const owner: Record<FieldZone, Array<number | null>> = { back: [], front: [] };
   const road = roadCells(world, built.length);
   for (const zone of ['back', 'front'] as const) {
-    owner[zone] = built.map((id, k) => ((zone === 'back' && id !== null) || (zone === 'front' && road[k]) ? null : farmFor(world, farms, zone, k, built)?.id ?? null));
+    owner[zone] = built.map((id, k) => ((zone === 'back' && id !== null) || road[k] ? null : farmFor(world, farms, zone, k, built)?.id ?? null));
   }
   return { built, owner };
 }

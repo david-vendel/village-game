@@ -1,10 +1,11 @@
-// Parallax backdrop in the spirit of the Age of Empires II intro: hazy blue
-// mountains, a castle on a hill, patchwork
-// fields, a distant village and a meadow behind the street (its trees and
-// the quarries are in the world: render/nature.ts).
+// Backdrop in the spirit of the Age of Empires II intro: hazy blue mountains and
+// a castle on a hill along the horizon, which turn with the view when the rider
+// turns at a crossroads, then the land itself: a plane from the horizon down to
+// the street, on which the rest of the village stands (plane.ts), and the
+// street being looked at (its trees and the quarries are in the world: render/nature.ts).
 
 import { SIDE_ROAD_HALF } from '../game/streets';
-import { depthScale, groundTiles, groundX } from './ground';
+import { depthScale, groundTiles, groundX, HORIZON_Y } from './ground';
 import { circle, type Ctx, ellipse, GROUND_Y, hash, mix, poly, rect, shade, smoke, VIEW_H } from './util';
 
 const HAZE = '#dcc9ad';
@@ -15,6 +16,9 @@ const CASTLE_FACTOR = 0.14;
 
 export interface View {
   camX: number;
+  /** Where the camera is along the way it looks across (map px), and which way it looks (quarter turns): the backdrop pans with both. */
+  along: number;
+  turn: number;
   width: number;
   /** World y at the top of the screen; below 0 when zoomed out. */
   top: number;
@@ -23,16 +27,20 @@ export interface View {
   time: number;
 }
 
-/** The land behind the street, far to near. The sky goes behind it afterwards (sky.ts). */
+/** The land, far to near. The sky goes behind it afterwards (sky.ts). */
 export function drawBackground(ctx: Ctx, v: View): void {
   drawMountains(ctx, v);
   drawCastleHills(ctx, v);
   drawFarHills(ctx, v);
   drawBirds(ctx, v);
-  drawDistantVillage(ctx, v);
-  drawTreeLine(ctx, v);
+  drawPlane(ctx, v);
   drawStreetGround(ctx, v);
 }
+
+/** Screen px a quarter turn of the view pans the horizon by. */
+const QUARTER_TURN = 900;
+/** How far a backdrop layer at `factor` is panned. */
+const pan = (v: View, factor: number) => v.along * factor - v.turn * QUARTER_TURN;
 
 // --- Terrain layers ----------------------------------------------------------
 
@@ -46,7 +54,7 @@ function ridge(x: number, seed: number, amp: number): number {
 }
 
 function fillRidge(ctx: Ctx, v: View, factor: number, baseY: number, seed: number, amp: number, fill: string | CanvasGradient, bump?: (lx: number) => number): void {
-  const off = v.camX * factor;
+  const off = pan(v, factor);
   ctx.beginPath();
   ctx.moveTo(-10, VIEW_H);
   for (let sx = -10; sx <= v.width + 10; sx += 6) {
@@ -63,10 +71,10 @@ function drawMountains(ctx: Ctx, v: View): void {
   const g = ctx.createLinearGradient(0, 180, 0, 330);
   g.addColorStop(0, '#9aa6c2');
   g.addColorStop(1, '#c3bdbf');
-  fillRidge(ctx, v, 0.05, 275, 1.3, 45, g, (x) => Math.max(0, Math.sin(x * 0.0009 + 0.4)) * 40);
+  fillRidge(ctx, v, 0.05, HORIZON_Y - 10, 1.3, 45, g, (x) => Math.max(0, Math.sin(x * 0.0009 + 0.4)) * 40);
   // snow-lit ridge highlight
   ctx.globalAlpha = 0.35;
-  fillRidge(ctx, v, 0.05, 290, 4.1, 30, '#b4b8cc');
+  fillRidge(ctx, v, 0.05, HORIZON_Y + 5, 4.1, 30, '#b4b8cc');
   ctx.globalAlpha = 1;
 }
 
@@ -77,49 +85,43 @@ function castleBump(lx: number): number {
 }
 
 function drawCastleHills(ctx: Ctx, v: View): void {
-  const g = ctx.createLinearGradient(0, 220, 0, 360);
+  const g = ctx.createLinearGradient(0, HORIZON_Y - 90, 0, HORIZON_Y);
   g.addColorStop(0, '#9aa886');
   g.addColorStop(1, '#b7b596');
-  fillRidge(ctx, v, CASTLE_FACTOR, 335, 2.2, 22, g, castleBump);
+  const base = HORIZON_Y + 16;
+  fillRidge(ctx, v, CASTLE_FACTOR, base, 2.2, 22, g, castleBump);
 
-  const cx = CASTLE_LAYER_X - v.camX * CASTLE_FACTOR;
+  const cx = CASTLE_LAYER_X - pan(v, CASTLE_FACTOR);
   if (cx > -300 && cx < v.width + 300) {
-    const baseY = 335 - ridge(CASTLE_LAYER_X, 2.2, 22) - castleBump(CASTLE_LAYER_X) + 6;
-    drawCastle(ctx, cx, baseY, v.time);
+    const baseY = base - ridge(CASTLE_LAYER_X, 2.2, 22) - castleBump(CASTLE_LAYER_X) + 6;
+    // far off on its hill beyond the horizon
+    ctx.save();
+    ctx.translate(cx, baseY);
+    ctx.scale(0.55, 0.55);
+    drawCastle(ctx, 0, 0, v.time);
+    ctx.restore();
   }
 }
 
+/** Low wooded hills along the horizon. */
 function drawFarHills(ctx: Ctx, v: View): void {
   const factor = 0.24;
-  const g = ctx.createLinearGradient(0, 300, 0, 420);
-  g.addColorStop(0, '#8e9e6a');
-  g.addColorStop(1, '#a7a574');
-  fillRidge(ctx, v, factor, 368, 5.5, 18, g);
-
-  // patchwork fields on the slopes
-  const off = v.camX * factor;
-  const T = 150;
-  const i0 = Math.floor(off / T) - 1;
-  const fieldCols = ['#c9b36c', '#a9a45f', '#b99c5a', '#8f9a5a', '#d3bf7a'];
-  for (let i = i0; i < i0 + v.width / T + 3; i++) {
-    if (hash(i, 40) < 0.35) continue;
-    const lx = i * T + hash(i, 41) * 40;
-    const sx = lx - off;
-    const w = 60 + hash(i, 42) * 70;
-    const y1 = 368 - ridge(lx, 5.5, 18) + 8;
-    const y2 = 368 - ridge(lx + w, 5.5, 18) + 8;
-    const h = 10 + hash(i, 43) * 12;
-    poly(ctx, [sx, y1, sx + w, y2, sx + w + 6, y2 + h, sx + 6, y1 + h], mix(fieldCols[Math.floor(hash(i, 44) * 5)], HAZE, 0.3));
-  }
+  const base = HORIZON_Y + 6;
+  const g = ctx.createLinearGradient(0, HORIZON_Y - 30, 0, HORIZON_Y);
+  g.addColorStop(0, mix('#8e9e6a', HAZE, 0.45));
+  g.addColorStop(1, mix('#a7a574', HAZE, 0.45));
+  fillRidge(ctx, v, factor, base, 5.5, 10, g);
   // forest clumps along the ridge
-  for (let i = i0 * 3; i < (i0 + v.width / T + 3) * 3; i++) {
+  const off = pan(v, factor);
+  const T = 50;
+  const i0 = Math.floor(off / T) - 1;
+  for (let i = i0; i < i0 + v.width / T + 3; i++) {
     if (hash(i, 50) < 0.45) continue;
-    const lx = i * (T / 3) + hash(i, 51) * 30;
+    const lx = i * T + hash(i, 51) * 30;
     const sx = lx - off;
-    const y = 368 - ridge(lx, 5.5, 18) + 2;
-    const r = 7 + hash(i, 52) * 8;
-    ellipse(ctx, sx, y - r * 0.6, r, r * 0.9, '#6f7f55');
-    ellipse(ctx, sx - r * 0.3, y - r * 0.9, r * 0.6, r * 0.55, '#86925f');
+    const y = base - ridge(lx, 5.5, 10) + 2;
+    const r = 4 + hash(i, 52) * 5;
+    ellipse(ctx, sx, y - r * 0.6, r, r * 0.9, mix('#6f7f55', HAZE, 0.4));
   }
 }
 
@@ -128,8 +130,8 @@ function drawBirds(ctx: Ctx, v: View): void {
   ctx.lineWidth = 1.3;
   for (let i = 0; i < 6; i++) {
     const span = v.width + 400;
-    const x = ((v.time * (18 + i * 3) + hash(i, 60) * span - v.camX * 0.08) % span + span) % span - 200;
-    const y = 110 + hash(i, 61) * 70 + Math.sin(v.time * 0.7 + i) * 8;
+    const x = ((v.time * (18 + i * 3) + hash(i, 60) * span - pan(v, 0.08)) % span + span) % span - 200;
+    const y = HORIZON_Y - 110 + hash(i, 61) * 70 + Math.sin(v.time * 0.7 + i) * 8;
     const flap = Math.sin(v.time * 8 + i * 2) * 3;
     ctx.beginPath();
     ctx.moveTo(x - 5, y - flap);
@@ -139,70 +141,25 @@ function drawBirds(ctx: Ctx, v: View): void {
   }
 }
 
-function drawDistantVillage(ctx: Ctx, v: View): void {
-  const factor = 0.42;
-  const baseY = 402;
-  const g = ctx.createLinearGradient(0, 360, 0, 440);
-  g.addColorStop(0, '#869a5c');
-  g.addColorStop(1, '#94a062');
-  fillRidge(ctx, v, factor, baseY, 8.8, 8, g);
-
-  const off = v.camX * factor;
-  const T = 110;
-  const i0 = Math.floor(off / T) - 2;
-  for (let i = i0; i < i0 + v.width / T + 4; i++) {
-    const r = hash(i, 70);
-    const lx = i * T + hash(i, 71) * 50;
-    const sx = lx - off;
-    const y = baseY - ridge(lx, 8.8, 8) + 4;
-    if (r < 0.5) {
-      tinyHouse(ctx, sx, y, i, v.time);
-    } else if (r < 0.56) {
-      tinyChurch(ctx, sx, y);
-    } else {
-      // poplars and round trees
-      const tall = hash(i, 72) < 0.4;
-      if (tall) ellipse(ctx, sx, y - 22, 6, 22, '#5d7042');
-      else {
-        ellipse(ctx, sx, y - 14, 15, 13, '#62763f');
-        ellipse(ctx, sx - 4, y - 18, 8, 7, '#7c8c4d');
-      }
-    }
-  }
+/** The land from the horizon to the street: hazy far off, greener near. */
+function drawPlane(ctx: Ctx, v: View): void {
+  const g = ctx.createLinearGradient(0, HORIZON_Y, 0, 440);
+  g.addColorStop(0, mix('#a7a574', HAZE, 0.55));
+  g.addColorStop(0.25, '#9aa262');
+  g.addColorStop(0.7, '#879a4c');
+  g.addColorStop(1, '#7f9148');
+  ctx.fillStyle = g;
+  ctx.fillRect(-10, HORIZON_Y - 1, v.width + 20, 442 - HORIZON_Y);
 }
 
-function tinyHouse(ctx: Ctx, x: number, y: number, seed: number, time: number): void {
-  const w = 22 + hash(seed, 80) * 16;
-  const h = 12 + hash(seed, 81) * 7;
-  const d = 9;
-  const wall = mix(['#d9c8a8', '#cdb792', '#bfae90'][seed & 1 ? 1 : hash(seed, 82) < 0.5 ? 0 : 2], HAZE, 0.35);
-  const roof = mix(hash(seed, 83) < 0.5 ? '#8e5c3e' : '#9f8a58', HAZE, 0.35);
-  rect(ctx, x, y - h, w, h, wall);
-  poly(ctx, [x + w, y, x + w + d, y - 4, x + w + d, y - h - 4, x + w, y - h], shade(wall, -0.2));
-  poly(ctx, [x - 2, y - h, x + w + 2, y - h, x + w + d / 2, y - h - 11, x + d / 2 - 2, y - h - 11], roof);
-  poly(ctx, [x + w, y - h, x + w + d, y - h - 4, x + w + d / 2, y - h - 11], shade(roof, -0.25));
-  if (hash(seed, 84) < 0.4) {
-    rect(ctx, x + w * 0.7, y - h - 14, 3, 6, '#7a6a5c');
-    smoke(ctx, x + w * 0.7 + 1, y - h - 15, time, seed, 0.5);
-  }
-}
-
-function tinyChurch(ctx: Ctx, x: number, y: number): void {
-  const wall = mix('#d4ccbc', HAZE, 0.35);
-  rect(ctx, x, y - 20, 36, 20, wall);
-  poly(ctx, [x - 2, y - 20, x + 38, y - 20, x + 32, y - 30, x + 4, y - 30], mix('#7d6e66', HAZE, 0.35));
-  rect(ctx, x + 30, y - 46, 12, 46, shade(wall, -0.05));
-  poly(ctx, [x + 29, y - 46, x + 43, y - 46, x + 36, y - 68], mix('#5c6275', HAZE, 0.3));
-}
-
-function drawTreeLine(ctx: Ctx, v: View): void {
-  const factor = 0.66;
-  // meadow behind the street
-  const g = ctx.createLinearGradient(0, 395, 0, 440);
-  g.addColorStop(0, '#7f9148');
-  g.addColorStop(1, '#8a9a4c');
-  fillRidge(ctx, v, factor, 416, 3.3, 5, g);
-  // the trees along it stand in the world, to be felled (render/nature.ts)
+/** Haze over everything far off: thickest at the horizon. */
+export function drawHaze(ctx: Ctx, v: View): void {
+  const g = ctx.createLinearGradient(0, HORIZON_Y, 0, 400);
+  g.addColorStop(0, 'rgba(220,201,173,0.75)');
+  g.addColorStop(0.35, 'rgba(220,201,173,0.3)');
+  g.addColorStop(1, 'rgba(220,201,173,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(-10, HORIZON_Y - 1, v.width + 20, 400 - HORIZON_Y);
 }
 
 function drawStreetGround(ctx: Ctx, v: View): void {

@@ -10,6 +10,7 @@
 import { dayPhase, sunNow } from '../game/daynight';
 import type { World } from '../game/world';
 import type { View } from './background';
+import { HORIZON_Y } from './ground';
 import { circle, clamp01, type Ctx, ellipse, hash, lerp, mix, shade, VIEW_H } from './util';
 
 export interface Light {
@@ -62,7 +63,7 @@ function skyPalette(sun: number): Palette {
  */
 function bodyPos(v: View, phase: number, altitude: number): [number, number] {
   const across = (phase - 0.25) / 0.5;
-  return [v.width * (0.06 + 0.88 * across) - v.camX * 0.01, 350 - altitude * 250];
+  return [v.width * (0.06 + 0.88 * across) - v.camX * 0.01, HORIZON_Y + 10 - altitude * 230];
 }
 
 // --- Drawing -------------------------------------------------------------------
@@ -112,12 +113,12 @@ function drawSky(ctx: Ctx, v: View, light: Light): void {
   // (when zoomed out) deepens towards the zenith.
   const [zenith, high, low, horizon] = skyPalette(light.sun);
   const top = Math.min(0, v.top);
-  const at = (y: number) => (y - top) / (380 - top);
-  const g = ctx.createLinearGradient(0, top, 0, 380);
+  const at = (y: number) => (y - top) / (HORIZON_Y - top);
+  const g = ctx.createLinearGradient(0, top, 0, HORIZON_Y);
   g.addColorStop(0, top < 0 ? shade(zenith, -0.2) : zenith);
   g.addColorStop(at(0), zenith);
-  g.addColorStop(at(133), high);
-  g.addColorStop(at(266), low);
+  g.addColorStop(at(HORIZON_Y * 0.35), high);
+  g.addColorStop(at(HORIZON_Y * 0.7), low);
   g.addColorStop(1, horizon);
   ctx.fillStyle = g;
   ctx.fillRect(0, top, v.width, VIEW_H - top);
@@ -167,9 +168,9 @@ function drawStars(ctx: Ctx, v: View, light: Light): void {
     for (let i = 0; i < 70; i++) {
       const x = tile * T + hash(i, 101) * T - off;
       if (x < -2 || x > v.width + 2) continue;
-      const y = top + hash(i, 102) * (330 - top);
+      const y = top + hash(i, 102) * (HORIZON_Y - top);
       const twinkle = 0.7 + 0.3 * Math.sin(v.time * (1 + hash(i, 103) * 2) + i);
-      ctx.globalAlpha = light.night * twinkle * (0.4 + 0.6 * hash(i, 104)) * clamp01((330 - y) / 120);
+      ctx.globalAlpha = light.night * twinkle * (0.4 + 0.6 * hash(i, 104)) * clamp01((HORIZON_Y - y) / 70);
       const r = hash(i, 105) < 0.9 ? 0.9 : 1.6;
       ctx.fillStyle = '#f4f1ff';
       ctx.fillRect(x - r / 2, y - r / 2, r, r);
@@ -188,7 +189,7 @@ function drawClouds(ctx: Ctx, v: View, light: Light): void {
   for (let i = i0; i < i0 + v.width / T + 3; i++) {
     const x = i * T - off + hash(i, 1) * 200;
     // when zoomed out, some clouds drift higher into the extra sky
-    const y = 50 + hash(i, 2) * 110 + Math.min(0, v.top) * hash(i, 5) * 0.8;
+    const y = 30 + hash(i, 2) * 100 + Math.min(0, v.top) * hash(i, 5) * 0.8;
     const s = 0.6 + hash(i, 3) * 0.8;
     ctx.globalAlpha = 0.55 + hash(i, 4) * 0.3;
     for (let k = 0; k < 6; k++) {

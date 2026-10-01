@@ -194,9 +194,17 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   stars at night, cloud colours, and a tint that darkens the land at night and warms it at dusk.
   The land is drawn first and tinted, then the sky (drawn on an offscreen canvas) is composited
   behind it, so the night sky stays bright while the land darkens.
-- `background.ts`: parallax land layers: mountains, the castle on its hill,
-  patchwork fields, the distant village, the tree line, the street and the foreground grass, and
-  (`drawSideRoad`) the road running off the street at a crossroads.
+- `background.ts`: the backdrop on the horizon (mountains, the castle on its hill, low hills),
+  panning with the camera and turning with it at a crossroads; the land plane from the horizon down;
+  the haze of distance; the street being looked at and the foreground grass; where a street ends
+  short; and (`drawSideRoad`) the road of a crossroads still being built.
+- `plane.ts`: the village as a plane seen in perspective. The camera stands in front of the street
+  the rider is on, looking across it (`Eye`); everything on every other street is projected from its
+  map position (streets.ts): roads and farm fields as shapes on the ground (clipped near the
+  camera), buildings, sites, fingerposts, trees, quarries and people as pictures that always face
+  the camera, smaller and nearer the horizon with distance. A building on a street running away from
+  the camera stands beside that road. Things further off than this street's woods are drawn before
+  them, nearer ones in among this street's people by screen depth.
 - `buildings.ts`: "2D picture of a 3D building" primitives (front face, shaded side face, gable
   roof with thatch/tile/slate, timber framing) and `BUILDING_ART`: per building `draw`, optional
   `behind`/`front` art, and the drawn `height`.
@@ -204,7 +212,8 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   timber frame → walls → roof. The finished art is revealed bottom-up behind scaffolding.
 - `grid.ts`: the land-grid debug overlay (tuning panel → "land grid", or `?grid=1`): cells tinted
   by use (building footprint red, field green), plot boundaries dashed.
-- `ground.ts`: the ground perspective. Anything lying or standing on the land (fields, the land
+- `ground.ts`: the ground perspective (the camera's, with the horizon on screen at `HORIZON_Y`;
+  plane.ts uses the same projection for the rest of the village). Anything lying or standing on the land (fields, the land
   grid, ruts and stones in the road, the grass edge, foreground grass, the farmer, villagers and
   the rider) maps its x through `groundX`; repeating ground details use `groundTiles`, so lines into the scene converge on a vanishing point in
   the middle of the view and fan out towards the screen edges as the camera moves. The ground is

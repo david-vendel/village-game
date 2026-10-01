@@ -2,6 +2,8 @@
 // land (fields, the land grid, the farmer walking them). Lines running into the
 // scene converge on a vanishing point in the middle of the view, so as the
 // camera moves the ground at the screen edges fans out and swings with it.
+// It is the camera's true perspective along the street being looked at
+// (plane.ts projects the rest of the village the same way).
 //
 // Depth is the world y of a point on the ground. At GROUND_REF_Y (the line
 // buildings stand on) the ground is drawn at true width, so buildings, plot
@@ -12,8 +14,8 @@
 
 import { BASE_Y } from '../game/layout';
 
-/** World y where lines on the ground would meet. Lower (more negative) = flatter perspective. */
-export const HORIZON_Y = -250;
+/** World y of the horizon, where lines on the ground meet: the far edge of the village's plane. */
+export const HORIZON_Y = 200;
 /** Depth drawn at true width. */
 export const GROUND_REF_Y = BASE_Y;
 
