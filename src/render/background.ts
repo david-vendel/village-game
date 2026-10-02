@@ -60,13 +60,16 @@ function ridge(x: number, seed: number, amp: number): number {
 
 function fillRidge(ctx: Ctx, v: View, factor: number, baseY: number, seed: number, amp: number, fill: string | CanvasGradient, bump?: (lx: number) => number): void {
   const off = pan(v, factor);
+  // closed just below the horizon, not at the screen's bottom: the land plane is drawn over
+  // everything below it, and at high resolutions filling the hidden part cost half the frame rate
+  const foot = HORIZON_Y + 80;
   ctx.beginPath();
-  ctx.moveTo(-10, VIEW_H);
+  ctx.moveTo(-10, foot);
   for (let sx = -10; sx <= v.width + 10; sx += 6) {
     const lx = sx + off;
     ctx.lineTo(sx, baseY - ridge(lx, seed, amp) - (bump ? bump(lx) : 0));
   }
-  ctx.lineTo(v.width + 10, VIEW_H);
+  ctx.lineTo(v.width + 10, foot);
   ctx.closePath();
   ctx.fillStyle = fill;
   ctx.fill();
