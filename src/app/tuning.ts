@@ -60,7 +60,7 @@ export interface DisplayOptions {
 }
 
 /** The drawing camera's distance to start with (render/ground.ts). */
-const CAMERA_DEFAULT = 800;
+const CAMERA_DEFAULT = 600;
 
 export function installTuning(world: World, sound: Sound): DisplayOptions {
   let cameraNow = CAMERA_DEFAULT;
