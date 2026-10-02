@@ -33,7 +33,7 @@ export const ROAD_BOTTOM = 500;
 
 /** Where the horizon is (world y), and how far the camera stands from the building line (map px). */
 export const HORIZON_Y = 200;
-export const EYE_DIST = 800;
+export const EYE_DIST = 400;
 /** Distance from the camera of ground at depth y. */
 const eyeDist = (y: number) => (EYE_DIST * (BASE_Y - HORIZON_Y)) / (y - HORIZON_Y);
 /**
