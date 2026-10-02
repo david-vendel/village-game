@@ -11,10 +11,10 @@ import { laidOut, onSite, upgrading } from '../game/site';
 import { crossings, streetOf, streetRange } from '../game/streets';
 import { BUILDING_TYPES } from '../game/buildings';
 import { blockStartX, crossroadsPlaces, sizeOfBuilding } from '../game/grid';
-import { CELL_W } from '../game/layout';
+import { CELL_W, EYE_DIST } from '../game/layout';
 import { buildingAt, canDemolish, canUpgrade, constructionStage, crossroadAt, getBuilding, roomToBuild, type Building, type World } from '../game/world';
 import { drawBackground, drawForeground, drawHaze, drawSideRoad, drawStreetEnds, type View } from './background';
-import { BUILDING_LINE_DIST, distAt, drawOtherGround, eyeOf, standingOn, TREE_LINE_DIST } from './plane';
+import { BUILDING_LINE_DIST, distAt, drawOtherGround, elsewhere3d, eyeOf, standingOn, TREE_LINE_DIST } from './plane';
 import { flushEmissive } from './assets';
 import { BUILDING_ART, drawCrossroadsSign, type DrawArgs } from './buildings';
 import { drawBuilding } from './sprites';
@@ -32,6 +32,8 @@ import { type Ctx, GROUND_Y, ROAD_Y, VIEW_H } from './util';
 import { type Building3d, draw3d, has3d, height3d } from './world3d';
 
 const BASE = GROUND_Y + 4;
+/** Sorts the far group of other streets' 3D buildings before everything behind this street. */
+const FAR_3D = Infinity;
 
 export function cameraX(world: World, viewW: number): number {
   // always centred on the rider, out to the very end of a street too (past it the grass runs on)
@@ -136,8 +138,23 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   // streets and their people, and this street's people out behind it (in the back fields, at the woods);
   // the haze of distance over what is beyond this street's lots
   const elsewhere = standingOn(ctx, world, eye);
+  // other streets' 3D buildings (true place and facing): behind the tree line (hazed with the far
+  // scenery), between it and this street's buildings, and in front (drawn with this street's)
+  const light = lightAt(world);
+  const view3d = () => ({ camX, viewW, top: sv.top, bottom: sv.bottom, pxPerU: ctx.getTransform().a, phase: light.phase, sunHeight: light.sun, night: light.night });
+  const cx = camX + viewW / 2;
+  const groups3d = { far: [] as Building3d[], mid: [] as Building3d[], near: [] as Building3d[] };
+  for (const e of elsewhere3d(world, eye)) {
+    const b = e.b;
+    const stage = b.status === 'done' ? undefined : constructionStage(b.progress).stage;
+    const m: Building3d = { id: b.id, type: b.type, seed: b.id * 97, x: b.x, upgraded: !!b.upgraded, stage: stage === 'done' ? undefined : stage, parts: [], at: { x: cx + e.u, z: EYE_DIST - e.z, rot: e.rot } };
+    groups3d[e.z >= TREE_LINE_DIST ? 'far' : e.z >= BUILDING_LINE_DIST ? 'mid' : 'near'].push(m);
+  }
+  const pass3d = (list: Building3d[]) => () => void draw3d(ctx, list, view3d());
   const behind = [
     ...elsewhere.filter((o) => o.z >= BUILDING_LINE_DIST),
+    ...(groups3d.far.length ? [{ z: FAR_3D, y: 0, draw: pass3d(groups3d.far) }] : []),
+    ...(groups3d.mid.length ? [{ z: TREE_LINE_DIST - 1e-6, y: 0, draw: pass3d(groups3d.mid) }] : []),
     ...atWork.filter(({ w }) => w.y < BASE - 4).map(({ w, fig, x }) => ({ z: distAt(w.y), y: w.y, draw: () => drawAtWork(w, fig, x) })),
   ].sort((a, b) => b.z - a.z);
   let hazed = false;
@@ -156,7 +173,6 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   if (world.menu?.kind === 'build') drawSitePreview(ctx, world, BUILDING_TYPES[world.menu.selection], world.menu.x, camX, viewW);
 
   // buildings: those with a 3D model in one 3D pass (world3d.ts), the rest as 2D art
-  const light = lightAt(world);
   const in3d: Array<{ b: Building; a: DrawArgs; m: Building3d }> = [];
   for (const b of world.buildings) {
     if (!onScreen(b.x)) continue;
@@ -171,8 +187,8 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     else if (b.status === 'done') drawBuilding(ctx, b.type, a);
     else drawConstruction(ctx, b.type, a, b.progress);
   }
-  if (in3d.length) {
-    const at = draw3d(ctx, in3d.map((e) => e.m), { camX, viewW, top: sv.top, bottom: sv.bottom, pxPerU: ctx.getTransform().a, phase: light.phase, sunHeight: light.sun, night: light.night });
+  if (in3d.length || groups3d.near.length) {
+    const at = draw3d(ctx, [...in3d.map((e) => e.m), ...groups3d.near], view3d());
     for (const { b, a, m } of in3d) {
       if (m.stage) drawSitePiles(ctx, b.type, a);
       else BUILDING_ART[b.type].overlay?.(ctx, a, { at: at.get(b.id)!, part: (name) => m.parts.includes(name) });

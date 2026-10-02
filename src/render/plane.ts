@@ -28,6 +28,7 @@ import { GROUND_REF_Y, HORIZON_Y } from './ground';
 import { beingFelled, drawQuarry, drawTreeAt } from './nature';
 import { drawVillager, walker } from './people';
 import { cameraDistance, cameraHeight, viewHorizon } from './ground';
+import { has3d } from './world3d';
 import { type Ctx, mix } from './util';
 
 const SPAN = GROUND_REF_Y - HORIZON_Y;
@@ -154,6 +155,37 @@ export interface Standing {
  * far to near, as pictures scaled by distance: the other streets' buildings,
  * building sites, crossroads' fingerposts and people, and every tree and quarry.
  */
+/** Whether a building on another street is drawn in 3D (elsewhere3d) rather than as a picture. */
+const in3d = (b: Building) => has3d(b.type) && !b.demolition && !upgrading(b);
+
+/** A building on another street drawn in 3D: where it stands from the camera (plane.ts u, z) and which way it faces. */
+export interface Elsewhere3d {
+  b: Building;
+  u: number;
+  z: number;
+  /** Turn about the vertical (radians) from facing the camera: its front faces its own street. */
+  rot: number;
+}
+
+/**
+ * The buildings on other streets that have a 3D model: at their true place on the map, turned to
+ * face their street (world3d.ts draws them), instead of pictures turned to the camera.
+ */
+export function elsewhere3d(world: World, eye: Eye): Elsewhere3d[] {
+  const out: Elsewhere3d[] = [];
+  for (const b of world.buildings) {
+    if (streetOf(b.x) === eye.street || !in3d(b)) continue;
+    const { u, z } = toEye(eye, ground(world, b.x, BASE_Y));
+    if (z < NEAR_DRAWN || z > FAR) continue;
+    // its front faces its road: away from its lots
+    const back = backOf(world.streets[streetOf(b.x)].dir);
+    const fu = -(back.x * eye.dir.x + back.y * eye.dir.y);
+    const fz = -(back.x * eye.back.x + back.y * eye.back.y);
+    out.push({ b, u, z, rot: Math.atan2(fu, -fz) });
+  }
+  return out;
+}
+
 export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
   const out: Standing[] = [];
   const add = (p: Vec, width: number, draw: () => void) => {
@@ -194,7 +226,7 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
   };
   for (const b of world.buildings) {
     const x = b.x;
-    if (!elsewhere(x)) continue;
+    if (!elsewhere(x) || in3d(b)) continue;
     const a: DrawArgs = {
       x: 0,
       base: 0,

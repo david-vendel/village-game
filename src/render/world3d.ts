@@ -146,6 +146,11 @@ export interface Building3d {
   stage?: Exclude<ConstructionStage, 'done'>;
   /** State parts to show (doorOpen while someone steps through the door). */
   parts: string[];
+  /**
+   * Where it stands, for a building on another street: x along this street, z towards the camera
+   * from the building line (world units), and its turn about the vertical. Else at (x, 0) facing the camera.
+   */
+  at?: { x: number; z: number; rot: number };
 }
 
 // --- the renderer -------------------------------------------------------------------------
@@ -305,7 +310,8 @@ export function draw3d(ctx: Ctx, buildings: Building3d[], v: View3d): Map<number
   const shown = new Set<THREE.Object3D>();
   for (const b of buildings) {
     const g = lookOf(b);
-    g.position.set(b.x, 0, 0);
+    g.position.set(b.at?.x ?? b.x, 0, b.at?.z ?? 0);
+    g.rotation.y = b.at?.rot ?? 0;
     if (g.parent !== scene) scene.add(g);
     shown.add(g);
     const points = GENERATORS[b.type]!.points;
