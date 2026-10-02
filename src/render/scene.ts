@@ -29,7 +29,7 @@ import { drawVillager, walker } from './people';
 import { drawGroundPile } from './piles';
 import { drawBuildingLabel, drawCompletionEffect, drawDemolitionLabel, drawPlotPrompt, drawProgress } from './ui';
 import { type Ctx, GROUND_Y, ROAD_Y, VIEW_H } from './util';
-import { type Building3d, draw3d, has3d, height3d } from './world3d';
+import { type Building3d, draw3d, has3d, height3d, nearestFootY } from './world3d';
 
 const BASE = GROUND_Y + 4;
 
@@ -136,8 +136,9 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   // streets and their people, and this street's people out behind it (in the back fields, at the woods);
   // the haze of distance over what is beyond this street's lots
   const elsewhere = standingOn(ctx, world, eye);
-  // other streets' 3D buildings (true place and facing): those behind this street's buildings each at
-  // its place among the far scenery (hazed with it beyond the tree line), those in front with this street's
+  // other streets' 3D buildings (true place and facing), each drawn on its own: those behind this street's
+  // buildings at their place among the far scenery (hazed with it beyond the tree line), those in front among
+  // the people and pictures by where they stand on screen
   const light = lightAt(world);
   const view3d = () => ({ camX, viewW, top: sv.top, bottom: sv.bottom, pxPerU: ctx.getTransform().a, phase: light.phase, sunHeight: light.sun, night: light.night });
   const cx = camX + viewW / 2;
@@ -185,8 +186,8 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     else if (b.status === 'done') drawBuilding(ctx, b.type, a);
     else drawConstruction(ctx, b.type, a, b.progress);
   }
-  if (in3d.length || groups3d.near.length) {
-    const at = draw3d(ctx, [...in3d.map((e) => e.m), ...groups3d.near], view3d());
+  if (in3d.length) {
+    const at = draw3d(ctx, in3d.map((e) => e.m), view3d());
     for (const { b, a, m } of in3d) {
       if (m.stage) drawSitePiles(ctx, b.type, a);
       else BUILDING_ART[b.type].overlay?.(ctx, a, { at: at.get(b.id)!, part: (name) => m.parts.includes(name) });
@@ -222,6 +223,8 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     { y: ROAD_Y, draw: () => atDepth(onGround(world.rider.x, ROAD_Y), ROAD_Y, () => drawRider(ctx, world.rider, 0, 0, world.time)) },
     // nearer things (trees in front, the other streets where they run past this one): sorted in by where they stand on screen
     ...elsewhere.filter((o) => o.z < BUILDING_LINE_DIST),
+    // and other streets' 3D buildings in front of this street's, each on its own, by where its footprint comes nearest
+    ...groups3d.near.map((m) => ({ y: nearestFootY(m, view3d()), draw: () => void draw3d(ctx, [m], view3d(), { clip: true }) })),
   ];
   for (const s of standing.sort((a, b) => a.y - b.y)) s.draw();
 

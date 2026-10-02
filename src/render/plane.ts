@@ -41,6 +41,8 @@ const NEAR_DRAWN = 150;
 const nearZ = () => NEAR_DRAWN - (cameraDistance() - EYE_DIST);
 /** Crops on other streets' fields are drawn while they come out at least this big; smaller, the field's colour stands for them. */
 const CROP_MIN_SCALE = 0.12;
+/** …and no bigger than this (this street's front field tops out at about 1.55). */
+const CROP_MAX_SIZE = 1.6;
 /** Things this far off are too small to make out. */
 const FAR = 9000;
 /** Pictures further than this are behind the tree line of the street being looked at… */
@@ -271,14 +273,16 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
           z: m.z,
           y: q.y,
           draw: () => {
-            // thinner far off: stalks a similar distance apart on screen
-            const step = 4.5 * Math.max(1, 0.6 / q.s);
+            // stalks no bigger than this street's nearest crops (farm.ts cropSize): near the camera the field
+            // grows denser rather than its stalks taller; far off, sparser
+            const k = Math.min(CROP_MAX_SIZE, q.s * 1.1);
+            const step = q.s >= 0.6 ? (4.5 * k) / q.s : (4.5 * 0.6) / q.s;
             const at: Array<{ x: number; y: number; s: number }> = [];
             for (let u = p.dx - p.width / 2 + 2; u < p.dx + p.width / 2 - 2; u += step) {
               const e = toEye(eye, ground(world, b.x + u + ((r * 7 + Math.floor(u)) % 3) * 0.6, y));
               if (e.z < NEAR_DRAWN) continue;
               const s = project(eye, e.u, e.z);
-              at.push({ x: s.x, y: s.y, s: s.s * 1.1 });
+              at.push({ x: s.x, y: s.y, s: Math.min(CROP_MAX_SIZE, s.s * 1.1) });
             }
             cropRowAt(ctx, p, at, world.time, r);
           },

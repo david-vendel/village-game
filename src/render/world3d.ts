@@ -239,6 +239,22 @@ export interface View3d {
   night: number;
 }
 
+/**
+ * The screen y (world units) of a 3D building's footprint where it comes nearest the camera: how it
+ * sorts among 2D people and pictures (scene.ts), so one reaching towards the camera is drawn after
+ * whatever stands behind its near end.
+ */
+export function nearestFootY(b: Building3d, v: View3d): number {
+  const g = lookOf(b);
+  g.position.set(b.at?.x ?? b.x, 0, b.at?.z ?? 0);
+  g.rotation.y = b.at?.rot ?? 0;
+  g.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(g);
+  let y = -Infinity;
+  for (const x of [box.min.x, box.max.x]) for (const z of [box.min.z, box.max.z]) y = Math.max(y, project(new THREE.Vector3(x, 0, z), v)[1]);
+  return y;
+}
+
 /** World point (x along the street, y up, z towards the camera from the building line) → screen point in world units. */
 function project(p: THREE.Vector3, v: View3d): [number, number] {
   const cx = v.camX + v.viewW / 2;
