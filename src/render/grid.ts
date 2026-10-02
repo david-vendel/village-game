@@ -10,7 +10,12 @@
 import { BUILDINGS, type BuildingType } from '../game/buildings';
 import { blockStartX, cellKey, cellName, footprintAt, landUse, streetCell, type LandUse } from '../game/grid';
 import { BLOCK, CELL_W, LOT_ROW, rowFar, rowNear } from '../game/layout';
-import { behindRoadLens as behindRoad, yAtLens as yAt } from './lens';
+import { behindRoad as behindRoadGame, yAt as yAtGame } from '../game/layout';
+import { unviewY, viewY } from './ground';
+
+/** Screen y of ground d map px behind the street line, and back: the game's depths through the drawing camera. */
+const yAt = (d: number) => viewY(yAtGame(d));
+const behindRoad = (screenY: number) => behindRoadGame(unviewY(screenY));
 import { streetOf, streetStart } from '../game/streets';
 import { placeAt, whyNotBuild, type World } from '../game/world';
 import { depthScale, groundX } from './ground';

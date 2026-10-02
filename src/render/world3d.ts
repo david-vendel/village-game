@@ -1,5 +1,5 @@
 // Buildings in real-time 3D (WebGL, three.js), seen through the game's own
-// camera: the pinhole camera of plane.ts, EYE_DIST in front of the building
+// camera: the pinhole camera of plane.ts, the drawing camera's distance (ground.ts) in front of the building
 // line at the height that puts the horizon at HORIZON_Y. A building on the
 // building line comes out exactly where its 2D art would, and as the camera
 // moves with the rider it is seen from the side: left of the view, its right
@@ -15,11 +15,12 @@
 
 import * as THREE from 'three';
 import type { BuildingType } from '../game/buildings';
-import { BASE_Y, EYE_DIST, HORIZON_Y } from '../game/layout';
+import { BASE_Y, HORIZON_Y } from '../game/layout';
 import type { ConstructionStage } from '../game/world';
 import type { Element, Vec3 } from './build3d/elements';
 import { farm, farmPoints } from './build3d/farm';
 import { type Look as MeshLook, mergedByMaterial } from './build3d/geometry';
+import { cameraDistance } from './ground';
 import type { Ctx } from './util';
 
 /** Units per metre (ASSET_SPEC §1): models are in metres, the game in world units. */
@@ -239,8 +240,9 @@ export interface View3d {
 /** World point (x along the street, y up, z towards the camera from the building line) → screen point in world units. */
 function project(p: THREE.Vector3, v: View3d): [number, number] {
   const cx = v.camX + v.viewW / 2;
-  const z = EYE_DIST - p.z;
-  return [v.viewW / 2 + ((p.x - cx) * EYE_DIST) / z, HORIZON_Y + ((EYE_H - p.y) * EYE_DIST) / z];
+  const cam = cameraDistance();
+  const z = cam - p.z;
+  return [v.viewW / 2 + ((p.x - cx) * cam) / z, HORIZON_Y + ((EYE_H - p.y) * cam) / z];
 }
 
 /**
@@ -259,10 +261,11 @@ export function draw3d(ctx: Ctx, buildings: Building3d[], v: View3d): Map<number
 
   // the game's camera: at the middle of the view, EYE_DIST in front of the building line, looking level
   const cx = v.camX + v.viewW / 2;
-  camera.matrixWorld.makeTranslation(cx, EYE_H, EYE_DIST);
+  const cam = cameraDistance();
+  camera.matrixWorld.makeTranslation(cx, EYE_H, cam);
   camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
   const near = 20;
-  const f = EYE_DIST;
+  const f = cam;
   camera.projectionMatrix.makePerspective(
     (near * (0 - v.viewW / 2)) / f,
     (near * (v.viewW - v.viewW / 2)) / f,

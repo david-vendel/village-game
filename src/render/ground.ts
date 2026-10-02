@@ -12,16 +12,60 @@
 //
 // Everything drawn on the land must go through groundX so it lines up exactly.
 
-import { BASE_Y, HORIZON_Y } from '../game/layout';
+import { BASE_Y, EYE_DIST, HORIZON_Y } from '../game/layout';
 
 /** World y of the horizon, where lines on the ground meet: the far edge of the village's plane (game/layout.ts). */
 export { HORIZON_Y };
 /** Depth drawn at true width. */
 export const GROUND_REF_Y = BASE_Y;
+const SPAN = GROUND_REF_Y - HORIZON_Y;
 
-/** How much wider than true the ground is drawn at depth y. */
+// --- The drawing camera ----------------------------------------------------------------
+// The game measures depth as world y, the way its own camera (EYE_DIST in front of the
+// building line) sees the street: game/layout.ts turns it into distance on the ground and
+// back (yAt, behindRoad), and the simulation never sees anything else. The picture can be
+// drawn through a camera standing further back (a longer lens: a wide one stretches depth):
+// every depth is turned into its distance on the ground, the camera moved back, and
+// projected again. The building line keeps its place and true width, and the horizon
+// stays put; in front of it the land is drawn shallower, behind it less steep.
+
+/** The drawing camera's distance from the building line (map px): the panel's "camera". EYE_DIST is the game's own. */
+let cameraDist = EYE_DIST;
+
+export function setCameraDistance(d: number): void {
+  cameraDist = Math.max(EYE_DIST * 0.5, d);
+}
+
+export function cameraDistance(): number {
+  return cameraDist;
+}
+
+/** Distance on the ground from the game's camera of depth y (world y): what the game means by y. */
+const gameDist = (y: number) => (EYE_DIST * SPAN) / (y - HORIZON_Y);
+
+/** How much wider than true the ground is drawn at depth y (through the drawing camera). */
 export function depthScale(y: number): number {
-  return (y - HORIZON_Y) / (GROUND_REF_Y - HORIZON_Y);
+  return cameraDist / (gameDist(y) + cameraDist - EYE_DIST);
+}
+
+/** Screen y (in world units) at which ground at depth y is drawn. */
+export function viewY(y: number): number {
+  return HORIZON_Y + SPAN * depthScale(y);
+}
+
+/** The depth (world y) drawn at screen y: viewY undone. */
+export function unviewY(screenY: number): number {
+  const scale = (screenY - HORIZON_Y) / SPAN;
+  const dist = cameraDist / scale - (cameraDist - EYE_DIST);
+  return HORIZON_Y + (EYE_DIST * SPAN) / dist;
+}
+
+/**
+ * How much bigger (> 1) or smaller things at depth y are drawn than the game's own camera
+ * would: art made for that camera (people, the rider, piles, crops) is scaled by it.
+ */
+export function viewRatio(y: number): number {
+  return depthScale(y) / ((y - HORIZON_Y) / SPAN);
 }
 
 /**

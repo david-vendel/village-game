@@ -27,15 +27,17 @@ import { figureOf } from './figure';
 import { GROUND_REF_Y, HORIZON_Y } from './ground';
 import { beingFelled, drawQuarry, drawTreeAt } from './nature';
 import { drawVillager, walker } from './people';
-import { lensZ } from './lens';
+import { cameraDistance } from './ground';
 import { type Ctx, mix } from './util';
 
 const SPAN = GROUND_REF_Y - HORIZON_Y;
 /** Distance from the camera of ground at depth y of the street being looked at. */
 export const distAt = (y: number) => (EYE_DIST * SPAN) / (y - HORIZON_Y);
 const ROAD_DIST = distAt(STREET_LINE_Y);
-/** Nothing nearer the camera than this is drawn (it is below the bottom of the screen anyway). */
-const NEAR = 150;
+/** Nothing nearer than this is drawn (it is below the bottom of the screen anyway). */
+const NEAR_DRAWN = 150;
+/** The same cut-off in the game's distances (z): the drawing camera may stand further back (ground.ts). */
+const nearZ = () => NEAR_DRAWN - (cameraDistance() - EYE_DIST);
 /** Things this far off are too small to make out. */
 const FAR = 9000;
 /** Pictures further than this are behind the tree line of the street being looked at… */
@@ -70,14 +72,16 @@ function toEye(eye: Eye, p: Vec): { u: number; z: number } {
   return { u: dx * eye.dir.x + dy * eye.dir.y, z: ROAD_DIST + dx * eye.back.x + dy * eye.back.y };
 }
 
-/** Screen position and scale of a point u across and z away (through the lens: lens.ts shortens far depth). */
+/** Screen position and scale of a point u across and z away from the game's camera, as the drawing camera sees it (ground.ts). */
 function project(eye: Eye, u: number, z: number): { x: number; y: number; s: number } {
-  const s = EYE_DIST / lensZ(z);
+  const cam = cameraDistance();
+  const s = cam / (z + cam - EYE_DIST);
   return { x: eye.vpX + u * s, y: HORIZON_Y + SPAN * s, s };
 }
 
-/** A shape lying on the ground (map points), cut off where it comes nearer than NEAR. */
+/** A shape lying on the ground (map points), cut off where it comes nearer than the near cut-off. */
 function groundShape(ctx: Ctx, eye: Eye, pts: Vec[], fill: string): void {
+  const NEAR = nearZ();
   const v = pts.map((p) => toEye(eye, p));
   const out: Array<{ u: number; z: number }> = [];
   for (let i = 0; i < v.length; i++) {
@@ -154,7 +158,8 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
   const out: Standing[] = [];
   const add = (p: Vec, width: number, draw: () => void) => {
     const { u, z } = toEye(eye, p);
-    if (z < NEAR || z > FAR) return;
+    // standing things keep the game camera's cut-off: what stood behind it shouldn't loom up in front
+    if (z < NEAR_DRAWN || z > FAR) return;
     const q = project(eye, u, z);
     const half = (width / 2 + 40) * q.s;
     if (q.x + half < 0 || q.x - half > eye.viewW) return;

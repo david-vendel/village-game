@@ -5,7 +5,7 @@
 import { QUARRIES, QUARRY_W, QUARRY_Y, TREE_Y } from '../game/layout';
 import { treeGrowth, type Tree } from '../game/nature';
 import type { World } from '../game/world';
-import { depthScale, groundX } from './ground';
+import { depthScale, groundX, viewY } from './ground';
 import { circle, type Ctx, ellipse, hash, line, poly, rect, shade } from './util';
 
 /** Seconds of felling done on each tree someone is chopping, as a share of the job. */
@@ -26,7 +26,7 @@ export function drawTrees(ctx: Ctx, world: World, camX: number, viewW: number): 
   for (const t of world.trees) {
     const sx = groundX(t.x - camX, TREE_Y, vpX);
     if (sx < -80 || sx > viewW + 80) continue;
-    drawTreeAt(ctx, world, t, sx, TREE_Y, k, felling);
+    drawTreeAt(ctx, world, t, sx, viewY(TREE_Y), k, felling);
   }
 }
 
@@ -74,7 +74,7 @@ export function drawQuarries(ctx: Ctx, camX: number, viewW: number): void {
     const x = groundX(q.x - camX, QUARRY_Y, vpX);
     const half = (QUARRY_W / 2) * k;
     if (x + half < -40 || x - half > viewW + 40) return;
-    drawQuarry(ctx, x, QUARRY_Y, k, qi);
+    drawQuarry(ctx, x, viewY(QUARRY_Y), k, qi);
   });
 }
 

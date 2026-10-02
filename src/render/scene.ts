@@ -22,7 +22,7 @@ import { drawConstruction, drawConstructionBehind, drawConstructionFront, drawDe
 import { drawWorker } from './farm';
 import { type Figure, figureOf } from './figure';
 import { drawBlockGlow, drawLandGrid, drawSitePreview } from './grid';
-import { groundX } from './ground';
+import { groundX, viewRatio, viewY } from './ground';
 import { drawSkyBehind, lightAt, tintLand } from './sky';
 import { drawRider } from './horse';
 import { drawVillager, walker } from './people';
@@ -111,7 +111,16 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     return b && onScreen(x + p.job!.worker.dx, 300) ? [{ w: p.job!.worker, fig: figureOf(p), x }] : [];
   });
   // they walk on the ground, so they follow its perspective like the fields do
-  const drawAtWork = (w: Worker, fig: Figure, x: number) => drawWorker(ctx, w, fig, groundX(x + w.dx - camX, w.y, viewW / 2), w.y, world.time);
+  const drawAtWork = (w: Worker, fig: Figure, x: number) => drawWorker(ctx, w, fig, groundX(x + w.dx - camX, w.y, viewW / 2), viewY(w.y), world.time);
+  /** Draw a picture made for the game's camera standing at depth y, where and as big as the drawing camera sees it. */
+  const atDepth = (sx: number, y: number, draw: () => void) => {
+    const r = viewRatio(y);
+    ctx.save();
+    ctx.translate(sx, viewY(y));
+    ctx.scale(r, r);
+    draw();
+    ctx.restore();
+  };
   // the unemployed and the animals stroll the street, each at their own depth
   const strollers = [...world.people.filter((p) => !p.job), ...world.animals];
 
@@ -191,12 +200,12 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     ...atWork.filter(({ w }) => w.y >= BASE - 4).map(({ w, fig, x }) => ({ y: w.y, draw: () => drawAtWork(w, fig, x) })),
     ...strollers
       .filter((who) => onScreen(who.stroll.x))
-      .map((who) => ({ y: who.stroll.y, draw: () => drawVillager(ctx, walker(who), onGround(who.stroll.x, who.stroll.y), who.stroll.y, world.time) })),
+      .map((who) => ({ y: who.stroll.y, draw: () => atDepth(onGround(who.stroll.x, who.stroll.y), who.stroll.y, () => drawVillager(ctx, walker(who), 0, 0, world.time)) })),
     // what lies on the ground by the road on this street
     ...world.piles
       .filter((p) => streetOf(p.x) === street && onScreen(p.x))
-      .map((p) => ({ y: GROUND_PILE_Y, draw: () => drawGroundPile(ctx, p, onGround(p.x, GROUND_PILE_Y), GROUND_PILE_Y) })),
-    { y: ROAD_Y, draw: () => drawRider(ctx, world.rider, onGround(world.rider.x, ROAD_Y), ROAD_Y, world.time) },
+      .map((p) => ({ y: GROUND_PILE_Y, draw: () => atDepth(onGround(p.x, GROUND_PILE_Y), GROUND_PILE_Y, () => drawGroundPile(ctx, p, 0, 0)) })),
+    { y: ROAD_Y, draw: () => atDepth(onGround(world.rider.x, ROAD_Y), ROAD_Y, () => drawRider(ctx, world.rider, 0, 0, world.time)) },
     // nearer things (trees in front, the other streets where they run past this one): sorted in by where they stand on screen
     ...elsewhere.filter((o) => o.z < BUILDING_LINE_DIST),
   ];

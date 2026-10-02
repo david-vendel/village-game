@@ -6,7 +6,7 @@
 
 import { LANE_YS, ROAD_FAR_Y, ROAD_NEAR_Y } from '../game/layout';
 import { SIDE_ROAD_HALF } from '../game/streets';
-import { depthScale, groundTiles, groundX, HORIZON_Y } from './ground';
+import { depthScale, groundTiles, groundX, HORIZON_Y, unviewY, viewY } from './ground';
 import { circle, type Ctx, ellipse, hash, mix, poly, rect, shade, smoke, VIEW_H } from './util';
 
 const HAZE = '#dcc9ad';
@@ -165,26 +165,27 @@ export function drawHaze(ctx: Ctx, v: View): void {
 
 function drawStreetGround(ctx: Ctx, v: View): void {
   // grass verge the buildings stand on
-  const g = ctx.createLinearGradient(0, 418, 0, ROAD_FAR_Y + 2);
+  // (depths through the drawing camera: ground.ts viewY)
+  const g = ctx.createLinearGradient(0, viewY(418), 0, viewY(ROAD_FAR_Y + 2));
   g.addColorStop(0, '#869a45');
   g.addColorStop(1, '#6f8238');
   ctx.fillStyle = g;
-  ctx.fillRect(0, 420, v.width, ROAD_FAR_Y + 4 - 420);
+  ctx.fillRect(0, viewY(420), v.width, viewY(ROAD_FAR_Y + 4) - viewY(420));
 
   // the dirt street: three lanes, a land-grid cell each (game/layout.ts)
-  const r = ctx.createLinearGradient(0, ROAD_FAR_Y, 0, ROAD_NEAR_Y);
+  const r = ctx.createLinearGradient(0, viewY(ROAD_FAR_Y), 0, viewY(ROAD_NEAR_Y));
   r.addColorStop(0, '#a8875b');
   r.addColorStop(0.5, '#b89668');
   r.addColorStop(1, '#9b7a50');
   ctx.fillStyle = r;
-  ctx.fillRect(0, ROAD_FAR_Y, v.width, ROAD_NEAR_Y - ROAD_FAR_Y);
+  ctx.fillRect(0, viewY(ROAD_FAR_Y), v.width, viewY(ROAD_NEAR_Y) - viewY(ROAD_FAR_Y));
 
   // Ruts, stones and hoofprints lie on the ground, so they follow its
   // perspective (ground.ts): nearer ones are spread wider and scroll faster.
   const T = 40;
   const rut = (y: number, dx: number, salt: number) =>
     groundTiles(v.camX, v.width, y, T, (i, sx, s) => {
-      rect(ctx, sx + dx * s, y + hash(i, salt) * 2, T * s * (0.4 + hash(i, salt + 1) * 0.5), 1.5, '#7e6040');
+      rect(ctx, sx + dx * s, viewY(y) + hash(i, salt) * 2 * s, T * s * (0.4 + hash(i, salt + 1) * 0.5), 1.5 * s, '#7e6040');
     });
   ctx.globalAlpha = 0.35;
   rut(LANE_YS[0], 0, 100);
@@ -196,25 +197,26 @@ function drawStreetGround(ctx: Ctx, v: View): void {
     const y = ROAD_FAR_Y + 2 + hash(i, 106) * (ROAD_NEAR_Y - ROAD_FAR_Y - 4);
     const s = depthScale(y);
     const x = groundX(i * T + hash(i, 105) * T - v.camX, y, v.width / 2);
-    ellipse(ctx, x, y, (2 + hash(i, 107) * 2.5) * s, 1.5 + hash(i, 108), shade('#b0a08a', -hash(i, 109) * 0.3));
+    ellipse(ctx, x, viewY(y), (2 + hash(i, 107) * 2.5) * s, (1.5 + hash(i, 108)) * s, shade('#b0a08a', -hash(i, 109) * 0.3));
   });
 
   // grassy edge between verge and street
   ctx.fillStyle = '#6a7c33';
   const edge = ROAD_FAR_Y + 2;
+  const ey = viewY(edge);
   groundTiles(v.camX, v.width, edge, T / 2, (i, sx, s) => {
     ctx.beginPath();
-    ctx.moveTo(sx, edge);
-    ctx.lineTo(sx + (4 + hash(i, 110) * 6) * s, edge - 5 - hash(i, 111) * 5);
-    ctx.lineTo(sx + 14 * s, edge);
-    ctx.lineTo(sx + 20 * s, edge + 2);
-    ctx.lineTo(sx, edge + 2);
+    ctx.moveTo(sx, ey);
+    ctx.lineTo(sx + (4 + hash(i, 110) * 6) * s, ey - (5 + hash(i, 111) * 5) * s);
+    ctx.lineTo(sx + 14 * s, ey);
+    ctx.lineTo(sx + 20 * s, ey + 2 * s);
+    ctx.lineTo(sx, ey + 2 * s);
     ctx.fill();
   });
 
   // foreground meadow below the street
   const bottom = Math.max(VIEW_H, v.bottom);
-  const meadow = ROAD_NEAR_Y - 2;
+  const meadow = viewY(ROAD_NEAR_Y - 2);
   const f = ctx.createLinearGradient(0, meadow, 0, bottom);
   f.addColorStop(0, '#6d8236');
   f.addColorStop(Math.min(1, (VIEW_H - meadow) / (bottom - meadow)), '#4d6127');
@@ -233,38 +235,40 @@ export function drawSideRoad(ctx: Ctx, v: View, x: number, alpha = 1): void {
   const vp = v.width / 2;
   const sx = x - v.camX;
   const hw = SIDE_ROAD_HALF;
-  const bottom = Math.max(VIEW_H, v.bottom);
+  // depths (world y) of its ends; drawn at viewY (the drawing camera)
+  const bottom = unviewY(Math.max(VIEW_H, v.bottom));
   // behind the street it narrows faster than the ground does, running off into the distance
   const far = 396;
   const street = ROAD_FAR_Y;
   const narrow = (y: number) => 0.45 + 0.55 * ((y - far) / (street - far));
   const at = (y: number, side: -1 | 1, k = 1) => groundX(sx + side * hw * k, y, vp);
+  const Y = viewY;
   ctx.save();
   ctx.globalAlpha = alpha;
-  const g = ctx.createLinearGradient(0, far, 0, street);
+  const g = ctx.createLinearGradient(0, Y(far), 0, Y(street));
   g.addColorStop(0, 'rgba(168,135,91,0)');
   g.addColorStop(0.4, 'rgba(168,135,91,0.85)');
   g.addColorStop(1, '#a8875b');
-  poly(ctx, [at(far, -1, narrow(far)), far, at(far, 1, narrow(far)), far, at(street, 1), street, at(street, -1), street], undefined);
+  poly(ctx, [at(far, -1, narrow(far)), Y(far), at(far, 1, narrow(far)), Y(far), at(street, 1), Y(street), at(street, -1), Y(street)], undefined);
   ctx.fillStyle = g;
   ctx.fill();
   // in front of the street, down to the bottom of the view
   const near = ROAD_NEAR_Y - 4;
-  const f = ctx.createLinearGradient(0, near, 0, bottom);
+  const f = ctx.createLinearGradient(0, Y(near), 0, Y(bottom));
   f.addColorStop(0, '#9b7a50');
   f.addColorStop(0.3, '#b08e60');
   f.addColorStop(1, '#94744b');
-  poly(ctx, [at(near, -1), near, at(near, 1), near, at(bottom, 1), bottom, at(bottom, -1), bottom], undefined);
+  poly(ctx, [at(near, -1), Y(near), at(near, 1), Y(near), at(bottom, 1), Y(bottom), at(bottom, -1), Y(bottom)], undefined);
   ctx.fillStyle = f;
   ctx.fill();
   // grassy edges and wheel ruts, in the same perspective
   ctx.globalAlpha = alpha * 0.35;
   for (const k of [-0.4, 0.4]) {
     ctx.beginPath();
-    ctx.moveTo(at(far + 12, 1, k * narrow(far + 12)), far + 12);
-    ctx.lineTo(at(street, 1, k), street);
-    ctx.moveTo(at(near, 1, k), near);
-    ctx.lineTo(at(bottom, 1, k), bottom);
+    ctx.moveTo(at(far + 12, 1, k * narrow(far + 12)), Y(far + 12));
+    ctx.lineTo(at(street, 1, k), Y(street));
+    ctx.moveTo(at(near, 1, k), Y(near));
+    ctx.lineTo(at(bottom, 1, k), Y(bottom));
     ctx.strokeStyle = '#7e6040';
     ctx.lineWidth = 1.5;
     ctx.stroke();
@@ -272,8 +276,8 @@ export function drawSideRoad(ctx: Ctx, v: View, x: number, alpha = 1): void {
   ctx.globalAlpha = alpha * 0.8;
   for (const side of [-1, 1] as const) {
     ctx.beginPath();
-    ctx.moveTo(at(near, side), near);
-    ctx.lineTo(at(bottom, side), bottom);
+    ctx.moveTo(at(near, side), Y(near));
+    ctx.lineTo(at(bottom, side), Y(bottom));
     ctx.strokeStyle = '#5d7030';
     ctx.lineWidth = 2;
     ctx.stroke();
@@ -284,9 +288,11 @@ export function drawSideRoad(ctx: Ctx, v: View, x: number, alpha = 1): void {
 /** Where a street ends (world x range `ends`): past each end the road gives way to grass. */
 export function drawStreetEnds(ctx: Ctx, v: View, ends: { min: number; max: number }): void {
   const vp = v.width / 2;
+  // depths of the road's edges, drawn at viewY (the drawing camera)
   const top = ROAD_FAR_Y - 2;
   const bottom = ROAD_NEAR_Y + 2;
-  const verge = ctx.createLinearGradient(0, top, 0, bottom);
+  const [ty, by] = [viewY(top), viewY(bottom)];
+  const verge = ctx.createLinearGradient(0, ty, 0, by);
   verge.addColorStop(0, '#7a8e3e');
   verge.addColorStop(1, '#6d8236');
   for (const [x, side] of [[ends.min, -1], [ends.max, 1]] as const) {
@@ -297,17 +303,18 @@ export function drawStreetEnds(ctx: Ctx, v: View, ends: { min: number; max: numb
     const far = side < 0 ? -40 : v.width + 40;
     ctx.fillStyle = verge;
     ctx.beginPath();
-    ctx.moveTo(far, top);
-    ctx.lineTo(edge(top), top);
-    ctx.bezierCurveTo(edge(top) - side * 26, top + 12, edge(bottom) - side * 26, bottom - 14, edge(bottom), bottom);
-    ctx.lineTo(far, bottom);
+    ctx.moveTo(far, ty);
+    ctx.lineTo(edge(top), ty);
+    ctx.bezierCurveTo(edge(top) - side * 26, ty + (by - ty) * 0.17, edge(bottom) - side * 26, by - (by - ty) * 0.2, edge(bottom), by);
+    ctx.lineTo(far, by);
     ctx.closePath();
     ctx.fill();
     // a few tufts along the edge
     ctx.fillStyle = '#5d7030';
     for (let i = 0; i < 6; i++) {
-      const y = top + 6 + i * 11;
-      const gx = edge(y) - side * (18 + Math.sin(i * 2.3) * 6);
+      const d = top + 6 + i * 11;
+      const y = viewY(d);
+      const gx = edge(d) - side * (18 + Math.sin(i * 2.3) * 6);
       ctx.beginPath();
       ctx.moveTo(gx - 4, y);
       ctx.lineTo(gx, y - 6);

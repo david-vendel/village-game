@@ -8,7 +8,7 @@ import { type FarmState, type FieldPlot, growth } from '../game/farm';
 import { drawArm, drawHead, drawLegs, drawTorso, type Figure, HEAD, outfitOf, SHOULDER, swingHand } from './figure';
 import { DOOR_TIME, WALK_SPEED, type Worker } from '../game/worker';
 import { BACK_FIELD, BASE_Y, BASKET, FIELD_ROWS, FRONT_FIELD, SHEAF_SLOTS, STORE, VIEW_H } from '../game/layout';
-import { groundX } from './ground';
+import { groundX, viewRatio, viewY } from './ground';
 import { circle, clamp01, type Ctx, ellipse, hash, lerp, line, mix, poly, rect } from './util';
 
 const SOIL = '#7a5a3a';
@@ -22,7 +22,8 @@ interface Anchor {
   vpX?: number;
 }
 
-const toScreenY = (a: Anchor, y: number) => a.base + (y - BASE_Y);
+/** Where depth y (world y) is drawn, relative to the building's base line (through the drawing camera). */
+const toScreenY = (a: Anchor, y: number) => a.base + (viewY(y) - BASE_Y);
 /** Screen point of the ground at x offset u from the farm centre and world depth y. */
 const ground = (a: Anchor, u: number, y: number): [number, number] => [groundX(a.x + u, y, a.vpX ?? a.x), toScreenY(a, y)];
 
@@ -58,7 +59,7 @@ function quad(a: Anchor, u0: number, u1: number, yFar: number, yNear: number): n
 }
 
 /** Crops are drawn bigger the nearer to the viewer they grow. */
-const cropSize = (y: number) => lerp(0.8, 1.55, clamp01((y - BACK_FIELD.back) / (FRONT_FIELD.bottom - BACK_FIELD.back)));
+const cropSize = (y: number) => lerp(0.8, 1.55, clamp01((y - BACK_FIELD.back) / (FRONT_FIELD.bottom - BACK_FIELD.back))) * viewRatio(y);
 
 /** One plot: soil, horizontal furrows, and crop rows drawn far-to-near. */
 function fieldPlot(ctx: Ctx, a: Anchor, p: FieldPlot, seed: number): void {
@@ -186,6 +187,11 @@ export function drawStore(ctx: Ctx, a: Anchor, sheaves: number): void {
 
 /** Nearer to the viewer (larger y) = drawn bigger. */
 export function farmerScale(y: number): number {
+  return viewRatio(y) * farmerScaleGame(y);
+}
+
+/** farmerScale as the game's own camera sees it (the art's sizes). */
+function farmerScaleGame(y: number): number {
   return y < BASE_Y ? lerp(0.82, 1, clamp01((y - BACK_FIELD.back) / (BASE_Y - BACK_FIELD.back))) : 1 + ((y - BASE_Y) / (VIEW_H - BASE_Y)) * 0.45;
 }
 

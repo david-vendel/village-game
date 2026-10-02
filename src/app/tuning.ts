@@ -3,7 +3,8 @@
 // so a setting survives a reload and can be sent as a link. Same pattern as
 // ../hollow.
 
-import { DEFAULT_EASE, DEFAULT_LENS, setLens, setLensEase } from '../render';
+import { setCameraDistance } from '../render';
+import { EYE_DIST } from '../game/layout';
 import { DAY_LENGTH } from '../game/daynight';
 import { DEFAULT_PARAMS, type World, type WorldParams } from '../game/world';
 import { makeCollapsible } from './panel';
@@ -58,9 +59,11 @@ export interface DisplayOptions {
   fps: boolean;
 }
 
+/** The drawing camera's distance to start with (render/ground.ts). */
+const CAMERA_DEFAULT = 800;
+
 export function installTuning(world: World, sound: Sound): DisplayOptions {
-  let lensNow = DEFAULT_LENS;
-  let easeNow = DEFAULT_EASE;
+  let cameraNow = CAMERA_DEFAULT;
   const knobs: Knob[] = [
     ...WORLD_KNOBS.map(({ key, ...k }) => ({
       ...k,
@@ -71,32 +74,19 @@ export function installTuning(world: World, sound: Sound): DisplayOptions {
       },
     })),
     {
-      // how long depth behind the street is drawn (render/lens.ts): 1 is the camera's own wide-angle perspective
-      param: 'lens',
-      min: 0.2,
-      max: 1,
-      step: 0.05,
-      def: DEFAULT_LENS,
-      get: () => lensNow,
+      // how far back the drawing camera stands (render/ground.ts): further back is a longer lens and
+      // less stretched depth; EYE_DIST is the game's own. Drawing only: the game's distances don't change
+      param: 'cam',
+      min: EYE_DIST,
+      max: EYE_DIST * 4,
+      step: 50,
+      def: CAMERA_DEFAULT,
+      get: () => cameraNow,
       set: (v) => {
-        lensNow = v;
-        setLens(v);
+        cameraNow = v;
+        setCameraDistance(v);
       },
-      render: (v) => `far depth ${v.toFixed(2)}×`,
-    },
-    {
-      // how soon behind the street the far depth takes hold (map px; render/lens.ts)
-      param: 'ease',
-      min: 50,
-      max: 1000,
-      step: 25,
-      def: DEFAULT_EASE,
-      get: () => easeNow,
-      set: (v) => {
-        easeNow = v;
-        setLensEase(v);
-      },
-      render: (v) => `depth ease ${v} px`,
+      render: (v) => `camera ${v} px back`,
     },
     {
       param: 'vol',
