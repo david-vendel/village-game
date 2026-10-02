@@ -102,6 +102,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     laid: laidOut(b),
     vpX: viewW / 2,
     bell: b.type === 'chapel' ? bell : undefined,
+    doorOpen: !!b.arriving,
   });
   // people at work, with their workplace's position
   const atWork = world.people.flatMap((p) => {

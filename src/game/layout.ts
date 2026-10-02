@@ -42,6 +42,8 @@ const eyeDist = (y: number) => (EYE_DIST * (BASE_Y - HORIZON_Y)) / (y - HORIZON_
  * the buildings, which stand right by the road.
  */
 const LINE_DIST = eyeDist(GROUND_Y + 6) - 1.5 * 25;
+/** How far in front of the middle of the road (map px) ground can lie and still have a depth (yAt): the camera stands there. */
+export const FRONT_LIMIT = LINE_DIST;
 /** How far behind the middle of the road (map px) ground at depth y lies (negative: in front of it). */
 export const behindRoad = (y: number) => eyeDist(y) - LINE_DIST;
 /** The depth y of ground lying d map px behind the middle of the road (the inverse of behindRoad). */
@@ -222,6 +224,20 @@ export function siteSlot(width: number, r: 'wood' | 'stone', i: number): Slot {
 
 /** How far to the right of a work spot the materials laid down there lie (beside the builder). */
 export const SPOT_PILE_DX = 12;
+
+/** The chapel's door, at the foot of its bell tower on the left. */
+export const CHAPEL_DOOR: Spot = { dx: -60, y: STAND_Y };
+/** The tavern's door. */
+export const TAVERN_DOOR: Spot = { dx: -12, y: STAND_Y };
+/** The smithy has no front wall: the middle of its open workshop is the way in. */
+export const SMITHY_DOOR: Spot = { dx: 3, y: STAND_Y };
+
+/**
+ * A house's door (the middle of it, from the building's x) by its size: a small
+ * one's near its left end, a merged one's in the middle of its front.
+ * render/buildings.ts draws it there; new villagers come out of it.
+ */
+export const HOUSE_DOOR_DX: Record<1 | 2 | 3, number> = { 1: -21, 2: -12, 3: -12 };
 
 /** The mill's door, where the miller carries the grain in to grind it upstairs. */
 export const MILL_DOOR: Spot = { dx: -6, y: STAND_Y };

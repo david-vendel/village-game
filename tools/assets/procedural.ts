@@ -78,7 +78,10 @@ async function exportBuilding(type: BuildingType, out: string): Promise<Building
   const top = Math.floor(t) - MARGIN;
   const size: Vec2 = [Math.ceil(r) + MARGIN - left, Math.ceil(b) + MARGIN - top];
   const anchor: Vec2 = [-left, -top];
-  const points = Object.fromEntries(Object.entries(art.points ?? {}).map(([k, [x, y]]) => [k, [x + anchor[0], y + anchor[1]] as Vec2]));
+  // every sprite of a building with a door marks it (the game's door: BuildingDef.door)
+  const door = BUILDINGS[type].door;
+  const named: Record<string, [number, number]> = { ...(door ? { door: [door.dx, 0] } : {}), ...art.points };
+  const points = Object.fromEntries(Object.entries(named).map(([k, [x, y]]) => [k, [x + anchor[0], y + anchor[1]] as Vec2]));
 
   const views: Record<string, ImageSet> = {};
   for (const { variant, a } of looks) {

@@ -10,7 +10,7 @@ import { buildingAt, getBuilding, type Building, type World } from '../game/worl
 
 function occupation(p: Person): string {
   if (p.profession) return p.profession;
-  if (p.seeker) return p.job?.role === 'serf' ? 'serf' : 'unemployed';
+  if (p.seeker) return p.job?.role ?? 'unemployed';
   return p.look === 'monk' ? 'monk' : 'townswoman';
 }
 

@@ -12,7 +12,8 @@ import { installWorkersPanel } from './app/workers';
 import { installVersionsPanel, requestedVersion, showVersion } from './app/versions';
 import { update, type World } from './game/world';
 import { sizePanelButtons } from './app/panel';
-import { type ArtMode, cameraX, HUD_BUTTON, loadArt, renderFrame, showArtPreview, type Toast } from './render';
+import { type ArtMode, cameraX, HUD_BUTTON, loadArt, renderFrame, showArtPreview, type Toast, viewY } from './render';
+import { yAt } from './game/layout';
 
 // ?art=procedural ignores sprite assets; ?art=preview shows the asset contact sheet instead of the game
 const artParam = new URLSearchParams(location.search).get('art');
@@ -71,6 +72,10 @@ async function play(): Promise<void> {
     autosave.tick(); // every half hour of game time
     if (world.events.length) autosave.requestSave(); // something was built or finished
     announceEvents(world, notify);
+
+    // the panel's "screen bottom" ground (by default the near edge of the fields in front of the
+    // road and their fence) at the bottom of the screen, wherever the drawing camera puts it
+    screen.frameTo(viewY(yAt(-display.viewBottom)));
 
     // smooth camera follow
     const vp = screen.vp;

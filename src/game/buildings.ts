@@ -5,7 +5,7 @@
 // its own module (farm.ts).
 // To add a building: add an entry here and an entry in BUILDING_ART.
 
-import { BAKERY_DOOR, BAKERY_OVEN, MILL_DOOR, PILE_UNIT, YARD_ITEMS, type Spot } from './layout';
+import { BAKERY_DOOR, BAKERY_OVEN, CHAPEL_DOOR, HOME, HOUSE_DOOR_DX, MILL_DOOR, PILE_UNIT, SMITHY_DOOR, STAND_Y, STONECUTTER_DOOR, TAVERN_DOOR, WOODCUTTER_DOOR, YARD_ITEMS, type Spot } from './layout';
 import type { Amounts, Resource } from './resources';
 
 export type BuildingType =
@@ -79,6 +79,14 @@ export interface BuildingDef {
   cost: Amounts;
   /** What the building's own store holds, and how much of each. */
   storage: Amounts;
+  /**
+   * Where people go in and out (the middle of the doorway, on the ground; dx from
+   * the building's x), or null for one nobody enters. Every building says which:
+   * its drawing, 3D model and sprite (`door` point) put the door here, and the
+   * game walks people through it (workplaces, new villagers out of a house).
+   * A merged house's door moves with its size: doorOf.
+   */
+  door: Spot | null;
   /** Workers it employs once finished, per role. */
   jobs: Partial<Record<Role, number>>;
   /** Goods it makes, which serfs carry from its store to a warehouse. */
@@ -93,6 +101,7 @@ export interface BuildingDef {
 export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   warehouse: {
     type: 'warehouse',
+    door: null, // an open storage yard
     name: 'Storage yard',
     purpose: "Open yard with the village's wood, stone, grain, flour and bread in piles. Builders fetch from here.",
     width: 75,
@@ -104,6 +113,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   },
   house: {
     type: 'house',
+    door: { dx: HOUSE_DOOR_DX[1], y: STAND_Y },
     name: 'House',
     purpose: 'Shelter for villagers. More homes, more hands.',
     width: 75,
@@ -114,6 +124,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   },
   farm: {
     type: 'farm',
+    door: HOME,
     name: 'Farm',
     purpose: 'A farmstead with wheat fields. Feeds the village.',
     // farmhouse, barn and grain store on 6 × 3 cells; the fields use free cells around it
@@ -129,6 +140,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   },
   mill: {
     type: 'mill',
+    door: MILL_DOOR,
     name: 'Mill',
     purpose: 'Grinds grain from the farms into flour.',
     width: 150,
@@ -143,6 +155,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   },
   bakery: {
     type: 'bakery',
+    door: BAKERY_DOOR,
     name: 'Bakery',
     purpose: 'Bakes flour from the mill into bread for the tavern.',
     width: 150,
@@ -157,6 +170,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   },
   blacksmith: {
     type: 'blacksmith',
+    door: SMITHY_DOOR,
     name: 'Blacksmith',
     purpose: 'Forges tools and arms at the glowing anvil.',
     width: 150,
@@ -167,6 +181,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   },
   market: {
     type: 'market',
+    door: null, // open stalls
     name: 'Market',
     purpose: 'Stalls where merchants trade goods and coin.',
     width: 150,
@@ -177,6 +192,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   },
   chapel: {
     type: 'chapel',
+    door: CHAPEL_DOOR,
     name: 'Chapel',
     purpose: 'Bells, prayer and a steeple seen for miles.',
     width: 150,
@@ -187,6 +203,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   },
   tavern: {
     type: 'tavern',
+    door: TAVERN_DOOR,
     name: 'Tavern',
     purpose: 'Ale, songs, rumours and bread for weary travellers.',
     width: 225,
@@ -199,6 +216,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   },
   watchtower: {
     type: 'watchtower',
+    door: null, // climbed by its ladder, no door
     name: 'Watchtower',
     purpose: 'Guards keep watch over the road and the woods.',
     width: 75,
@@ -209,6 +227,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   },
   well: {
     type: 'well',
+    door: null, // no door
     name: 'Well',
     purpose: 'Fresh water for the whole street.',
     width: 75,
@@ -219,6 +238,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   },
   woodcutter: {
     type: 'woodcutter',
+    door: WOODCUTTER_DOOR,
     name: "Woodcutter's hut",
     purpose: 'Fells grown trees in the woods behind the street for wood.',
     width: 150,
@@ -231,6 +251,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   },
   stonecutter: {
     type: 'stonecutter',
+    door: STONECUTTER_DOOR,
     name: "Stonecutter's hut",
     purpose: 'Cuts blocks of stone out of the nearest quarry in the hills.',
     width: 150,
@@ -243,6 +264,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
   },
   intersection: {
     type: 'intersection',
+    door: null, // a crossroads
     name: 'Crossroads',
     purpose: 'A road across the street, at right angles. Ride up to it and turn to follow the new street.',
     // the road it opens is a street of its own (streets.ts); the footprint is where it meets this one
@@ -261,4 +283,9 @@ export function storageOf(b: { type: BuildingType; size?: number }): Amounts {
   const out: Amounts = {};
   for (const [r, n] of Object.entries(BUILDINGS[b.type].storage)) out[r as keyof Amounts] = (n ?? 0) * (b.size ?? 1);
   return out;
+}
+
+/** A building's door (BuildingDef.door), for its size: a merged house's is in the middle of its front. */
+export function doorOf(type: BuildingType, size: 1 | 2 | 3 = 1): Spot | null {
+  return type === 'house' ? { dx: HOUSE_DOOR_DX[size], y: STAND_Y } : BUILDINGS[type].door;
 }

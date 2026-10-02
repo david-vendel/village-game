@@ -57,14 +57,20 @@ export interface DisplayOptions {
   grid: boolean;
   /** Show the frame rate (on unless URL: fps=0). */
   fps: boolean;
+  /** How far in front of the middle of the road (map px) the ground at the bottom of the screen lies (main.ts frames to it). */
+  viewBottom: number;
 }
 
 /** The drawing camera's distance to start with (render/ground.ts). */
 const CAMERA_DEFAULT = 600;
+/** Ground at the bottom of the screen to start with: just past the fence along the near edge of the fields in front of the road. */
+const VIEW_BOTTOM_DEFAULT = 92;
 
 export function installTuning(world: World, sound: Sound): DisplayOptions {
   let cameraNow = CAMERA_DEFAULT;
   let heightNow = GAME_EYE_HEIGHT;
+  const params = new URLSearchParams(window.location.search);
+  const display: DisplayOptions = { grid: params.get('grid') === '1', fps: params.get('fps') !== '0', viewBottom: VIEW_BOTTOM_DEFAULT };
   const knobs: Knob[] = [
     ...WORLD_KNOBS.map(({ key, ...k }) => ({
       ...k,
@@ -76,11 +82,12 @@ export function installTuning(world: World, sound: Sound): DisplayOptions {
     })),
     {
       // how far back the drawing camera stands (render/ground.ts): further back is a longer lens and
-      // less stretched depth; EYE_DIST is the game's own. Drawing only: the game's distances don't change
+      // less stretched depth; EYE_DIST is the game's own. Closer than it, the fields in front of the
+      // road reach down to the bottom of the screen. Drawing only: the game's distances don't change
       param: 'cam',
-      min: EYE_DIST,
+      min: Math.round(EYE_DIST * 0.625),
       max: EYE_DIST * 4,
-      step: 50,
+      step: 25,
       def: CAMERA_DEFAULT,
       get: () => cameraNow,
       set: (v) => {
@@ -105,6 +112,20 @@ export function installTuning(world: World, sound: Sound): DisplayOptions {
       render: (v) => `camera height ${(v / 20).toFixed(1)} m`,
     },
     {
+      // not the camera moving: which ground is framed at the bottom of the screen, the picture scaled
+      // to fit it (zoom 1) with the depth unchanged. The fields in front of the road end at 87.5
+      param: 'vbot',
+      min: 40,
+      max: 160,
+      step: 2,
+      def: VIEW_BOTTOM_DEFAULT,
+      get: () => display.viewBottom,
+      set: (v) => {
+        display.viewBottom = v;
+      },
+      render: (v) => `screen bottom ${(v / 20).toFixed(1)} m before road`,
+    },
+    {
       param: 'vol',
       min: 0,
       max: 100,
@@ -118,7 +139,6 @@ export function installTuning(world: World, sound: Sound): DisplayOptions {
     },
   ];
 
-  const params = new URLSearchParams(window.location.search);
   const root = document.createElement('div');
   root.style.cssText =
     'position:fixed;right:12px;top:50%;transform:translateY(-50%);color:#f3ead8;' +
@@ -153,7 +173,6 @@ export function installTuning(world: World, sound: Sound): DisplayOptions {
     content.append(label, input);
   }
 
-  const display: DisplayOptions = { grid: params.get('grid') === '1', fps: params.get('fps') !== '0' };
   const toggle = document.createElement('label');
   toggle.style.cssText = 'display:flex;gap:6px;justify-content:flex-end;align-items:center;margin-top:6px;cursor:pointer';
   const box = document.createElement('input');

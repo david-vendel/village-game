@@ -6,11 +6,12 @@
 //
 // Positions are relative to the workplace's centre (dx) and in world y.
 // Nothing moves by magic: a worker walks to the exact spot where a thing lies
-// to pick it up, and to the exact spot where it will lie to put it down. A spot
-// on another street is reached along the road, round the corner (`Nav`).
+// to pick it up, and to the exact spot where it will lie to put it down, the
+// fastest way across the land (`Nav`, paths.ts): round buildings, along roads
+// where that is quicker, slower through fields; to another street too.
 
 import type { TimeOfDay } from './daynight';
-import { behindRoad, ROAD_Y, yAt, type Spot } from './layout';
+import { behindRoad, yAt, type Spot } from './layout';
 import type { Load } from './resources';
 
 /** A job at a workplace: what to do (its own vocabulary, e.g. 'sow') and to which of its things. */
@@ -101,13 +102,26 @@ export interface Workplace {
   deliver(load: Load, job: JobTicket): void;
 }
 
+/** A point on the village map (map px). */
+export interface MapPoint {
+  x: number;
+  y: number;
+}
+
 /**
- * Where the workplace is (world x) and the way between two world x's (streets.ts
- * route): straight there, or to a corner (x) that leads on to `turnTo` on the next street.
+ * The land around the workplace, for walking it (world.ts, paths.ts). Workers'
+ * positions (dx, y) are seen from the workplace's street; someone who walks off
+ * to another street is seen from that street instead (dx past this street's end).
  */
 export interface Nav {
-  x: number;
-  route(from: number, to: number): { x: number; turnTo?: number };
+  /** Where (dx, y) lies on the map. */
+  toMap(dx: number, y: number): MapPoint;
+  /** Map point p as (dx, y), seen from the street the worker at `nearDx` is on, or one nearer p. */
+  fromMap(p: MapPoint, nearDx: number): { dx: number; y: number };
+  /** The next point on the fastest way from `from` to `to` (to itself at the end), for this worker. */
+  next(w: Worker, from: MapPoint, to: MapPoint): MapPoint;
+  /** How fast someone walks at p, as a share of their speed on grass. */
+  speedAt(p: MapPoint): number;
 }
 
 /** Walking speed with a load, and with empty hands (px/s). */
@@ -177,6 +191,62 @@ export function offDuty(w: Worker, now: TimeOfDay, place: Pick<Workplace, 'dayLa
   return null;
 }
 
+/**
+ * Walk the fastest way across the land towards (toDx, toY) for `reach` px of
+ * grass (further on the road, less in fields). Returns whether they got there.
+ */
+function walkOnLand(w: Worker, toDx: number, toY: number, reach: number, nav: Nav): boolean {
+  const to = nav.toMap(toDx, toY);
+  let p = nav.toMap(w.dx, w.y);
+  let left = reach;
+  let walked = 0;
+  // a few legs of the way in one step at most: corners close together
+  for (let legs = 0; legs < 8 && left > 1e-9; legs++) {
+    const q = nav.next(w, p, to);
+    const d = Math.hypot(q.x - p.x, q.y - p.y);
+    const v = nav.speedAt(p);
+    if (d > left * v) {
+      p = { x: p.x + ((q.x - p.x) / d) * left * v, y: p.y + ((q.y - p.y) / d) * left * v };
+      walked += left * v;
+      left = 0;
+      break;
+    }
+    p = q;
+    walked += d;
+    left -= d / v;
+    if (q.x === to.x && q.y === to.y) {
+      w.stride += walked;
+      return true;
+    }
+  }
+  const at = nav.fromMap(p, w.dx);
+  // facing the way they go along the street (not when they come to be seen from another street)
+  const ddx = at.dx - w.dx;
+  if (Math.abs(ddx) > 0.05 && Math.abs(ddx) < 100) w.facing = ddx > 0 ? 1 : -1;
+  w.dx = at.dx;
+  w.y = at.y;
+  w.stride += walked;
+  return false;
+}
+
+/** Without a map (a workplace on its own, in tests): straight towards (toDx, toY) on the ground. Returns whether they got there. */
+function walkStraight(w: Worker, toDx: number, toY: number, step: number): boolean {
+  // y is a depth across the street, so the step is measured in ground px (layout.ts behindRoad)
+  const ddx = toDx - w.dx;
+  const depth = behindRoad(w.y);
+  const ddy = behindRoad(toY) - depth;
+  const d = Math.hypot(ddx, ddy);
+  if (Math.abs(ddx) > 0.5) w.facing = ddx > 0 ? 1 : -1;
+  if (d > step) {
+    w.dx += (ddx / d) * step;
+    w.y = yAt(depth + (ddy / d) * step);
+    w.stride += step;
+    return false;
+  }
+  w.stride += d;
+  return true;
+}
+
 /** Advance one worker. `taken`: jobs the workplace's other workers are on; `nav`: the way to other streets. */
 export function updateWorker(w: Worker, place: Workplace, dt: number, now: TimeOfDay, taken: JobTicket[], nav?: Nav): void {
   const task = w.task;
@@ -241,32 +311,10 @@ export function updateWorker(w: Worker, place: Workplace, dt: number, now: TimeO
       task.toDx = at.dx;
       task.toY = at.y;
     }
-    // bound for another street: along the road to the corner first
-    const leg = nav?.route(nav.x + w.dx, nav.x + task.toDx);
-    const corner = leg?.turnTo !== undefined ? { dx: leg.x - nav!.x, y: ROAD_Y, next: leg.turnTo - nav!.x } : null;
-    // walking on the ground: y is a depth across the street, so the step is measured in ground px (layout.ts behindRoad)
-    const ddx = (corner ? corner.dx : task.toDx) - w.dx;
-    const depth = behindRoad(w.y);
-    const ddy = behindRoad(corner ? corner.y : task.toY) - depth;
-    const d = Math.hypot(ddx, ddy);
-    const step = (w.carrying ? WALK_SPEED : WALK_SPEED_EMPTY) * (place.walkSpeed ?? 1) * dt;
-    if (Math.abs(ddx) > 0.5) w.facing = ddx > 0 ? 1 : -1;
-    if (d > step) {
-      w.dx += (ddx / d) * step;
-      w.y = yAt(depth + (ddy / d) * step);
-      w.stride += step;
-      return;
-    }
-    if (corner) {
-      // round the corner: the same spot, seen along the next street
-      w.dx = corner.next;
-      w.y = corner.y;
-      w.stride += d;
-      return;
-    }
+    const speed = (w.carrying ? WALK_SPEED : WALK_SPEED_EMPTY) * (place.walkSpeed ?? 1);
+    if (nav ? !walkOnLand(w, task.toDx, task.toY, speed * dt, nav) : !walkStraight(w, task.toDx, task.toY, speed * dt)) return;
     w.dx = task.toDx;
     w.y = task.toY;
-    w.stride += d;
     if (task.then === 'job' && task.job) {
       const duration = place.begin(task.job);
       // the job changed on the way (someone else did it, the land was built on): pick another

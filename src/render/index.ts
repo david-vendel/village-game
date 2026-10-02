@@ -9,7 +9,7 @@ import { drawTopView } from './topview';
 import { drawBuildMenu, drawHud, drawToasts, drawTurnFade, type Toast } from './ui';
 
 export { artMode, loadArt, type ArtMode } from './assets';
-export { GAME_EYE_HEIGHT, setCameraDistance, setCameraHeight } from './ground';
+export { GAME_EYE_HEIGHT, setCameraDistance, setCameraHeight, viewY } from './ground';
 export { showArtPreview } from './preview';
 export { cameraX } from './scene';
 export { galloping, STRIDE as HORSE_STRIDE, strideAt } from './horse';

@@ -38,7 +38,7 @@
 > expect at s0:82 crossroads constructing
   ok: #81 intersection at s0:82-84, constructing
 > run until built
-  all built after 16.2s
+  all built after 14.5s
 > expect streets 2
   ok: 2 streets
 # its street has places of its own, every 27 cells along it
@@ -76,7 +76,7 @@
     G ######......|||................
     F ######......|||................
     E ............|||......,,,FFFFFF,
-    D ......HHH...|||......,,,FFFFFF,
+    D ......HHH...|||......_,,FFFFFF,
     C ......HHH...|||......",,FFFFFF,
     B ============+++================
     A ============+@+================

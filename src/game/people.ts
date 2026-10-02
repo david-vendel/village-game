@@ -4,8 +4,9 @@
 // routine (worker.ts) at that building. Animals (chickens) just stroll.
 
 import { BUILDINGS, ROLES, type Role } from './buildings';
-import { ROAD_Y } from './layout';
-import { streetDist, streetOf, streetRange } from './streets';
+import { ROAD_Y, yAt } from './layout';
+import { findPath, terrainSpeed } from './paths';
+import { fromStreet, groundPoint, streetDist, streetOf, streetRange, type Vec } from './streets';
 import type { Worker } from './worker';
 import type { Building, World } from './world';
 
@@ -39,9 +40,11 @@ export interface Person {
   /** Their profession for life; people with one take jobs of that role only. */
   profession?: Role;
   /**
-   * Out of work and looking: no profession yet. Runs errands as a serf while
-   * there are any, and takes the first lasting job going (a miller, a
-   * farmer), which then becomes their profession. Never a builder.
+   * Out of work and looking: no profession yet. The village's backup hands:
+   * runs errands as a serf while there are any, takes the first lasting job
+   * going (a miller, a woodcutter, a farmer), which then becomes their
+   * profession, and helps build when no builder is free (still looking
+   * after: building is not a profession they take up).
    */
   seeker?: true;
   stroll: Stroll;
@@ -116,13 +119,13 @@ function betweenErrands(p: Person): boolean {
  * Who may take a job of this role, best first: people of that profession who
  * are free; for a lasting job (not building, not errands) then seekers who
  * are free, then seekers running errands as serfs, between errands; for
- * errands, free seekers only.
+ * building, then free seekers; for errands, free seekers only.
  */
 function candidates(world: World, role: Role): Person[][] {
   const free = (p: Person) => !p.job;
   if (role === 'serf') return [world.people.filter((p) => free(p) && p.seeker)];
   const pros = world.people.filter((p) => free(p) && p.profession === role);
-  if (role === 'builder') return [pros];
+  if (role === 'builder') return [pros, world.people.filter((p) => free(p) && p.seeker)];
   return [pros, world.people.filter((p) => free(p) && p.seeker), world.people.filter((p) => p.seeker && betweenErrands(p))];
 }
 
@@ -141,7 +144,7 @@ export function staffBuildings(world: World, hire: (b: Building, role: Role, who
         if (!tier) break; // nobody for this job: on to the next
         const who = tier.sort((a, c) => streetDist(world, whereX(world, a), x) - streetDist(world, whereX(world, c), x))[0];
         if (who.job) release(world, who); // a serf leaves their errands from where they stand
-        if (role !== 'serf') {
+        if (role !== 'serf' && role !== 'builder') {
           // a lasting job becomes a seeker's profession
           who.profession = role;
           delete who.seeker;
@@ -165,6 +168,47 @@ export function release(world: World, p: Person): void {
   p.job = null;
 }
 
+/** Each stroller's way back to their lane (paths.ts), while they walk it. */
+const ways = new WeakMap<Stroll, { to: Vec; path: Vec[] }>();
+
+/** Walk towards the lane, straight across the street from where they were, round anything in the way (paths.ts). */
+function backToLane(world: World, s: Stroll, lane: number, dt: number): void {
+  let way = ways.get(s);
+  const p = groundPoint(world, s.x, s.y);
+  if (!way) {
+    const to = groundPoint(world, s.x, lane);
+    way = { to, path: findPath(world, p, to) };
+    ways.set(s, way);
+  }
+  let at = p;
+  let left = s.speed * dt;
+  while (left > 1e-9 && way.path.length) {
+    const q = way.path[0];
+    const d = Math.hypot(q.x - at.x, q.y - at.y);
+    const v = terrainSpeed(world, at);
+    if (d > left * v) {
+      at = { x: at.x + ((q.x - at.x) / d) * left * v, y: at.y + ((q.y - at.y) / d) * left * v };
+      left = 0;
+    } else {
+      at = q;
+      left -= d / v;
+      way.path.shift();
+    }
+  }
+  const i = streetOf(s.x);
+  if (!way.path.length) {
+    const r = fromStreet(world, i, way.to);
+    s.x = r.x;
+    s.y = lane;
+    ways.delete(s);
+    return;
+  }
+  const r = fromStreet(world, i, at);
+  if (Math.abs(r.x - s.x) > 0.05) s.dir = r.x > s.x ? 1 : -1;
+  s.x = r.x;
+  s.y = yAt(r.d);
+}
+
 /** Unemployed people and animals wander the street they are on, stopping now and then. */
 export function updateStrolls(world: World, dt: number, rand: () => number): void {
   const walkers: Array<{ s: Stroll; chicken: boolean; lane: number }> = [
@@ -177,11 +221,9 @@ export function updateStrolls(world: World, dt: number, rand: () => number): voi
       if (s.idle <= 0 && rand() < 0.4 && s.y === lane) s.dir = (s.dir * -1) as 1 | -1;
       continue;
     }
-    // off the street (just let go from work): walk back to their lane first
+    // off the street (just let go from work, out of a door): back to their lane first, the fastest way
     if (s.y !== lane) {
-      const d = lane - s.y;
-      const step = s.speed * dt;
-      s.y = Math.abs(d) <= step ? lane : s.y + Math.sign(d) * step;
+      backToLane(world, s, lane, dt);
       continue;
     }
     const { min: minX, max: maxX } = streetRange(world, streetOf(s.x));

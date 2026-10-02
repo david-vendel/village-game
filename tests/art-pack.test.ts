@@ -68,8 +68,8 @@ describe('pack', () => {
       views: {
         street: {
           size,
-          anchor: [10, 35],
-          points: { door: [20, 35] },
+          anchor: [40, 35],
+          points: { door: [21, 35] }, // the farm's door: 19 u left of the anchor (BUILDINGS.farm.door)
           images: { default: { kind: 'look', name: 'default', dir: 'street/default', files: { color: 'color.png', normal: 'normal.npy', depth: 'depth.npy', shadow: 'shadow.npy', emissive: 'emissive.npy' } } },
         },
       },
@@ -86,7 +86,7 @@ describe('pack', () => {
     const farm = (JSON.parse(readFileSync(join(assets, 'manifest.json'), 'utf8')) as Manifest).assets['building.farm'] as BuildingAsset;
     expect(farm.footprintWidth).toBe(BUILDINGS.farm.width);
     expect(farm.construction).toEqual({ mode: 'reveal' });
-    expect(farm.views.street.points).toEqual({ door: [20, 35] });
+    expect(farm.views.street.points).toEqual({ door: [21, 35] });
     expect(farm.views.street.depthRange).toEqual([10, 11]);
     expect(Object.keys(farm.views.street.layers).sort()).toEqual(['color', 'depth', 'emissive', 'normal', 'shadow']);
     // @2x colour of the box is the box's colour, straight alpha, and opaque

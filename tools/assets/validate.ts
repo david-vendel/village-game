@@ -31,6 +31,8 @@ const SCHEMA = fileURLToPath(new URL('../../docs/art/asset-manifest.schema.json'
 const SUN: [number, number, number] = [-0.71, 0.57, 0.41];
 const LOSSLESS_ONLY: LayerName[] = ['normal', 'mask', 'ao'];
 const MAX_DIM = 4096;
+/** How far (u) a sprite's door point may be from the game's door (BuildingDef.door). */
+const DOOR_TOLERANCE = 3;
 
 interface Pixels {
   width: number;
@@ -350,6 +352,13 @@ export async function validateAssets(dir: string): Promise<Report> {
       const def = BUILDINGS[type];
       if (!def) err(id, `no building type “${type}” in src/game/buildings.ts`);
       else if (Math.abs(asset.footprintWidth - def.width) > 10) err(id, `footprintWidth ${asset.footprintWidth} u differs from BUILDINGS.${type}.width ${def.width} u by more than 10 u`);
+      // people walk in and out where the game has the door: the sprite must show it there
+      const img = asset.views.street;
+      if (def?.door && img) {
+        const d = img.points?.door;
+        if (!d) err(`${id} street`, `no \`door\` point: BUILDINGS.${type}.door is ${def.door.dx} u from the anchor`);
+        else if (Math.abs(d[0] - img.anchor[0] - def.door.dx) > DOOR_TOLERANCE) err(`${id} street`, `door point is ${(d[0] - img.anchor[0]).toFixed(1)} u from the anchor but BUILDINGS.${type}.door is at ${def.door.dx} u (±${DOOR_TOLERANCE})`);
+      }
       if (asset.construction.mode === 'stages') {
         const missing = ['staking', 'foundation', 'frame', 'walls', 'roof'].filter((s) => !(asset.construction as { stages: Record<string, unknown> }).stages[s]);
         if (missing.length) err(id, `construction stages missing: ${missing.join(', ')}`);

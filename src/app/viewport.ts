@@ -1,8 +1,11 @@
 // Maps the canvas to world and UI coordinates.
 //
-// Zoom 1 fits the designed 540-unit-tall scene to the screen height. Zooming
-// out shows more street horizontally and more sky above; the ground stays
-// anchored near the bottom of the screen. On portrait touch screens the street
+// Zoom 1 fits the scene from its top (world y 0) down to `frameBottom` to the
+// screen height: by default VIEW_H, in the game the near edge of the fields in
+// front of the road, wherever the drawing camera puts it (main.ts), so they
+// reach the bottom of the screen without moving the camera closer (which would
+// stretch the depth). Zooming out shows more street horizontally and more sky
+// above; the ground stays anchored near the bottom of the screen. On portrait touch screens the street
 // is lifted by `bottomPad` so the on-screen buttons sit on meadow, not on the
 // rider. Screen UI uses its own scale so buttons and text keep a usable size
 // whatever the zoom.
@@ -44,26 +47,27 @@ export function bottomPad(cw: number, ch: number, touch: boolean): number {
   return touch && ch > cw * 1.1 ? TOUCH_PAD_UI * uiScaleFor(cw, ch) : 0;
 }
 
-export function defaultZoom(cw: number, ch: number, touch = false): number {
+export function defaultZoom(cw: number, ch: number, touch = false, frameBottom = VIEW_H): number {
   const sceneH = ch - bottomPad(cw, ch, touch);
-  return Math.min(1, cw / (sceneH / VIEW_H) / MIN_DEFAULT_VIEW_W);
+  return Math.min(1, cw / (sceneH / frameBottom) / MIN_DEFAULT_VIEW_W);
 }
 
-export function zoomRange(cw: number, ch: number, touch = false): [number, number] {
-  return [Math.min(0.45, defaultZoom(cw, ch, touch) * 0.6), ZOOM_MAX];
+export function zoomRange(cw: number, ch: number, touch = false, frameBottom = VIEW_H): [number, number] {
+  return [Math.min(0.45, defaultZoom(cw, ch, touch, frameBottom) * 0.6), ZOOM_MAX];
 }
 
-export function clampZoom(z: number, cw: number, ch: number, touch = false): number {
-  const [lo, hi] = zoomRange(cw, ch, touch);
+export function clampZoom(z: number, cw: number, ch: number, touch = false, frameBottom = VIEW_H): number {
+  const [lo, hi] = zoomRange(cw, ch, touch, frameBottom);
   return Math.max(lo, Math.min(hi, z));
 }
 
-export function computeViewport(cw: number, ch: number, zoom: number, touch = false): Viewport {
-  const z = clampZoom(zoom, cw, ch, touch);
+/** `frameBottom`: the world y kept at the bottom of the scene (above the touch buttons' pad). */
+export function computeViewport(cw: number, ch: number, zoom: number, touch = false, frameBottom = VIEW_H): Viewport {
+  const z = clampZoom(zoom, cw, ch, touch, frameBottom);
   const pad = bottomPad(cw, ch, touch);
   const sceneH = ch - pad;
-  const worldScale = (sceneH / VIEW_H) * z;
-  const offsetY = sceneH - VIEW_H * worldScale;
+  const worldScale = (sceneH / frameBottom) * z;
+  const offsetY = sceneH - frameBottom * worldScale;
   const uiScale = uiScaleFor(cw, ch);
   return {
     zoom: z,

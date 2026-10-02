@@ -7,6 +7,7 @@ import {
   confirmMenu,
   constructionStage,
   createWorld,
+  HOUSE_RESIDENTS,
   moveMenu,
   openMenu,
   placeAt,
@@ -145,6 +146,42 @@ describe('construction', () => {
     runFor(w, 1);
     setConstructionEnabled(w, false);
     expect(b.status).toBe('done');
+  });
+
+  it('a finished house brings three people out of work, merged into a neighbour or not', () => {
+    const w = emptyWorld();
+    const seekers = () => w.people.filter((p) => p.seeker).length;
+    const a = placeBuilding(w, 1000, 'house', { free: true })!;
+    expect(seekers()).toBe(0); // nobody moves in before it is built
+    setConstructionEnabled(w, false);
+    runFor(w, 1);
+    expect(seekers()).toBe(1); // they come out of the door one by one
+    runFor(w, 4);
+    expect(seekers()).toBe(HOUSE_RESIDENTS);
+    placeBuilding(w, a.x + 75, 'house', { free: true });
+    expect(w.buildings).toHaveLength(1);
+    runFor(w, 5);
+    expect(seekers()).toBe(2 * HOUSE_RESIDENTS);
+    expect(new Set(w.people.map((p) => p.name)).size).toBe(w.people.length);
+  });
+
+  it("a house's people are backup hands: they build when no builder is free and take any lasting job, a woodcutter's too", () => {
+    const w = emptyWorld();
+    setConstructionEnabled(w, false);
+    placeBuilding(w, 1000, 'house', { free: true });
+    runFor(w, 5);
+    setConstructionEnabled(w, true);
+    const site = placeBuilding(w, 1750, 'chapel', { free: true })!;
+    update(w, 0.1, idle);
+    const helping = w.people.filter((p) => p.job?.buildingId === site.id);
+    expect(helping.length).toBeGreaterThan(0);
+    expect(helping.every((p) => p.seeker && p.job!.role === 'builder')).toBe(true); // still looking: building is no profession for them
+    setConstructionEnabled(w, false);
+    const hut = placeBuilding(w, 2500, 'woodcutter', { free: true })!;
+    update(w, 0.1, idle);
+    const cutter = w.people.find((p) => p.job?.buildingId === hut.id)!;
+    expect(cutter.profession).toBe('woodcutter');
+    expect(cutter.seeker).toBeUndefined();
   });
 
   it('stages advance in order', () => {

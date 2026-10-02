@@ -30,6 +30,11 @@ const GENERATORS: Partial<Record<BuildingType, { elements: (seed: number) => Ele
   farm: { elements: farm, points: farmPoints() },
 };
 
+/** A 3D model's named points (model space, metres), or undefined for a type drawn in 2D: tests hold its `door` to BuildingDef.door. */
+export function points3d(type: BuildingType): Record<string, Vec3> | undefined {
+  return GENERATORS[type]?.points;
+}
+
 let enabled = false;
 
 /** Draw buildings that have a generator in 3D (true) or keep everything 2D (false). */

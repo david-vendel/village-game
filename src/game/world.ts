@@ -11,20 +11,21 @@
 // stand (hired, let go, or done for the day), and goods only move in
 // someone's arms, from the place they lie to the place they will lie.
 
-import { BUILDINGS, BUILDING_TYPES, type BuildingType, type Role } from './buildings';
+import { BUILDINGS, BUILDING_TYPES, doorOf, type BuildingType, type Role } from './buildings';
 import { timeOfDay } from './daynight';
 import { buildShortfall, putAway, takeFromWarehouses, upgradeShortfall, WAREHOUSE_START } from './economy';
 import { createFarm, DEFAULT_WORK, farmWorkplace, updateCrops, type FarmState } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
-import { BLOCK, CELL_W, FIRST_PLOT_X, PLOT_SPACING, ROAD_GRID, STREET_LENGTH } from './layout';
-import { alongCell, blockStartX, footprintOf, onRoadGrid, roadBlocked, roadInWay, siteX, sizeOfBuilding, whyNotHere } from './grid';
+import { BASE_Y, BLOCK, CELL_W, FIRST_PLOT_X, FRONT_LIMIT, PLOT_SPACING, ROAD_GRID, STREET_BAND_HALF, STREET_LENGTH, yAt } from './layout';
+import { alongCell, blockStartX, footprintOf, landUse, onRoadGrid, roadBlocked, roadInWay, siteX, sizeOfBuilding, whyNotHere } from './grid';
 import { clearLand, plantWoods, gatherWorkplace, isGatherHut, updateForest, type Tree } from './nature';
 import { employees, laneY, nameFor, openings, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
 import { builderPositions, builders, createSite, siteWork, siteWorkplace, upgrading, type Site } from './site';
 import { demolitionWork, demolitionWorkplace, dropAll, materialsIn, tearDown, type Demolition } from './demolition';
 import { dropOnGround, type Pile } from './piles';
 import { RESOURCES, stockOf, type Stock } from './resources';
-import { CROSS_PLOT, mainStreet, newStreet, plotPoint, plotX, PLOTS_PER_STREET, route, STREET_END_RUN, streetOf, streetRange, streetsAt, streetStart, turnFacing, type Junction, type Street, type Vec } from './streets';
+import { CROSS_PLOT, fromStreet, groundPoint, mainStreet, newStreet, plotPoint, plotX, PLOTS_PER_STREET, STREET_END_RUN, streetOf, streetRange, streetsAt, streetStart, turnFacing, type Junction, type Street, type Vec } from './streets';
+import { findPath, terrainSpeed } from './paths';
 import { eatAtTaverns } from './tavern';
 import { serfPositions, transportHub, transportWorkplace } from './transport';
 import { createWorker, currentJob, offDuty, updateWorker, type Nav, type Worker, type Workplace } from './worker';
@@ -117,6 +118,8 @@ export interface Building {
   demolition?: Demolition;
   /** Fields — farms only, once finished. */
   farm?: FarmState;
+  /** A newly finished house's people still to come out of its door, one by one: how many, and the seconds until the next (moveIn). */
+  arriving?: { left: number; next: number };
 }
 
 export interface Rider {
@@ -247,7 +250,7 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
 
   if (opts.village ?? true) {
     for (const [x, type] of STARTING_VILLAGE) {
-      const b = placeBuilding(world, x, type, { instant: true, free: true });
+      const b = placeBuilding(world, x, type, { instant: true, free: true, settled: true });
       if (!b) continue;
       b.completedAt = -100; // no completion effect for the starting village
       if (type === 'warehouse') b.stock = { ...WAREHOUSE_START };
@@ -335,9 +338,11 @@ export function placeBuilding(
   type: BuildingType,
   /**
    * instant: skip construction (materials are taken from the warehouses at
-   * once); free: needs nothing from the warehouses (the starting village).
+   * once); free: needs nothing from the warehouses (the starting village);
+   * settled: a house nobody new moves into (the starting village's, whose
+   * people are there already).
    */
-  opts: { instant?: boolean; free?: boolean } = {},
+  opts: { instant?: boolean; free?: boolean; settled?: boolean } = {},
 ): Building | null {
   const x = placeAt(world, type, wantX);
   if (x === null || whyNotBuild(world, type, wantX)) return null;
@@ -359,6 +364,7 @@ export function placeBuilding(
   world.buildings.push(b);
   if (instant && type === 'farm') b.farm = createFarm({ spots: farmFieldSpots(world, b) });
   if (instant) b = mergeNeighbours(world, b);
+  if (instant && !opts.settled && type === 'house') moveIn(b);
   if (type === 'intersection') crossroadsPlot(world, x)!.buildingId = b.id;
   if (instant && type === 'intersection') openStreet(world, b);
   // the new footprint may cover land neighbouring farms were using; trees standing on it are cut down
@@ -581,6 +587,7 @@ function complete(world: World, b: Building): void {
   }
   if (b.type === 'farm') b.farm = createFarm({ spots: farmFieldSpots(world, b) });
   b = mergeNeighbours(world, b);
+  if (b.type === 'house') moveIn(b);
   if (b.type === 'intersection') {
     openStreet(world, b);
     syncFarmFields(world);
@@ -588,6 +595,36 @@ function complete(world: World, b: Building): void {
   // nothing grows on the farm's fields
   if (b.type === 'farm') clearLand(world);
   world.events.push({ kind: 'completed', buildingId: b.id });
+}
+
+/** People who move into the village when a house is finished: out of work and looking (Person.seeker), so they run errands as serfs. */
+export const HOUSE_RESIDENTS = 3;
+
+/** Seconds between one new villager stepping out of a house's door and the next. */
+const ARRIVAL_GAP = 1.6;
+
+/** A house is finished (on its own or as part of the one it merged into): its people are on their way out of the door. */
+function moveIn(b: Building): void {
+  b.arriving = { left: (b.arriving?.left ?? 0) + HOUSE_RESIDENTS, next: b.arriving?.next ?? 0.5 };
+}
+
+/** Houses let their new people out of the door one at a time; each walks down to the street and strolls it. */
+function arrive(world: World, dt: number): void {
+  for (const b of world.buildings) {
+    const a = b.arriving;
+    if (!a || b.status !== 'done') continue;
+    a.next -= dt;
+    if (a.next > 0) continue;
+    const id = world.nextId++;
+    const seed = Math.floor(rand(world) * 1e6);
+    const x = b.x + doorOf('house', b.size)!.dx;
+    const stroll = { x, y: BASE_Y + 1, dir: (rand(world) < 0.5 ? -1 : 1) as 1 | -1, speed: 26 + rand(world) * 18, idle: 0 };
+    const name = nameFor('peasant', seed, new Set(world.people.map((p) => p.name)));
+    world.people.push({ id, name, look: 'peasant', seed, job: null, stroll, seeker: true });
+    a.left--;
+    a.next = ARRIVAL_GAP;
+    if (a.left <= 0) delete b.arriving;
+  }
 }
 
 /** Buildings that grow by merging with their own kind beside them: up to three small ones in one (Building.size). */
@@ -627,6 +664,7 @@ export function mergeNeighbours(world: World, b: Building): Building {
     keep.size = size;
     keep.completedAt = world.time;
     for (const r of RESOURCES) keep.stock[r] += gone.stock[r];
+    if (gone.arriving) keep.arriving = { left: (keep.arriving?.left ?? 0) + gone.arriving.left, next: Math.min(keep.arriving?.next ?? Infinity, gone.arriving.next) };
     for (const p of employees(world, keep)) p.job!.worker.dx += oldX - keep.x;
     moveStaff(world, gone, keep);
     world.buildings = world.buildings.filter((x) => x !== gone);
@@ -897,6 +935,7 @@ export function update(world: World, dt: number, input: MoveInput): void {
   world.dayClock += dt * world.params.timeSpeed;
   eatAtTaverns(world, clockBefore);
   updateRider(world, dt, world.menu ? { left: false, right: false } : input);
+  arrive(world, dt);
   staff(world);
   for (const b of world.buildings) if (b.farm) updateCrops(b.farm, dt);
   updateForest(world, dt, () => rand(world));
@@ -942,12 +981,62 @@ function newWorker(world: World, b: Building, role: Role, who: Person): Worker {
   return w;
 }
 
+/** Each walking worker's way (paths.ts), kept while they walk to the same spot over the same land. */
+const ways = new WeakMap<Worker, { to: Vec; land: unknown; path: Vec[] }>();
+
+/** How far in front of a street's road a point can still be seen from it (map px): beyond, it is seen from another (layout.ts yAt). */
+const FRONT_REACH = FRONT_LIMIT - 5;
+
+/** Walking the land from a workplace at world x (worker.ts Nav). */
+function navFrom(world: World, x: number): Nav {
+  return {
+    toMap: (dx, y) => groundPoint(world, x + dx, y),
+    fromMap(p, nearDx) {
+      // seen from the street they are on, unless another runs nearer (or this one can't see it)
+      const seen = (i: number) => {
+        const s = world.streets[i];
+        if (!s || s.gone) return null;
+        const r = fromStreet(world, i, p);
+        const t = r.x - streetStart(i);
+        return t >= 0 && t < STREET_LENGTH && r.d > -FRONT_REACH ? r : null;
+      };
+      const here = streetOf(x + nearDx);
+      let best = seen(here);
+      for (const s of world.streets) {
+        if (s.index === here) continue;
+        const r = seen(s.index);
+        if (r && (!best || Math.abs(r.d) + STREET_BAND_HALF < Math.abs(best.d))) best = r;
+      }
+      if (!best) {
+        // nowhere better: from this street, as near in front of it as it can see
+        const r = fromStreet(world, here, p);
+        best = { x: r.x, d: Math.max(r.d, -FRONT_REACH) };
+      }
+      return { dx: best.x - x, y: yAt(best.d) };
+    },
+    next(w, from, to) {
+      const land = landUse(world);
+      let way = ways.get(w);
+      if (!way || way.land !== land || Math.hypot(way.to.x - to.x, way.to.y - to.y) > 1) {
+        way = { to, land, path: findPath(world, from, to) };
+        ways.set(w, way);
+      }
+      // the corners already reached are behind them
+      while (way.path.length > 1 && Math.hypot(way.path[0].x - from.x, way.path[0].y - from.y) < 1e-6) way.path.shift();
+      // the spot moved a little (a pile grew): the last leg goes to where it is now
+      if (way.path.length === 1) way.path[0] = to;
+      return way.path[0];
+    },
+    speedAt: (p) => terrainSpeed(world, p),
+  };
+}
+
 function updateWorkers(world: World, dt: number): void {
   const now = timeOfDay(world);
   for (const b of world.buildings) {
     const people = employees(world, b);
     if (!people.length) continue;
-    const nav: Nav = { x: b.x, route: (from, to) => route(world, from, to) };
+    const nav = navFrom(world, b.x);
     // each role at the building works at its own workplace, alongside the others in that role
     const places = new Map<Role, Workplace | null>();
     for (const p of people) {

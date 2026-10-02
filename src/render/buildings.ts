@@ -2,9 +2,9 @@
 // a sunlit front face, a shaded side face receding up-right, and a pitched
 // roof. The sun is to the left, so right-hand faces are in shadow.
 
-import type { BuildingType } from '../game/buildings';
+import { doorOf, type BuildingType } from '../game/buildings';
 import type { FarmState } from '../game/farm';
-import { BAKERY_OVEN_MOUTH_DX, BAKERY_SLOTS, BASKET, MILL_SLOTS, PILE_UNIT, SACK, pileItems, STONECUTTER_DOOR, STONECUTTER_SLOTS, TAVERN_SLOTS, warehouseSlot, WOODCUTTER_DOOR, WOODCUTTER_SLOTS, YARD_ITEMS, type Slot } from '../game/layout';
+import { BAKERY_OVEN_MOUTH_DX, BAKERY_SLOTS, BASKET, MILL_SLOTS, PILE_UNIT, SACK, pileItems, STONECUTTER_SLOTS, TAVERN_SLOTS, warehouseSlot, WOODCUTTER_SLOTS, YARD_ITEMS, type Slot } from '../game/layout';
 import type { Amounts, Stock } from '../game/resources';
 import type { Worker } from '../game/worker';
 import { breadBasket, doorProgress, drawBackFences, drawBackField, drawFrontField, drawStore, stook } from './farm';
@@ -35,6 +35,8 @@ export interface DrawArgs {
   onSite?: Amounts;
   /** Under construction: materials laid down at each work spot (dx from the centre), not yet built in. */
   laid?: Array<{ dx: number; amounts: Amounts }>;
+  /** Its door stands open (a new house's people coming out of it). */
+  doorOpen?: boolean;
   /** The chapel bell's swing angle (daynight.ts chapelBell); at rest without it. */
   bell?: number;
   /** Ground-perspective vanishing point x (see ground.ts); defaults to `x`. */
@@ -228,6 +230,14 @@ function occupiedWindow(ctx: Ctx, x: number, y: number, w: number, h: number, wh
   line(ctx, x, y + h / 2, x + w, y + h / 2, '#5a4331', 1.5);
 }
 
+/**
+ * Screen x of the middle of a building's door: where the game has it
+ * (BuildingDef.door), so people come and go through the door that is drawn.
+ */
+function doorX(a: DrawArgs, type: BuildingType, size: 1 | 2 | 3 = 1): number {
+  return a.x + doorOf(type, size)!.dx;
+}
+
 function door(ctx: Ctx, x: number, base: number, w: number, h: number, wood = '#6b4a2c'): void {
   ctx.fillStyle = '#3a2a1c';
   ctx.beginPath();
@@ -347,6 +357,9 @@ function drawHouse(ctx: Ctx, a: DrawArgs): void {
   const plaster = PLASTER[Math.floor(hash(a.seed, 1) * PLASTER.length)];
   const twoStorey = hash(a.seed, 2) < 0.55;
   const thatch = hash(a.seed, 3) < 0.5;
+  // the door where the game lets new villagers out (game/layout.ts), from the front's left corner
+  const doorU = doorX(a, 'house', Math.min(3, size) as 1 | 2 | 3) - x0 - 10;
+  const doorWood = a.doorOpen ? '#1c140d' : undefined;
   /** Windows evenly along the front from u0 to u1 (px from x0), at height y. */
   const windows = (u0: number, u1: number, y: number, s: number, salt: number) => {
     const n = Math.max(0, Math.floor((u1 - u0 + 16) / 44));
@@ -367,14 +380,18 @@ function drawHouse(ctx: Ctx, a: DrawArgs): void {
     timberFrame(ctx, x0 - jetty, g - 34, w + jetty * 2, 40, a.seed);
     rect(ctx, x0 - jetty, g - 36, w + jetty * 2, 4, '#3a281b');
     top = g - 74;
-    door(ctx, x0 + 15, a.base, 20, 36);
-    windows(52, w - 18, g - 26, 15, 5);
+    door(ctx, x0 + doorU, a.base, 20, 36, doorWood);
+    if (size === 1) windows(38, 38, g - 26, 15, 5);
+    else {
+      windows(18, doorU - 14, g - 26, 15, 5);
+      windows(doorU + 34, w - 18, g - 26, 15, 7);
+    }
     windows(18, w - 18, g - 64, 14, 9);
   } else {
     block(ctx, x0, a.base - 14, w, 48, d, plaster);
     timberFrame(ctx, x0, a.base - 14, w, 48, a.seed);
     top = a.base - 62;
-    door(ctx, x0 + (size === 1 ? 6 : w / 2 - 10), a.base, 20, 40);
+    door(ctx, x0 + doorU, a.base, 20, 40, doorWood);
     if (size === 1) windows(38, 38, a.base - 50, 14, 5);
     else {
       windows(18, w / 2 - 24, a.base - 50, 16, 5);
@@ -399,7 +416,7 @@ function drawFarmFrontField(ctx: Ctx, a: DrawArgs): void {
 }
 
 /** Farmhouse points, from the anchor: its door (bottom centre), and where each room's sleeper snores. */
-const FARM_POINTS: Record<string, [number, number]> = { door: [-19, 0], 'sleep:0': [-34, -70], 'sleep:1': [10, -70] };
+const FARM_POINTS: Record<string, [number, number]> = { door: [doorOf('farm')!.dx, 0], 'sleep:0': [-34, -70], 'sleep:1': [10, -70] };
 
 /** Small cottage with a lean-to barn: the static picture. */
 function farmBody(ctx: Ctx, a: DrawArgs): void {
@@ -409,7 +426,7 @@ function farmBody(ctx: Ctx, a: DrawArgs): void {
   stonePlinth(ctx, x0, a.base, w, 10, d);
   block(ctx, x0, a.base - 10, w, 38, d, '#ead9b4');
   timberFrame(ctx, x0, a.base - 10, w, 38, a.seed + 3);
-  door(ctx, x0 + 30, a.base, 18, 34);
+  door(ctx, doorX(a, 'farm') - 9, a.base, 18, 34);
   window_(ctx, x0 + 8, a.base - 40, 13, 13, true, a.time, a.seed);
   // upgraded: a second room on the other side of the door, for a second farmer
   if (a.upgraded) window_(ctx, x0 + 59, a.base - 40, 13, 13, true, a.time, a.seed + 1);
@@ -608,7 +625,7 @@ function drawBakery(ctx: Ctx, a: DrawArgs): void {
   block(ctx, x0, a.base - 12, w, 40, d, '#e9d6b0');
   timberFrame(ctx, x0, a.base - 12, w, 40, a.seed + 5);
   const doorOpen = (a.workers ?? []).some((w) => doorProgress(w) > 0 && doorProgress(w) < 1);
-  door(ctx, x0 + 36, a.base, 20, 34, doorOpen ? '#1c140d' : '#6b4a2c');
+  door(ctx, doorX(a, 'bakery') - 10, a.base, 20, 34, doorOpen ? '#1c140d' : '#6b4a2c');
   window_(ctx, x0 + 10, a.base - 42, 14, 14, true, a.time, a.seed);
   window_(ctx, x0 + 66, a.base - 42, 14, 14, true, a.time, a.seed + 2);
   const r = gableRoof(ctx, x0, a.base - 52, w, d, 42, '#a4553a', '#e9d6b0', 'tile', a.seed);
@@ -661,7 +678,7 @@ function drawMill(ctx: Ctx, a: DrawArgs): void {
   ellipse(ctx, cx + 10, a.base + 1, 52, 5, '#2c2416');
   ctx.globalAlpha = 1;
   const doorOpen = (a.workers ?? []).some((w) => doorProgress(w) > 0 && doorProgress(w) < 1);
-  door(ctx, cx - 10, a.base, 20, 34, doorOpen ? '#1c140d' : undefined);
+  door(ctx, doorX(a, 'mill') - 10, a.base, 20, 34, doorOpen ? '#1c140d' : undefined);
   // the miller upstairs at the millstones, seen at the window
   const miller = atWindow(a);
   if (miller) occupiedWindow(ctx, cx - 8, a.base - 82, 14, 16, miller, a.time, a.seed);
@@ -857,7 +874,7 @@ function drawChapel(ctx: Ctx, a: DrawArgs): void {
   ctx.globalAlpha = 0.14;
   for (let y = a.base - th + 6; y < a.base; y += 7) rect(ctx, tx, y, tw, 1, '#5a5046');
   ctx.globalAlpha = 1;
-  door(ctx, tx + 10, a.base, 20, 40, '#5e3d24');
+  door(ctx, doorX(a, 'chapel') - 10, a.base, 20, 40, '#5e3d24');
   // belfry opening with a swinging bell
   ctx.fillStyle = '#2e2622';
   ctx.beginPath();
@@ -897,7 +914,7 @@ function drawTavern(ctx: Ctx, a: DrawArgs): void {
   block(ctx, x0 - j, a.base - 56, w + j * 2, 46, d, '#ecdcb8');
   timberFrame(ctx, x0 - j, a.base - 56, w + j * 2, 46, a.seed + 11);
   rect(ctx, x0 - j, a.base - 58, w + j * 2, 4, '#3a281b');
-  door(ctx, x0 + 52, a.base, 24, 40, '#6b3f22');
+  door(ctx, doorX(a, 'tavern') - 12, a.base, 24, 40, '#6b3f22');
   window_(ctx, x0 + 12, a.base - 42, 22, 16, true, a.time, a.seed);
   window_(ctx, x0 + 90, a.base - 42, 22, 16, true, a.time, a.seed + 3);
   window_(ctx, x0 + 14, a.base - 92, 16, 16, true, a.time, a.seed + 5);
@@ -1039,9 +1056,9 @@ function atHome(a: DrawArgs): { doorOpen: boolean; asleep: boolean } {
   };
 }
 
-/** A door at dx from the centre, open while someone steps through it. */
-function hutDoor(ctx: Ctx, a: DrawArgs, dx: number, open: boolean, wood: string): void {
-  const x = a.x + dx - 8;
+/** A hut's door, open while someone steps through it. */
+function hutDoor(ctx: Ctx, a: DrawArgs, type: BuildingType, open: boolean, wood: string): void {
+  const x = doorX(a, type) - 8;
   door(ctx, x, a.base, 16, 30, open ? '#1c140d' : wood);
   if (open) rect(ctx, x - 4, a.base - 27, 4, 27, wood); // the door leaf, swung open
 }
@@ -1059,7 +1076,7 @@ function drawWoodcutter(ctx: Ctx, a: DrawArgs): void {
     circle(ctx, x0 + 1, y - 3, 2.6, '#c9a577');
   }
   const { doorOpen, asleep } = atHome(a);
-  hutDoor(ctx, a, WOODCUTTER_DOOR.dx, doorOpen, '#5a3d24');
+  hutDoor(ctx, a, 'woodcutter', doorOpen, '#5a3d24');
   window_(ctx, x0 + 46, a.base - 26, 12, 11, hash(a.seed, 5) < 0.7, a.time, a.seed);
   const r = gableRoof(ctx, x0, a.base - h, w, d, 30, '#7a5a3a', '#8b6440', 'tile', a.seed);
   chimney(ctx, r.ridgeX1 + w * 0.25, r.ridgeY + 6, 14, a, 0.6);
@@ -1098,7 +1115,7 @@ function drawStonecutter(ctx: Ctx, a: DrawArgs): void {
   }
   ctx.globalAlpha = 1;
   const { doorOpen, asleep } = atHome(a);
-  hutDoor(ctx, a, STONECUTTER_DOOR.dx, doorOpen, '#6b4a2c');
+  hutDoor(ctx, a, 'stonecutter', doorOpen, '#6b4a2c');
   window_(ctx, x0 + 45, a.base - 26, 12, 11, hash(a.seed, 5) < 0.7, a.time, a.seed);
   gableRoof(ctx, x0, a.base - h, w, d, 28, '#5f646e', '#b8ab94', 'slate', a.seed);
   // the mason's bench with a block on it, mallet and chisel beside

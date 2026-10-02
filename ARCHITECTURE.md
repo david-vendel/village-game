@@ -72,6 +72,7 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
 | Give a building workers | its `jobs` in `game/buildings.ts`, a `Workplace` for it (like `farmWorkplace`) returned by `workplaceOf` in `game/world.ts`, and a look for the worker in `render/` |
 | Change timings, speeds, rules (build times, grow time, store size, rider speed) | `game/buildings.ts`, `game/world.ts`, `game/farm.ts` |
 | Change the working day (lunch, sleep, doors) | `game/worker.ts` |
+| Change how people find their way, or walking speeds on each ground | `game/paths.ts` |
 | Change what farmers do, or the crop cycle | `game/farm.ts` |
 | Add a new mechanic | new module in `src/game` + tests, a state field for anything visible, then draw it in `src/render` |
 | Move where things stand (plots, farmyard, store, road) | `game/layout.ts` |
@@ -163,9 +164,13 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   in clumps behind the streets and a little in front, never on a road, a building's lot, a field or a
   quarry, nor crowding each other; each keeps its place as a world x along a street and a depth y.
   Land that gets taken (a building, a farm's fields, a new road) is cleared (`clearLand`). Saplings
-  sprout mostly near grown trees. A woodcutter walks out to the nearest grown tree in reach (along the
-  streets, then across the land) and fells it; a stonecutter cuts at the face of the nearest quarry.
-  Workers walk at real ground speed: depth y is turned into ground px for every step (`worker.ts`).
+  sprout mostly near grown trees. A woodcutter walks out to the nearest grown tree in reach and fells it; a stonecutter cuts at the face of the nearest quarry.
+  Workers walk at real ground speed, the fastest way across the land (`paths.ts`, walked by `worker.ts`):
+  never through a building but the one they set out from or are going to, faster on roads (×1.2) than
+  on grass (×1), slower through fields (×0.8); to another street too, straight across the land.
+- Every building type says where its door is (`BuildingDef.door`, or null for none): the 2D art draws it
+  there, a 3D model's and a sprite's `door` point must match it (tests/doors.test.ts, the asset
+  validator), and people go in and out there (workplaces, a new house's villagers).
 - `streets.ts`: the street network. A crossroads (the `intersection` building, 10 wood) opens a
   new street across its own at right angles. Crossroads go only where their road runs down a line
   of the road grid (`ROAD_GRID` in `layout.ts`, `onRoadGrid` in `grid.ts`): squares 27 cells
@@ -184,8 +189,8 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   keeps that end off any road it doesn't meet, with a cell of grass between (`planStreet`); a
   crossroads whose road can't keep off one that way can't be built. Plots past a street's ends are `off`. So streets close into loops. `Junction`s are where
   streets meet; `route` is the shortest way between two x's through them (to the corner, then on
-  from the same spot on the next street; `worker.ts` walks it) and `streetDist` the walking distance
-  every "nearest" is measured by. Each street is seen from its right-hand side, so its lots lie to
+  from the same spot on the next street) and `streetDist` the distance
+  every "nearest" is measured by (people themselves walk the land: `paths.ts`). Each street is seen from its right-hand side, so its lots lie to
   its left (`backOf`) and a new street runs off into what lay behind the old one. The rider turns at
   a crossroads (`turnAtCrossroads`): ↑ onto the road away from the viewer, ↓ towards them. A new
   street gets its own woods; trees are cut where roads run off, and no field is sown across one.
