@@ -3,7 +3,7 @@
 // so a setting survives a reload and can be sent as a link. Same pattern as
 // ../hollow.
 
-import { DEFAULT_LENS, setLens } from '../render';
+import { DEFAULT_EASE, DEFAULT_LENS, setLens, setLensEase } from '../render';
 import { DAY_LENGTH } from '../game/daynight';
 import { DEFAULT_PARAMS, type World, type WorldParams } from '../game/world';
 import { makeCollapsible } from './panel';
@@ -60,6 +60,7 @@ export interface DisplayOptions {
 
 export function installTuning(world: World, sound: Sound): DisplayOptions {
   let lensNow = DEFAULT_LENS;
+  let easeNow = DEFAULT_EASE;
   const knobs: Knob[] = [
     ...WORLD_KNOBS.map(({ key, ...k }) => ({
       ...k,
@@ -82,6 +83,20 @@ export function installTuning(world: World, sound: Sound): DisplayOptions {
         setLens(v);
       },
       render: (v) => `far depth ${v.toFixed(2)}×`,
+    },
+    {
+      // how soon behind the street the far depth takes hold (map px; render/lens.ts)
+      param: 'ease',
+      min: 50,
+      max: 1000,
+      step: 25,
+      def: DEFAULT_EASE,
+      get: () => easeNow,
+      set: (v) => {
+        easeNow = v;
+        setLensEase(v);
+      },
+      render: (v) => `depth ease ${v} px`,
     },
     {
       param: 'vol',
