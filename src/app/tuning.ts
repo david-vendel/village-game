@@ -3,7 +3,7 @@
 // so a setting survives a reload and can be sent as a link. Same pattern as
 // ../hollow.
 
-import { setCameraDistance } from '../render';
+import { GAME_EYE_HEIGHT, setCameraDistance, setCameraHeight } from '../render';
 import { EYE_DIST } from '../game/layout';
 import { DAY_LENGTH } from '../game/daynight';
 import { DEFAULT_PARAMS, type World, type WorldParams } from '../game/world';
@@ -64,6 +64,7 @@ const CAMERA_DEFAULT = 600;
 
 export function installTuning(world: World, sound: Sound): DisplayOptions {
   let cameraNow = CAMERA_DEFAULT;
+  let heightNow = GAME_EYE_HEIGHT;
   const knobs: Knob[] = [
     ...WORLD_KNOBS.map(({ key, ...k }) => ({
       ...k,
@@ -87,6 +88,21 @@ export function installTuning(world: World, sound: Sound): DisplayOptions {
         setCameraDistance(v);
       },
       render: (v) => `camera ${v} px back`,
+    },
+    {
+      // how high the drawing camera stands (render/ground.ts): higher looks down more steeply, the
+      // horizon moves up and the street you ride along is drawn wider. Drawing only
+      param: 'camh',
+      min: Math.round(GAME_EYE_HEIGHT * 0.75),
+      max: Math.round(GAME_EYE_HEIGHT * 3),
+      step: 4,
+      def: GAME_EYE_HEIGHT,
+      get: () => heightNow,
+      set: (v) => {
+        heightNow = v;
+        setCameraHeight(v);
+      },
+      render: (v) => `camera height ${(v / 20).toFixed(1)} m`,
     },
     {
       param: 'vol',

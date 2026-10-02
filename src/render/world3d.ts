@@ -15,18 +15,15 @@
 
 import * as THREE from 'three';
 import type { BuildingType } from '../game/buildings';
-import { BASE_Y, HORIZON_Y } from '../game/layout';
 import type { ConstructionStage } from '../game/world';
 import type { Element, Vec3 } from './build3d/elements';
 import { farm, farmPoints } from './build3d/farm';
 import { type Look as MeshLook, mergedByMaterial } from './build3d/geometry';
-import { cameraDistance } from './ground';
+import { cameraDistance, cameraHeight, viewHorizon } from './ground';
 import type { Ctx } from './util';
 
 /** Units per metre (ASSET_SPEC §1): models are in metres, the game in world units. */
 const U = 20;
-/** The camera's height above the ground: the span from the horizon to the building line, seen EYE_DIST away. */
-const EYE_H = BASE_Y - HORIZON_Y;
 
 /** What can be built in 3D: its pieces for a seed, and its named points (model space, metres). */
 const GENERATORS: Partial<Record<BuildingType, { elements: (seed: number) => Element[]; points: Record<string, Vec3> }>> = {
@@ -242,7 +239,7 @@ function project(p: THREE.Vector3, v: View3d): [number, number] {
   const cx = v.camX + v.viewW / 2;
   const cam = cameraDistance();
   const z = cam - p.z;
-  return [v.viewW / 2 + ((p.x - cx) * cam) / z, HORIZON_Y + ((EYE_H - p.y) * cam) / z];
+  return [v.viewW / 2 + ((p.x - cx) * cam) / z, viewHorizon() + ((cameraHeight() - p.y) * cam) / z];
 }
 
 /**
@@ -262,15 +259,15 @@ export function draw3d(ctx: Ctx, buildings: Building3d[], v: View3d): Map<number
   // the game's camera: at the middle of the view, EYE_DIST in front of the building line, looking level
   const cx = v.camX + v.viewW / 2;
   const cam = cameraDistance();
-  camera.matrixWorld.makeTranslation(cx, EYE_H, cam);
+  camera.matrixWorld.makeTranslation(cx, cameraHeight(), cam);
   camera.matrixWorldInverse.copy(camera.matrixWorld).invert();
   const near = 20;
   const f = cam;
   camera.projectionMatrix.makePerspective(
     (near * (0 - v.viewW / 2)) / f,
     (near * (v.viewW - v.viewW / 2)) / f,
-    (near * (HORIZON_Y - v.top)) / f,
-    (near * (HORIZON_Y - v.bottom)) / f,
+    (near * (viewHorizon() - v.top)) / f,
+    (near * (viewHorizon() - v.bottom)) / f,
     near,
     30000,
   );

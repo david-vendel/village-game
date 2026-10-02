@@ -6,7 +6,7 @@
 
 import { LANE_YS, ROAD_FAR_Y, ROAD_NEAR_Y } from '../game/layout';
 import { SIDE_ROAD_HALF } from '../game/streets';
-import { depthScale, groundTiles, groundX, HORIZON_Y, unviewY, viewY } from './ground';
+import { depthScale, groundTiles, groundX, horizonShift, HORIZON_Y, unviewY, viewY } from './ground';
 import { circle, type Ctx, ellipse, hash, mix, poly, rect, shade, smoke, VIEW_H } from './util';
 
 const HAZE = '#dcc9ad';
@@ -30,11 +30,15 @@ export interface View {
 
 /** The land, far to near. The sky goes behind it afterwards (sky.ts). */
 export function drawBackground(ctx: Ctx, v: View): void {
+  // the backdrop hangs off the horizon, which the drawing camera's height moves (ground.ts)
+  ctx.save();
+  ctx.translate(0, horizonShift());
   drawMountains(ctx, v);
   drawCastleHills(ctx, v);
   drawFarHills(ctx, v);
   drawBirds(ctx, v);
   drawPlane(ctx, v);
+  ctx.restore();
   drawStreetGround(ctx, v);
 }
 
@@ -150,17 +154,21 @@ function drawPlane(ctx: Ctx, v: View): void {
   g.addColorStop(0.7, '#879a4c');
   g.addColorStop(1, '#7f9148');
   ctx.fillStyle = g;
-  ctx.fillRect(-10, HORIZON_Y - 1, v.width + 20, 442 - HORIZON_Y);
+  // on down past the street, whatever the horizon's shift (the street's own ground is drawn over it)
+  ctx.fillRect(-10, HORIZON_Y - 1, v.width + 20, Math.max(VIEW_H, v.bottom) - horizonShift() - HORIZON_Y + 2);
 }
 
 /** Haze over everything far off: thickest at the horizon. */
 export function drawHaze(ctx: Ctx, v: View): void {
+  ctx.save();
+  ctx.translate(0, horizonShift());
   const g = ctx.createLinearGradient(0, HORIZON_Y, 0, 400);
   g.addColorStop(0, 'rgba(220,201,173,0.75)');
   g.addColorStop(0.35, 'rgba(220,201,173,0.3)');
   g.addColorStop(1, 'rgba(220,201,173,0)');
   ctx.fillStyle = g;
   ctx.fillRect(-10, HORIZON_Y - 1, v.width + 20, 400 - HORIZON_Y);
+  ctx.restore();
 }
 
 function drawStreetGround(ctx: Ctx, v: View): void {

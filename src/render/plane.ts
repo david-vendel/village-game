@@ -27,7 +27,7 @@ import { figureOf } from './figure';
 import { GROUND_REF_Y, HORIZON_Y } from './ground';
 import { beingFelled, drawQuarry, drawTreeAt } from './nature';
 import { drawVillager, walker } from './people';
-import { cameraDistance } from './ground';
+import { cameraDistance, cameraHeight, viewHorizon } from './ground';
 import { type Ctx, mix } from './util';
 
 const SPAN = GROUND_REF_Y - HORIZON_Y;
@@ -76,7 +76,7 @@ function toEye(eye: Eye, p: Vec): { u: number; z: number } {
 function project(eye: Eye, u: number, z: number): { x: number; y: number; s: number } {
   const cam = cameraDistance();
   const s = cam / (z + cam - EYE_DIST);
-  return { x: eye.vpX + u * s, y: HORIZON_Y + SPAN * s, s };
+  return { x: eye.vpX + u * s, y: viewHorizon() + cameraHeight() * s, s };
 }
 
 /** A shape lying on the ground (map points), cut off where it comes nearer than the near cut-off. */

@@ -40,6 +40,33 @@ export function cameraDistance(): number {
   return cameraDist;
 }
 
+/**
+ * The drawing camera's height above the ground (world units): the panel's "camera height". The
+ * game's own camera stands SPAN up (the horizon at HORIZON_Y). Higher looks down more steeply:
+ * the horizon (and the backdrop with it) moves up the screen, the street you ride along is less
+ * foreshortened. The building line keeps its place and true width.
+ */
+let eyeHeight = SPAN;
+export const GAME_EYE_HEIGHT = SPAN;
+
+export function setCameraHeight(h: number): void {
+  eyeHeight = Math.min(SPAN * 4, Math.max(SPAN * 0.5, h));
+}
+
+export function cameraHeight(): number {
+  return eyeHeight;
+}
+
+/** Screen y (world units) of the drawn horizon. */
+export function viewHorizon(): number {
+  return GROUND_REF_Y - eyeHeight;
+}
+
+/** How far the drawn horizon is above the game's (HORIZON_Y): the backdrop and the sky move by it. */
+export function horizonShift(): number {
+  return viewHorizon() - HORIZON_Y;
+}
+
 /** Distance on the ground from the game's camera of depth y (world y): what the game means by y. */
 const gameDist = (y: number) => (EYE_DIST * SPAN) / (y - HORIZON_Y);
 
@@ -50,12 +77,12 @@ export function depthScale(y: number): number {
 
 /** Screen y (in world units) at which ground at depth y is drawn. */
 export function viewY(y: number): number {
-  return HORIZON_Y + SPAN * depthScale(y);
+  return viewHorizon() + eyeHeight * depthScale(y);
 }
 
 /** The depth (world y) drawn at screen y: viewY undone. */
 export function unviewY(screenY: number): number {
-  const scale = (screenY - HORIZON_Y) / SPAN;
+  const scale = (screenY - viewHorizon()) / eyeHeight;
   const dist = cameraDist / scale - (cameraDist - EYE_DIST);
   return HORIZON_Y + (EYE_DIST * SPAN) / dist;
 }
