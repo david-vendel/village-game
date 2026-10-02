@@ -1,0 +1,15 @@
+[
+  { "commit": "39db68e", "date": "2026-10-01", "title": "Original 2D", "note": "Everything drawn by code (Canvas 2D): buildings, people, horse, fields, sky." },
+  { "commit": "53a05a9", "date": "2026-10-01", "title": "Sprite art support", "note": "Buildings can come from picture files, the code drawing as fallback; lit windows at night. Looks like the original until art exists." },
+  { "commit": "5a0f8c5", "date": "2026-10-01", "title": "Blender farm (2D)", "note": "The farm built as a 3D model and rendered by Blender into game pictures (the 10 m farm)." },
+  { "commit": "3abb9b7", "date": "2026-10-01", "title": "Real-time 3D prototype", "note": "The farm drawn live in 3D through the game's camera; sides show as you ride past; the sun moves, shadows fade at sunset." },
+  { "commit": "ba1734e", "date": "2026-10-02", "title": "Game builds the farm", "note": "The 3D farm generated in the game, about 9 meshes, every farm a little different; no model file." },
+  { "commit": "f64ea67", "date": "2026-10-02", "title": "2D · 3D switch, merged", "note": "Merged with the cell-grid game; a 2D · 3D button by the zoom keys (or V)." },
+  { "commit": "c76d10a", "date": "2026-10-02", "title": "Farm fits its plot", "note": "The farm lower and wider on its 6 × 3 plot; 2D mode shows the Blender farm." },
+  { "commit": "008fbf6", "date": "2026-10-02", "title": "One drawing camera", "note": "The picture drawn through a camera further back (the camera slider): depth no longer stretched." },
+  { "commit": "b4899da", "date": "2026-10-02", "title": "Camera height", "note": "A camera height slider: a more top-down view, the road wider, the horizon higher." },
+  { "commit": "d855b5b", "date": "2026-10-02", "title": "Faster at 4K", "note": "Hidden fills of the hills removed: about 41 to 70 fps at 3840×2160." },
+  { "commit": "523c817", "date": "2026-10-02", "title": "Other streets' farms in 3D", "note": "Farms on other streets drawn in 3D at their true place, facing their own street." },
+  { "commit": "de746b8", "date": "2026-10-02", "title": "Crops on other streets", "note": "Other streets' fields grow real crops; their 3D buildings sort by distance (a well behind a farm is hidden)." },
+  { "commit": "c400b88", "date": "2026-10-02", "title": "Near buildings sort right", "note": "A building between camera and road covers the rider correctly; near crops capped in size." }
+]

@@ -9,6 +9,7 @@ import { createScreen } from './app/screen';
 import { createSound } from './app/sound';
 import { installTuning } from './app/tuning';
 import { installWorkersPanel } from './app/workers';
+import { installVersionsPanel, requestedVersion, showVersion } from './app/versions';
 import { update, type World } from './game/world';
 import { sizePanelButtons } from './app/panel';
 import { type ArtMode, cameraX, HUD_BUTTON, loadArt, renderFrame, showArtPreview, type Toast } from './render';
@@ -17,7 +18,10 @@ import { type ArtMode, cameraX, HUD_BUTTON, loadArt, renderFrame, showArtPreview
 const artParam = new URLSearchParams(location.search).get('art');
 const art: ArtMode = artParam === 'procedural' || artParam === 'preview' ? artParam : 'auto';
 await loadArt({ mode: art, approvedOnly: import.meta.env.PROD });
-if (art === 'preview') showArtPreview();
+// ?v=<commit>: the game as it was at a major graphics commit (the Versions panel, bottom left)
+const version = requestedVersion();
+if (version) showVersion(version);
+else if (art === 'preview') showArtPreview();
 else await play();
 
 async function play(): Promise<void> {
@@ -43,6 +47,7 @@ async function play(): Promise<void> {
   });
   const display = installTuning(world, sound);
   installWorkersPanel(world);
+  installVersionsPanel(null);
   if (restored) notify('Welcome back to your village');
 
   let camX = cameraX(world, screen.vp.viewW);

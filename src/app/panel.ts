@@ -30,7 +30,7 @@ const remember = (key: string, open: boolean) => {
  * Make a fixed side panel collapsible. `root` is the positioned panel, `content`
  * everything inside it; the toggle button goes at the top of `root`.
  */
-export function makeCollapsible(root: HTMLElement, content: HTMLElement, side: 'left' | 'right', key: string): void {
+export function makeCollapsible(root: HTMLElement, content: HTMLElement, side: 'left' | 'right', key: string, startOpen = true): void {
   const expanded = root.style.cssText;
   const button = document.createElement('button');
   button.style.cssText =
@@ -53,7 +53,7 @@ export function makeCollapsible(root: HTMLElement, content: HTMLElement, side: '
     set(content.style.display === 'none');
     button.blur(); // hand the keys back to the game
   });
-  set(remembered(key) ?? true);
+  set(remembered(key) ?? startOpen);
 }
 
 let buttonPx = 0;
