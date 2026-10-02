@@ -22,7 +22,7 @@ import { drawCrossroadsSign, type DrawArgs } from './buildings';
 import type { ViewId } from './manifest';
 import { drawBuilding } from './sprites';
 import { drawConstruction, drawDemolition, drawUpgrade } from './construction';
-import { drawWorker, farmerScale } from './farm';
+import { cropRowAt, drawWorker, farmerScale } from './farm';
 import { figureOf } from './figure';
 import { GROUND_REF_Y, HORIZON_Y } from './ground';
 import { beingFelled, drawQuarry, drawTreeAt } from './nature';
@@ -39,6 +39,8 @@ const ROAD_DIST = distAt(STREET_LINE_Y);
 const NEAR_DRAWN = 150;
 /** The same cut-off in the game's distances (z): the drawing camera may stand further back (ground.ts). */
 const nearZ = () => NEAR_DRAWN - (cameraDistance() - EYE_DIST);
+/** Crops on other streets' fields are drawn while they come out at least this big; smaller, the field's colour stands for them. */
+const CROP_MIN_SCALE = 0.12;
 /** Things this far off are too small to make out. */
 const FAR = 9000;
 /** Pictures further than this are behind the tree line of the street being looked at… */
@@ -136,7 +138,10 @@ export function drawOtherGround(ctx: Ctx, world: World, eye: Eye): void {
       const row = FIELD_ROWS[p.zone][p.row];
       const x0 = x + p.dx - p.width / 2 + 2;
       const x1 = x + p.dx + p.width / 2 - 2;
-      const fill = p.state === 'ripe' ? '#d4b24c' : p.state === 'growing' ? mix('#8a7048', '#7f9a44', Math.min(1, p.age / 90)) : '#8a6a44';
+      // near enough for its crop to be drawn (standingOn), the field is tilled soil under it; far off, its colour
+      const mid = toEye(eye, ground(world, x + p.dx, (row.far + row.near) / 2));
+      const cropsDrawn = p.state !== 'fallow' && project(eye, mid.u, Math.max(mid.z, 1)).s >= CROP_MIN_SCALE;
+      const fill = cropsDrawn ? '#6f5234' : p.state === 'ripe' ? '#d4b24c' : p.state === 'growing' ? mix('#8a7048', '#7f9a44', Math.min(1, p.age / 90)) : '#8a6a44';
       shapes.push({ pts: [ground(world, x0, row.far), ground(world, x1, row.far), ground(world, x1, row.near), ground(world, x0, row.near)], fill });
     }
   }
@@ -248,6 +253,38 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
       else if (b.status === 'done') drawBuilding(ctx, b.type, a, view);
       else drawConstruction(ctx, b.type, a, b.progress);
     });
+  }
+  // the crops on other streets' fields, row by row, among everything else by distance
+  for (const b of world.buildings) {
+    if (!b.farm || !elsewhere(b.x)) continue;
+    for (const p of b.farm.plots) {
+      if (!p.tilled || p.state === 'fallow') continue;
+      const { far, near } = FIELD_ROWS[p.zone][p.row];
+      const rows = 4;
+      for (let r = 0; r < rows; r++) {
+        const y = far + ((near - far) * (r + 0.5)) / rows;
+        const m = toEye(eye, ground(world, b.x + p.dx, y));
+        if (m.z < NEAR_DRAWN || m.z > FAR) continue;
+        const q = project(eye, m.u, m.z);
+        if (q.s < CROP_MIN_SCALE || q.x + p.width * q.s < 0 || q.x - p.width * q.s > eye.viewW) continue;
+        out.push({
+          z: m.z,
+          y: q.y,
+          draw: () => {
+            // thinner far off: stalks a similar distance apart on screen
+            const step = 4.5 * Math.max(1, 0.6 / q.s);
+            const at: Array<{ x: number; y: number; s: number }> = [];
+            for (let u = p.dx - p.width / 2 + 2; u < p.dx + p.width / 2 - 2; u += step) {
+              const e = toEye(eye, ground(world, b.x + u + ((r * 7 + Math.floor(u)) % 3) * 0.6, y));
+              if (e.z < NEAR_DRAWN) continue;
+              const s = project(eye, e.u, e.z);
+              at.push({ x: s.x, y: s.y, s: s.s * 1.1 });
+            }
+            cropRowAt(ctx, p, at, world.time, r);
+          },
+        });
+      }
+    }
   }
   // a crossroads' fingerpost stands at both of its ends
   for (const c of crossings(world)) {

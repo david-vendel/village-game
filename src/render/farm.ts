@@ -91,6 +91,19 @@ function fieldPlot(ctx: Ctx, a: Anchor, p: FieldPlot, seed: number): void {
   }
 }
 
+/**
+ * A row of a plot's crop at given screen points, each with its scale: the fields of farms on
+ * other streets (plane.ts projects the points).
+ */
+export function cropRowAt(ctx: Ctx, p: FieldPlot, at: Array<{ x: number; y: number; s: number }>, time: number, row: number): void {
+  const g = growth(p);
+  const look = cropLook(g);
+  for (const q of at) {
+    const sway = g > 0.5 ? Math.sin(time * 1.8 + q.x * 0.05 + row) * 1.5 * g * q.s : 0;
+    stalk(ctx, q.x, q.y, look.h * q.s, g, sway, look.color, look.tip, 1.25 * q.s);
+  }
+}
+
 /** Grass border, then the plots far row first so nearer crops overlap farther ones. */
 function drawPlots(ctx: Ctx, a: Anchor, plots: FieldPlot[], seed: number, border: string, margin: number): void {
   for (const p of plots) {

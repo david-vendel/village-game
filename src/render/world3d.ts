@@ -251,7 +251,7 @@ function project(p: THREE.Vector3, v: View3d): [number, number] {
  * Render these buildings and draw the image into ctx (under its world
  * transform). Returns where each building's named points came out on screen.
  */
-export function draw3d(ctx: Ctx, buildings: Building3d[], v: View3d): Map<number, (name: string) => [number, number] | null> {
+export function draw3d(ctx: Ctx, buildings: Building3d[], v: View3d, opts: { clip?: boolean } = {}): Map<number, (name: string) => [number, number] | null> {
   const out = new Map<number, (name: string) => [number, number] | null>();
   if (!buildings.length) return out;
   if (!renderer) setup();
@@ -323,7 +323,35 @@ export function draw3d(ctx: Ctx, buildings: Building3d[], v: View3d): Map<number
   }
   for (const c of [...scene.children]) if (c instanceof THREE.Group && !shown.has(c)) c.removeFromParent();
 
+  if (!opts.clip) {
+    r.render(scene, camera);
+    ctx.drawImage(r.domElement, 0, v.top, v.viewW, v.bottom - v.top);
+    return out;
+  }
+  // clipped: only the screen rectangle these buildings and their shadows cover is rendered and copied,
+  // so a building can be drawn on its own at its place in the far-to-near order (scene.ts) cheaply
+  const box = new THREE.Box3();
+  for (const g of shown) box.expandByObject(g);
+  const pts: Array<[number, number]> = [];
+  for (const x of [box.min.x, box.max.x]) {
+    for (const y of [box.min.y, box.max.y]) {
+      for (const z of [box.min.z, box.max.z]) {
+        pts.push(project(new THREE.Vector3(x, y, z), v));
+        // where that corner's shadow falls on the ground
+        if (y > 0 && dir.y > 0.01) pts.push(project(new THREE.Vector3(x - (dir.x * y) / dir.y, 0, z - (dir.z * y) / dir.y), v));
+      }
+    }
+  }
+  const k = v.pxPerU;
+  const x0 = Math.max(0, Math.floor(Math.min(...pts.map((p) => p[0])) * k) - 2);
+  const x1 = Math.min(w, Math.ceil(Math.max(...pts.map((p) => p[0])) * k) + 2);
+  const y0 = Math.max(0, Math.floor((Math.min(...pts.map((p) => p[1])) - v.top) * k) - 2);
+  const y1 = Math.min(h, Math.ceil((Math.max(...pts.map((p) => p[1])) - v.top) * k) + 2);
+  if (x1 <= x0 || y1 <= y0) return out;
+  r.setScissorTest(true);
+  r.setScissor(x0, h - y1, x1 - x0, y1 - y0); // WebGL counts from the bottom
   r.render(scene, camera);
-  ctx.drawImage(r.domElement, 0, v.top, v.viewW, v.bottom - v.top);
+  r.setScissorTest(false);
+  ctx.drawImage(r.domElement, x0, y0, x1 - x0, y1 - y0, x0 / k, v.top + y0 / k, (x1 - x0) / k, (y1 - y0) / k);
   return out;
 }

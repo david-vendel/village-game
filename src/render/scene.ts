@@ -32,8 +32,6 @@ import { type Ctx, GROUND_Y, ROAD_Y, VIEW_H } from './util';
 import { type Building3d, draw3d, has3d, height3d } from './world3d';
 
 const BASE = GROUND_Y + 4;
-/** Sorts the far group of other streets' 3D buildings before everything behind this street. */
-const FAR_3D = Infinity;
 
 export function cameraX(world: World, viewW: number): number {
   // always centred on the rider, out to the very end of a street too (past it the grass runs on)
@@ -138,23 +136,23 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   // streets and their people, and this street's people out behind it (in the back fields, at the woods);
   // the haze of distance over what is beyond this street's lots
   const elsewhere = standingOn(ctx, world, eye);
-  // other streets' 3D buildings (true place and facing): behind the tree line (hazed with the far
-  // scenery), between it and this street's buildings, and in front (drawn with this street's)
+  // other streets' 3D buildings (true place and facing): those behind this street's buildings each at
+  // its place among the far scenery (hazed with it beyond the tree line), those in front with this street's
   const light = lightAt(world);
   const view3d = () => ({ camX, viewW, top: sv.top, bottom: sv.bottom, pxPerU: ctx.getTransform().a, phase: light.phase, sunHeight: light.sun, night: light.night });
   const cx = camX + viewW / 2;
-  const groups3d = { far: [] as Building3d[], mid: [] as Building3d[], near: [] as Building3d[] };
+  const groups3d = { behind: [] as Array<{ m: Building3d; z: number }>, near: [] as Building3d[] };
   for (const e of elsewhere3d(world, eye)) {
     const b = e.b;
     const stage = b.status === 'done' ? undefined : constructionStage(b.progress).stage;
     const m: Building3d = { id: b.id, type: b.type, seed: b.id * 97, x: b.x, upgraded: !!b.upgraded, stage: stage === 'done' ? undefined : stage, parts: [], at: { x: cx + e.u, z: EYE_DIST - e.z, rot: e.rot } };
-    groups3d[e.z >= TREE_LINE_DIST ? 'far' : e.z >= BUILDING_LINE_DIST ? 'mid' : 'near'].push(m);
+    if (e.z >= BUILDING_LINE_DIST) groups3d.behind.push({ m, z: e.z });
+    else groups3d.near.push(m);
   }
-  const pass3d = (list: Building3d[]) => () => void draw3d(ctx, list, view3d());
   const behind = [
     ...elsewhere.filter((o) => o.z >= BUILDING_LINE_DIST),
-    ...(groups3d.far.length ? [{ z: FAR_3D, y: 0, draw: pass3d(groups3d.far) }] : []),
-    ...(groups3d.mid.length ? [{ z: TREE_LINE_DIST - 1e-6, y: 0, draw: pass3d(groups3d.mid) }] : []),
+    // each on its own, so a well or a tree behind it is drawn first and hidden, one in front drawn after
+    ...groups3d.behind.map(({ m, z }) => ({ z, y: 0, draw: () => void draw3d(ctx, [m], view3d(), { clip: true }) })),
     ...atWork.filter(({ w }) => w.y < BASE - 4).map(({ w, fig, x }) => ({ z: distAt(w.y), y: w.y, draw: () => drawAtWork(w, fig, x) })),
   ].sort((a, b) => b.z - a.z);
   let hazed = false;
