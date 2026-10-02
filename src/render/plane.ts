@@ -27,6 +27,7 @@ import { figureOf } from './figure';
 import { GROUND_REF_Y, HORIZON_Y } from './ground';
 import { beingFelled, drawQuarry, drawTreeAt } from './nature';
 import { drawVillager, walker } from './people';
+import { lensZ } from './lens';
 import { type Ctx, mix } from './util';
 
 const SPAN = GROUND_REF_Y - HORIZON_Y;
@@ -69,9 +70,9 @@ function toEye(eye: Eye, p: Vec): { u: number; z: number } {
   return { u: dx * eye.dir.x + dy * eye.dir.y, z: ROAD_DIST + dx * eye.back.x + dy * eye.back.y };
 }
 
-/** Screen position and scale of a point u across and z away. */
+/** Screen position and scale of a point u across and z away (through the lens: lens.ts shortens far depth). */
 function project(eye: Eye, u: number, z: number): { x: number; y: number; s: number } {
-  const s = EYE_DIST / z;
+  const s = EYE_DIST / lensZ(z);
   return { x: eye.vpX + u * s, y: HORIZON_Y + SPAN * s, s };
 }
 
@@ -89,8 +90,15 @@ function groundShape(ctx: Ctx, eye: Eye, pts: Vec[], fill: string): void {
     }
   }
   if (out.length < 3) return;
+  // the lens bends lines that run away from the camera a little: cut long edges into short steps
+  const steps: Array<{ u: number; z: number }> = [];
+  out.forEach((a, i) => {
+    const b = out[(i + 1) % out.length];
+    const n = Math.min(40, Math.max(1, Math.ceil(Math.abs(b.z - a.z) / 60)));
+    for (let k = 0; k < n; k++) steps.push({ u: a.u + ((b.u - a.u) * k) / n, z: a.z + ((b.z - a.z) * k) / n });
+  });
   ctx.beginPath();
-  out.forEach((p, i) => {
+  steps.forEach((p, i) => {
     const q = project(eye, p.u, Math.min(p.z, FAR * 4));
     if (i === 0) ctx.moveTo(q.x, q.y);
     else ctx.lineTo(q.x, q.y);

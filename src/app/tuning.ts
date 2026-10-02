@@ -3,6 +3,7 @@
 // so a setting survives a reload and can be sent as a link. Same pattern as
 // ../hollow.
 
+import { DEFAULT_LENS, setLens } from '../render';
 import { DAY_LENGTH } from '../game/daynight';
 import { DEFAULT_PARAMS, type World, type WorldParams } from '../game/world';
 import { makeCollapsible } from './panel';
@@ -58,6 +59,7 @@ export interface DisplayOptions {
 }
 
 export function installTuning(world: World, sound: Sound): DisplayOptions {
+  let lensNow = DEFAULT_LENS;
   const knobs: Knob[] = [
     ...WORLD_KNOBS.map(({ key, ...k }) => ({
       ...k,
@@ -67,6 +69,20 @@ export function installTuning(world: World, sound: Sound): DisplayOptions {
         world.params[key] = v;
       },
     })),
+    {
+      // how long depth behind the street is drawn (render/lens.ts): 1 is the camera's own wide-angle perspective
+      param: 'lens',
+      min: 0.2,
+      max: 1,
+      step: 0.05,
+      def: DEFAULT_LENS,
+      get: () => lensNow,
+      set: (v) => {
+        lensNow = v;
+        setLens(v);
+      },
+      render: (v) => `far depth ${v.toFixed(2)}×`,
+    },
     {
       param: 'vol',
       min: 0,

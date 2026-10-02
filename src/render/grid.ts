@@ -9,7 +9,8 @@
 
 import { BUILDINGS, type BuildingType } from '../game/buildings';
 import { blockStartX, cellKey, cellName, footprintAt, landUse, streetCell, type LandUse } from '../game/grid';
-import { behindRoad, BLOCK, CELL_W, LOT_ROW, rowFar, rowNear, yAt } from '../game/layout';
+import { BLOCK, CELL_W, LOT_ROW, rowFar, rowNear } from '../game/layout';
+import { behindRoadLens as behindRoad, yAtLens as yAt } from './lens';
 import { streetOf, streetStart } from '../game/streets';
 import { placeAt, whyNotBuild, type World } from '../game/world';
 import { depthScale, groundX } from './ground';

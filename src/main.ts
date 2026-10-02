@@ -9,7 +9,7 @@ import { createScreen } from './app/screen';
 import { createSound } from './app/sound';
 import { installTuning } from './app/tuning';
 import { installWorkersPanel } from './app/workers';
-import { update } from './game/world';
+import { update, type World } from './game/world';
 import { sizePanelButtons } from './app/panel';
 import { type ArtMode, cameraX, HUD_BUTTON, loadArt, renderFrame, showArtPreview, type Toast } from './render';
 
@@ -24,8 +24,10 @@ async function play(): Promise<void> {
   const canvas = document.getElementById('canvas') as HTMLCanvasElement;
   const ctx = canvas.getContext('2d')!;
 
-  const saves = await openSaveStore();
-  const { world, restored } = await loadGame(saves);
+  // dev only: ?scenario=<name> starts from tests/scenarios/<name>.scn instead of the save, and saves nothing
+  const scenario = import.meta.env.DEV ? new URLSearchParams(location.search).get('scenario') : null;
+  const saves = scenario ? null : await openSaveStore();
+  const { world, restored } = scenario ? await scenarioWorld(scenario) : await loadGame(saves);
   const autosave = installAutosave(world, saves);
   const screen = createScreen(canvas);
   const toasts: Toast[] = [];
@@ -78,4 +80,15 @@ async function play(): Promise<void> {
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
+}
+
+/** A world played from a scenario file (dev builds only; see tools/sim.ts). */
+async function scenarioWorld(name: string): Promise<{ world: World; restored: boolean }> {
+  const files = import.meta.glob('../tests/scenarios/*.scn', { query: '?raw', import: 'default' });
+  const load = files[`../tests/scenarios/${name}.scn`];
+  if (!load) throw new Error(`no scenario ${name} (${Object.keys(files).join(', ')})`);
+  const { runScenario } = await import('./sim/scenario');
+  const r = runScenario((await load()) as string);
+  if (r.failures.length) console.warn('scenario failures', r.failures);
+  return { world: r.world, restored: false };
 }
