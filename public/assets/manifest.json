@@ -1,0 +1,279 @@
+{
+  "specVersion": 1,
+  "unitsPerMeter": 20,
+  "assets": {
+    "building.farm": {
+      "kind": "building",
+      "footprintWidth": 150,
+      "views": {
+        "street": {
+          "size": [334, 159],
+          "anchor": [101, 151],
+          "tiers": [2, 4],
+          "layers": {
+            "color": "building/farm/street/default/color@{tier}x.webp",
+            "shadow": "building/farm/street/default/shadow@{tier}x.webp",
+            "emissive": "building/farm/street/default/emissive@{tier}x.webp",
+            "normal": "building/farm/street/default/normal@{tier}x.webp",
+            "ao": "building/farm/street/default/ao@{tier}x.webp",
+            "albedo": "building/farm/street/default/albedo@{tier}x.webp",
+            "depth": "building/farm/street/default/depth@{tier}x.png"
+          },
+          "depthRange": [-556, 33],
+          "points": {
+            "door": [82, 151],
+            "sleep:0": [50, 85.9],
+            "sleep:1": [126, 85.9],
+            "smoke:0": [89.95, 3.85],
+            "window:0": [50, 112.94],
+            "window:1": [126, 112.94]
+          }
+        },
+        "roadsideL": {
+          "size": [255, 173],
+          "anchor": [94, 151],
+          "tiers": [2, 4],
+          "layers": {
+            "color": "building/farm/roadsideL/default/color@{tier}x.webp",
+            "shadow": "building/farm/roadsideL/default/shadow@{tier}x.webp",
+            "emissive": "building/farm/roadsideL/default/emissive@{tier}x.webp",
+            "normal": "building/farm/roadsideL/default/normal@{tier}x.webp",
+            "ao": "building/farm/roadsideL/default/ao@{tier}x.webp",
+            "albedo": "building/farm/roadsideL/default/albedo@{tier}x.webp",
+            "depth": "building/farm/roadsideL/default/depth@{tier}x.png"
+          },
+          "depthRange": [-487, 100],
+          "points": {
+            "door": [89.08, 155.75],
+            "sleep:0": [80.8, 98.65],
+            "sleep:1": [100.47, 79.65],
+            "smoke:0": [36.83, 22.75],
+            "window:0": [80.8, 125.69],
+            "window:1": [100.47, 106.69]
+          }
+        },
+        "roadsideR": {
+          "size": [268, 174],
+          "anchor": [38, 152],
+          "tiers": [2, 4],
+          "layers": {
+            "color": "building/farm/roadsideR/default/color@{tier}x.webp",
+            "shadow": "building/farm/roadsideR/default/shadow@{tier}x.webp",
+            "emissive": "building/farm/roadsideR/default/emissive@{tier}x.webp",
+            "normal": "building/farm/roadsideR/default/normal@{tier}x.webp",
+            "ao": "building/farm/roadsideR/default/ao@{tier}x.webp",
+            "albedo": "building/farm/roadsideR/default/albedo@{tier}x.webp",
+            "depth": "building/farm/roadsideR/default/depth@{tier}x.png"
+          },
+          "depthRange": [-199999995904, 91],
+          "points": {
+            "door": [33.08, 147.25],
+            "sleep:0": [24.8, 74.15],
+            "sleep:1": [44.47, 93.15],
+            "smoke:0": [75.5, 4.75],
+            "window:0": [24.8, 101.19],
+            "window:1": [44.47, 120.19]
+          }
+        }
+      },
+      "construction": {
+        "mode": "stages",
+        "stages": {
+          "staking": {
+            "street": {
+              "size": [334, 159],
+              "anchor": [101, 151],
+              "tiers": [2, 4],
+              "layers": {
+                "color": "building/farm/street/stage-staking/color@{tier}x.webp",
+                "shadow": "building/farm/street/stage-staking/shadow@{tier}x.webp",
+                "normal": "building/farm/street/stage-staking/normal@{tier}x.webp",
+                "ao": "building/farm/street/stage-staking/ao@{tier}x.webp",
+                "albedo": "building/farm/street/stage-staking/albedo@{tier}x.webp",
+                "depth": "building/farm/street/stage-staking/depth@{tier}x.png"
+              },
+              "depthRange": [-112, 4]
+            }
+          },
+          "foundation": {
+            "street": {
+              "size": [334, 159],
+              "anchor": [101, 151],
+              "tiers": [2, 4],
+              "layers": {
+                "color": "building/farm/street/stage-foundation/color@{tier}x.webp",
+                "shadow": "building/farm/street/stage-foundation/shadow@{tier}x.webp",
+                "normal": "building/farm/street/stage-foundation/normal@{tier}x.webp",
+                "ao": "building/farm/street/stage-foundation/ao@{tier}x.webp",
+                "albedo": "building/farm/street/stage-foundation/albedo@{tier}x.webp",
+                "depth": "building/farm/street/stage-foundation/depth@{tier}x.png"
+              },
+              "depthRange": [-112, 13]
+            }
+          },
+          "frame": {
+            "street": {
+              "size": [334, 159],
+              "anchor": [101, 151],
+              "tiers": [2, 4],
+              "layers": {
+                "color": "building/farm/street/stage-frame/color@{tier}x.webp",
+                "shadow": "building/farm/street/stage-frame/shadow@{tier}x.webp",
+                "normal": "building/farm/street/stage-frame/normal@{tier}x.webp",
+                "ao": "building/farm/street/stage-frame/ao@{tier}x.webp",
+                "albedo": "building/farm/street/stage-frame/albedo@{tier}x.webp",
+                "depth": "building/farm/street/stage-frame/depth@{tier}x.png"
+              },
+              "depthRange": [-434, 29]
+            }
+          },
+          "walls": {
+            "street": {
+              "size": [334, 159],
+              "anchor": [101, 151],
+              "tiers": [2, 4],
+              "layers": {
+                "color": "building/farm/street/stage-walls/color@{tier}x.webp",
+                "shadow": "building/farm/street/stage-walls/shadow@{tier}x.webp",
+                "normal": "building/farm/street/stage-walls/normal@{tier}x.webp",
+                "ao": "building/farm/street/stage-walls/ao@{tier}x.webp",
+                "albedo": "building/farm/street/stage-walls/albedo@{tier}x.webp",
+                "depth": "building/farm/street/stage-walls/depth@{tier}x.png"
+              },
+              "depthRange": [-434, 42]
+            }
+          },
+          "roof": {
+            "street": {
+              "size": [334, 159],
+              "anchor": [101, 151],
+              "tiers": [2, 4],
+              "layers": {
+                "color": "building/farm/street/stage-roof/color@{tier}x.webp",
+                "shadow": "building/farm/street/stage-roof/shadow@{tier}x.webp",
+                "normal": "building/farm/street/stage-roof/normal@{tier}x.webp",
+                "ao": "building/farm/street/stage-roof/ao@{tier}x.webp",
+                "albedo": "building/farm/street/stage-roof/albedo@{tier}x.webp",
+                "depth": "building/farm/street/stage-roof/depth@{tier}x.png"
+              },
+              "depthRange": [-556, 42]
+            }
+          }
+        }
+      },
+      "source": {
+        "method": "render3d",
+        "models": [
+          {
+            "name": "Blender",
+            "version": "4.5 LTS",
+            "licence": "GPL-3.0 (tool; output is ours)"
+          }
+        ],
+        "author": "tools/building-gen (procedural, route P)",
+        "notes": "13th-14th c. Central European farmstead: fieldstone footing, oak frame, limewashed wattle-and-daub, thatch; lean-to barn.",
+        "approvedBy": "the user, 2026-10-02 (\"2D should show those nice 2D blender models\")",
+        "date": "2026-10-02"
+      },
+      "variants": {
+        "upgraded": {
+          "views": {
+            "street": {
+              "size": [334, 159],
+              "anchor": [101, 151],
+              "tiers": [2, 4],
+              "layers": {
+                "color": "building/farm/street/upgraded/color@{tier}x.webp",
+                "shadow": "building/farm/street/upgraded/shadow@{tier}x.webp",
+                "emissive": "building/farm/street/upgraded/emissive@{tier}x.webp",
+                "normal": "building/farm/street/upgraded/normal@{tier}x.webp",
+                "ao": "building/farm/street/upgraded/ao@{tier}x.webp",
+                "albedo": "building/farm/street/upgraded/albedo@{tier}x.webp",
+                "depth": "building/farm/street/upgraded/depth@{tier}x.png"
+              },
+              "depthRange": [-556, 33],
+              "points": {
+                "door": [82, 151],
+                "sleep:0": [50, 85.9],
+                "sleep:1": [126, 85.9],
+                "smoke:0": [89.95, 3.85],
+                "window:0": [50, 112.94],
+                "window:1": [126, 112.94]
+              }
+            },
+            "roadsideL": {
+              "size": [255, 173],
+              "anchor": [94, 151],
+              "tiers": [2, 4],
+              "layers": {
+                "color": "building/farm/roadsideL/upgraded/color@{tier}x.webp",
+                "shadow": "building/farm/roadsideL/upgraded/shadow@{tier}x.webp",
+                "emissive": "building/farm/roadsideL/upgraded/emissive@{tier}x.webp",
+                "normal": "building/farm/roadsideL/upgraded/normal@{tier}x.webp",
+                "ao": "building/farm/roadsideL/upgraded/ao@{tier}x.webp",
+                "albedo": "building/farm/roadsideL/upgraded/albedo@{tier}x.webp",
+                "depth": "building/farm/roadsideL/upgraded/depth@{tier}x.png"
+              },
+              "depthRange": [-504, 100],
+              "points": {
+                "door": [89.08, 155.75],
+                "sleep:0": [80.8, 98.65],
+                "sleep:1": [100.47, 79.65],
+                "smoke:0": [36.83, 22.75],
+                "window:0": [80.8, 125.69],
+                "window:1": [100.47, 106.69]
+              }
+            },
+            "roadsideR": {
+              "size": [268, 174],
+              "anchor": [38, 152],
+              "tiers": [2, 4],
+              "layers": {
+                "color": "building/farm/roadsideR/upgraded/color@{tier}x.webp",
+                "shadow": "building/farm/roadsideR/upgraded/shadow@{tier}x.webp",
+                "emissive": "building/farm/roadsideR/upgraded/emissive@{tier}x.webp",
+                "normal": "building/farm/roadsideR/upgraded/normal@{tier}x.webp",
+                "ao": "building/farm/roadsideR/upgraded/ao@{tier}x.webp",
+                "albedo": "building/farm/roadsideR/upgraded/albedo@{tier}x.webp",
+                "depth": "building/farm/roadsideR/upgraded/depth@{tier}x.png"
+              },
+              "depthRange": [-199999995904, 91],
+              "points": {
+                "door": [33.08, 147.25],
+                "sleep:0": [24.8, 74.15],
+                "sleep:1": [44.47, 93.15],
+                "smoke:0": [75.5, 4.75],
+                "window:0": [24.8, 101.19],
+                "window:1": [44.47, 120.19]
+              }
+            }
+          }
+        }
+      },
+      "parts": [
+        {
+          "name": "doorOpen",
+          "image": {
+            "size": [334, 159],
+            "anchor": [82, 151],
+            "tiers": [2, 4],
+            "layers": {
+              "color": "building/farm/street/part-doorOpen/color@{tier}x.webp",
+              "shadow": "building/farm/street/part-doorOpen/shadow@{tier}x.webp",
+              "normal": "building/farm/street/part-doorOpen/normal@{tier}x.webp",
+              "ao": "building/farm/street/part-doorOpen/ao@{tier}x.webp",
+              "albedo": "building/farm/street/part-doorOpen/albedo@{tier}x.webp",
+              "depth": "building/farm/street/part-doorOpen/depth@{tier}x.png"
+            },
+            "depthRange": [-186, 29]
+          },
+          "pivot": [82, 151],
+          "z": "front",
+          "animate": {
+            "type": "static"
+          }
+        }
+      ]
+    }
+  }
+}

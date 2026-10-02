@@ -39,7 +39,8 @@ describe('farm geometry', () => {
         const p = g.attributes.position as THREE.BufferAttribute;
         let up = 0;
         let top = 0;
-        for (let i = 0; i < p.count; i++) if (p.getY(i) > hi[2] - 0.5) (top++, n.getY(i) > 0 && up++);
+        // the top 0.3 m: above the underside (which lies a thatch thickness lower and faces down)
+        for (let i = 0; i < p.count; i++) if (p.getY(i) > hi[2] - 0.3) (top++, n.getY(i) > 0 && up++);
         expect(up / top, e.id).toBeGreaterThan(0.9);
       } else {
         expect(outward(g, centre), e.id).toBeGreaterThan(0.95);

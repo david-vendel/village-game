@@ -1,12 +1,24 @@
 {
   "id": "building.farm",
-  "views": ["street", "roadsideL", "roadsideR"],
+  "views": [
+    "street",
+    "roadsideL",
+    "roadsideR"
+  ],
   "samples": 128,
   "emissive_samples": 32,
   "source": {
     "method": "render3d",
-    "models": [{ "name": "Blender", "version": "4.5 LTS", "licence": "GPL-3.0 (tool; output is ours)" }],
+    "models": [
+      {
+        "name": "Blender",
+        "version": "4.5 LTS",
+        "licence": "GPL-3.0 (tool; output is ours)"
+      }
+    ],
     "author": "tools/building-gen (procedural, route P)",
-    "notes": "13th-14th c. Central European farmstead: fieldstone footing, oak frame, limewashed wattle-and-daub, thatch; lean-to barn."
+    "notes": "13th-14th c. Central European farmstead: fieldstone footing, oak frame, limewashed wattle-and-daub, thatch; lean-to barn.",
+    "approvedBy": "the user, 2026-10-02 (\"2D should show those nice 2D blender models\")",
+    "date": "2026-10-02"
   }
 }

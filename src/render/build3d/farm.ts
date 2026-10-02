@@ -12,7 +12,7 @@
 // varies the stones and boards, so no two farms are quite alike.
 
 import { BUILDINGS } from '../../game/buildings';
-import { HOME } from '../../game/layout';
+import { CELL_W, HOME } from '../../game/layout';
 import { Builder, type Element, uniform, type Vec3 } from './elements';
 
 const U = 20; // world units per metre
@@ -49,22 +49,23 @@ export interface FarmSpec {
 
 export const SPEC: FarmSpec = {
   width: BUILDINGS.farm.width / U,
-  depth: 5,
+  // the house fills the plot's depth (BUILDINGS.farm.depth cells), less a little for the eaves
+  depth: ((BUILDINGS.farm.depth ?? 2) * CELL_W) / U - 0.25,
   houseX0: -BUILDINGS.farm.width / U / 2,
   houseX1: 0.6,
   bayUpgraded: 1.6,
   doorX: HOME.dx / U,
   doorW: 0.9,
-  doorH: 1.85,
+  doorH: 1.8,
   footingH: 0.5,
   footingW: 0.45,
   sill: [0.22, 0.22],
   post: 0.2,
-  wallH: 2.2,
+  wallH: 2.0,
   plate: [0.22, 0.2],
   tie: [0.2, 0.24],
   tieOverhang: 0.35,
-  pitchDeg: 50,
+  pitchDeg: 45,
   rafter: [0.13, 0.16],
   rafterSpacing: 0.95,
   eaveOverhang: 0.55,
@@ -73,8 +74,8 @@ export const SPEC: FarmSpec = {
   battenSpacing: 0.32,
   windowW: 0.7,
   windowH: 0.6,
-  barnDepth: 4.4,
-  barnLow: 2.3,
+  barnDepth: ((BUILDINGS.farm.depth ?? 2) * CELL_W) / U - 0.75,
+  barnLow: 2.1,
 };
 
 const sillTop = (s: FarmSpec) => s.footingH + s.sill[1];

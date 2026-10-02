@@ -74,7 +74,7 @@
 > expect at s0:85 house constructing
   ok: #81 house at s0:85-87, constructing
 > run until built
-  all built after 49.9s
+  all built after 50.0s
 > expect at s0:85 house size 3 done
   ok: #81 house×3 at s0:85-93, done
 > map ids D60:-C99

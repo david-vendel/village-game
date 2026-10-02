@@ -239,9 +239,8 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
   button(ctx, L.zoomIn, false);
   plusMinusIcon(ctx, L.zoomIn, true);
   text(ctx, 'New village', L.newVillage.x + L.newVillage.w / 2, L.newVillage.y + L.newVillage.h - 3.5, 9, GOLD, 'center', true);
-  // 2D · 3D: the one showing bright
+  // 2D · 3D: just the words, like New village; the one showing bright
   const v = L.view3d;
-  button(ctx, v, false);
   const ty = v.y + v.h - 3.5;
   text(ctx, '2D', v.x + v.w * 0.27, ty, 9, st.view3d ? 'rgba(232,200,114,0.4)' : GOLD, 'center', true);
   text(ctx, '·', v.x + v.w / 2, ty, 9, 'rgba(232,200,114,0.5)', 'center', true);
