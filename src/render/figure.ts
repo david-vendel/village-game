@@ -108,6 +108,9 @@ export function outfitOf(f: Figure): Outfit {
   } else if (f.role === 'sawyer') {
     o.top = pick(['#7a5a3a', '#6e5a40', '#80643e'], f.seed, 18);
     Object.assign(o, { rolled: true, legs: '#4e4234', shoes: '#2e2218', apron: '#8a6a44', hat: 'cap', hatColor: '#5e4a34', dusty: true });
+  } else if (f.role === 'herder') {
+    o.top = pick(['#7a6a4a', '#6a5a3a', '#5e6a44'], f.seed, 18);
+    Object.assign(o, { rolled: true, legs: '#4e4636', shoes: '#3a2a1c', belt: '#4a3a2a', apron: '#a89878', hat: 'straw', hatColor: '#c9a85a' });
   } else if (f.role === 'stonecutter') {
     o.top = pick(['#8a8680', '#7a766e', '#948c80'], f.seed, 18);
     Object.assign(o, { rolled: true, legs: '#5a554c', shoes: '#3a342c', apron: '#6a4a2e', hat: 'cap', hatColor: '#6e6a62' });

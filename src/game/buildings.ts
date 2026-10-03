@@ -6,8 +6,9 @@
 // To add a building: add an entry here, its cost in balance.ts (NEW_BUILDING_COST)
 // and an entry in BUILDING_ART.
 
-import { BAKERY_DOOR, BAKERY_OVEN, CHAPEL_DOOR, HOME, HOUSE_DOOR_DX, MILL_DOOR, SAWMILL_DOOR, SAWMILL_SAW, SMITHY_DOOR, STAND_Y, STONECUTTER_DOOR, TAVERN_DOOR, PILE_UNIT, WELL_DRAW, WOODCUTTER_DOOR, YARD_ITEMS, type Spot } from './layout';
+import { BAKERY_DOOR, BAKERY_OVEN, CHAPEL_DOOR, HOME, HOUSE_DOOR_DX, MILL_DOOR, SAWMILL_DOOR, SAWMILL_SAW, SMITHY_DOOR, STAND_Y, STONECUTTER_DOOR, TAVERN_DOOR, PILE_UNIT, LIVESTOCK_DOOR, WELL_DRAW, WOODCUTTER_DOOR, YARD_ITEMS, type Spot } from './layout';
 import { COSTS, UPGRADE_COSTS } from './balance';
+import type { Livestock } from './livestock';
 import type { Amounts, Resource } from './resources';
 
 export type BuildingType =
@@ -24,6 +25,10 @@ export type BuildingType =
   | 'well'
   | 'woodcutter'
   | 'sawmill'
+  | 'chickenfarm'
+  | 'cowfarm'
+  | 'sheepfarm'
+  | 'horsefarm'
   | 'stonecutter'
   | 'intersection'
   | 'road';
@@ -35,8 +40,8 @@ export type BuildingType =
  * work takes it for as long as there is carrying to do. Serf comes last:
  * hiring fills the other jobs first.
  */
-export type Role = 'farmer' | 'builder' | 'miller' | 'baker' | 'woodcutter' | 'sawyer' | 'stonecutter' | 'serf';
-export const ROLES: readonly Role[] = ['farmer', 'builder', 'miller', 'baker', 'woodcutter', 'sawyer', 'stonecutter', 'serf'];
+export type Role = 'farmer' | 'builder' | 'miller' | 'baker' | 'woodcutter' | 'sawyer' | 'stonecutter' | 'herder' | 'serf';
+export const ROLES: readonly Role[] = ['farmer', 'builder', 'miller', 'baker', 'woodcutter', 'sawyer', 'stonecutter', 'herder', 'serf'];
 
 /**
  * What a workshop makes (workshop.ts): its worker takes `batch` of `from` out
@@ -101,6 +106,8 @@ export interface BuildingDef {
   needs?: Resource[];
   /** A workshop: what its worker makes of what it needs (workshop.ts). */
   makes?: Recipe;
+  /** An animal farm: the herd it keeps, what it eats and what it gives (livestock.ts). */
+  livestock?: Livestock;
   /**
    * Drawn here by hand, without end (the well's water): whoever comes for it
    * and finds none waiting draws it at `at`, for WELL_DRAW_SECONDS (balance.ts),
@@ -138,15 +145,16 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     type: 'farm',
     door: HOME,
     name: 'Farm',
-    purpose: 'A farmstead with wheat fields. Feeds the village.',
+    purpose: 'A farmstead with fields of wheat (grain) and meadow (hay). Feeds the village and its animals.',
     // farmhouse, barn and grain store on 6 × 3 cells; the fields use free cells around it
     width: 150,
     depth: 3,
     buildTime: 12,
     cost: COSTS.farm,
-    storage: { grain: 5 },
+    // sheaves on the pallet (layout.ts SHEAF_SLOTS), bales of hay by the barn (HAY_SLOTS)
+    storage: { grain: 5, hay: 3 },
     jobs: { farmer: 1 },
-    ships: ['grain'],
+    ships: ['grain', 'hay'],
     // a second room built on: two farmers live and work here
     upgrade: { name: 'Large farm', cost: UPGRADE_COSTS.farm!, buildTime: 8, jobs: { farmer: 2 } },
   },
@@ -281,6 +289,59 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     ships: ['planks'],
     needs: ['wood'],
     makes: { from: 'wood', to: 'planks', batch: 1, per: 2, seconds: 5, verb: 'saw', door: SAWMILL_DOOR, at: SAWMILL_SAW },
+  },
+  chickenfarm: {
+    type: 'chickenfarm',
+    door: LIVESTOCK_DOOR,
+    name: 'Chicken farm',
+    purpose: 'Hens and a cock fed on grain from the farms: the hens lay eggs, and every bird ends as meat.',
+    width: 150,
+    buildTime: 9,
+    cost: COSTS.chickenfarm,
+    // the feed left of the door, what the animals give right of it (layout.ts FEED_SLOTS, GOODS_SLOTS)
+    storage: { grain: 3, eggs: 4, meat: 2 },
+    jobs: { herder: 1 },
+    needs: ['grain'],
+    livestock: { animal: 'chicken', feed: 'grain', gives: 'eggs', per: 2 },
+  },
+  cowfarm: {
+    type: 'cowfarm',
+    door: LIVESTOCK_DOOR,
+    name: 'Cow farm',
+    purpose: 'Cows and a bull fed on hay from the farms: the cows give two pails of milk a feed, and every beast ends as meat.',
+    width: 150,
+    buildTime: 11,
+    cost: COSTS.cowfarm,
+    storage: { hay: 3, milk: 4, meat: 2 },
+    jobs: { herder: 1 },
+    needs: ['hay'],
+    livestock: { animal: 'cow', feed: 'hay', gives: 'milk', per: 2 },
+  },
+  sheepfarm: {
+    type: 'sheepfarm',
+    door: LIVESTOCK_DOOR,
+    name: 'Sheep farm',
+    purpose: 'Ewes and a ram fed on hay from the farms: ewes give milk, all give wool, and every sheep ends as meat.',
+    width: 150,
+    buildTime: 11,
+    cost: COSTS.sheepfarm,
+    storage: { hay: 3, milk: 2, wool: 2, meat: 2 },
+    jobs: { herder: 1 },
+    needs: ['hay'],
+    livestock: { animal: 'sheep', feed: 'hay', gives: 'milk', per: 1, or: 'wool' },
+  },
+  horsefarm: {
+    type: 'horsefarm',
+    door: LIVESTOCK_DOOR,
+    name: 'Horse farm',
+    purpose: 'Mares and a stallion fed on hay, grazing the free land behind the farm: foals are born and grow up there.',
+    width: 150,
+    buildTime: 12,
+    cost: COSTS.horsefarm,
+    storage: { hay: 3, meat: 2 },
+    jobs: { herder: 1 },
+    needs: ['hay'],
+    livestock: { animal: 'horse', feed: 'hay' },
   },
   stonecutter: {
     type: 'stonecutter',

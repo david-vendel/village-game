@@ -69,7 +69,7 @@ export function workshopWorkplace(world: World, b: Building, recipe: Recipe): Wo
     },
     dropSpot(job, load) {
       if (isErrand(job)) return errand.dropSpot(job, load);
-      return load.resource === from ? (at ?? door) : storeSpot(world, b, to, x, false, load.amount);
+      return load.resource === from ? (at ?? door) : storeSpot(world, b, load.resource, x, false, load.amount);
     },
     deliver(load, job) {
       if (isErrand(job)) return errand.deliver(load, job);

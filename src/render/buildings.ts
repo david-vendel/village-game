@@ -2,11 +2,13 @@
 // a sunlit front face, a shaded side face receding up-right, and a pitched
 // roof. The sun is to the left, so right-hand faces are in shadow.
 
-import { doorOf, type BuildingType } from '../game/buildings';
+import { BUILDINGS, doorOf, type BuildingType } from '../game/buildings';
 import type { FarmState } from '../game/farm';
-import { BAKERY_OVEN_MOUTH_DX, BAKERY_SLOTS, BAKERY_WATER_SLOTS, BASKET, WELL_SLOTS, MILL_SLOTS, PILE_UNIT, SACK, SAWMILL_BENCH_DX, SAWMILL_SLOTS, pileItems, STONECUTTER_SLOTS, TAVERN_SLOTS, warehouseSlot, WOODCUTTER_SLOTS, YARD_ITEMS, type Slot } from '../game/layout';
+import { BAKERY_OVEN_MOUTH_DX, BAKERY_SLOTS, BAKERY_WATER_SLOTS, BASKET, WELL_SLOTS, MILL_SLOTS, PILE_UNIT, SACK, SAWMILL_BENCH_DX, SAWMILL_SLOTS, pileItems, FEED_SLOTS, GOODS_SLOTS, HAY_SLOTS, LIVESTOCK_TROUGH_DX, STONECUTTER_SLOTS, TAVERN_SLOTS, warehouseSlot, WOODCUTTER_SLOTS, YARD_ITEMS, type Slot } from '../game/layout';
 import type { Amounts, Stock } from '../game/resources';
 import type { Worker } from '../game/worker';
+import { goodsOf, type Herd } from '../game/livestock';
+import { drawAnimal, drawGood } from './livestock';
 import { breadBasket, waterBucket, doorProgress, drawBackFences, drawBackField, drawFrontField, drawStore, stook } from './farm';
 import { drawArm, drawHead, drawLegs, drawTorso, type Figure, HEAD, outfitOf, SHOULDER } from './figure';
 import { circle, clamp01, type Ctx, ellipse, hash, line, mix, poly, rect, shade, smoke } from './util';
@@ -37,6 +39,10 @@ export interface DrawArgs {
   laid?: Array<{ dx: number; amounts: Amounts }>;
   /** Its door stands open (a new house's people coming out of it). */
   doorOpen?: boolean;
+  /** An animal farm's herd (game/livestock.ts). */
+  herd?: Herd;
+  /** A horse farm: how many cells of pasture it has (game/pasture.ts). */
+  pasture?: number;
   /** A well: how far through drawing a bucket someone at it is (0..1), or null if nobody is drawing. */
   drawing?: number | null;
   /** The chapel bell's swing angle (daynight.ts chapelBell); at rest without it. */
@@ -465,8 +471,9 @@ function farmOverlay(ctx: Ctx, a: DrawArgs, s: Surface): void {
   }
   // low fences in front of the side plots
   drawBackFences(ctx, a, a.farm);
-  // the grain store between the house and the street
+  // the grain store between the house and the street, bales of hay by the barn
   drawStore(ctx, a, a.stock?.grain ?? 0);
+  for (let i = 0; i < Math.min(HAY_SLOTS.length, pileItems(a.stock?.hay ?? 0)); i++) drawGood(ctx, 'hay', a.x + HAY_SLOTS[i].dx, a.base + 2 - HAY_SLOTS[i].lift, 1);
   // the farmers asleep inside, each in their own room
   const sleepers = (a.workers ?? []).filter((wk) => wk.task.kind === 'home' && wk.task.activity === 'sleep').length;
   for (let i = 0; i < Math.min(sleepers, 2); i++) {
@@ -1197,6 +1204,91 @@ function drawSawmill(ctx: Ctx, a: DrawArgs): void {
   if (asleep) drawSnore(ctx, x0 + 16, a.base - 58, a.time);
 }
 
+/** How each animal farm's shed looks: wall, roof, height, and which animal it keeps. */
+const SHEDS = {
+  chickenfarm: { wall: '#a07a50', roof: '#7a5a3a', h: 24, style: 'tile' as const },
+  cowfarm: { wall: '#e2d6bc', roof: '#b8955a', h: 36, style: 'thatch' as const },
+  sheepfarm: { wall: '#b8ab94', roof: '#b8955a', h: 30, style: 'thatch' as const },
+  horsefarm: { wall: '#8b6440', roof: '#7a5a3a', h: 38, style: 'tile' as const },
+};
+
+/**
+ * An animal farm: the shed on the left, the feed stacked left of its door and
+ * what the animals give right of it, and the paddock with its trough, where
+ * the herd lives, each animal as old and as female or male as the game says.
+ */
+function drawLivestockFarm(type: keyof typeof SHEDS) {
+  return (ctx: Ctx, a: DrawArgs): void => {
+    const def = BUILDINGS[type];
+    const kind = def.livestock!.animal;
+    const look = SHEDS[type];
+    const w = 64;
+    const d = 26;
+    const x0 = a.x - 74;
+    block(ctx, x0, a.base, w, look.h, d, look.wall);
+    const { doorOpen, asleep } = atHome(a);
+    hutDoor(ctx, a, type, doorOpen, '#5a3d24');
+    window_(ctx, x0 + 46, a.base - look.h + 6, 10, 9, hash(a.seed, 5) < 0.7, a.time, a.seed);
+    gableRoof(ctx, x0, a.base - look.h, w, d, 26, look.roof, look.wall, look.style, a.seed);
+
+    // the paddock: a post-and-rail fence behind, the herd, then the near rail
+    const p0 = a.x + 12;
+    const p1 = a.x + 76;
+    for (let px = p0; px <= p1; px += 16) rect(ctx, px - 1.5, a.base - 22, 3, 22, '#6b4f33');
+    for (const y of [a.base - 19, a.base - 11]) line(ctx, p0, y, p1, y, '#8a6a44', 2);
+    // the trough, with feed in it while the keeper feeds
+    const tx = a.x + LIVESTOCK_TROUGH_DX;
+    const feeding = (a.crew ?? []).some((c) => c.worker.task.kind === 'job' && c.worker.task.job.action === 'feed' && !!c.worker.task.carried);
+    rect(ctx, tx - 9, a.base - 6, 18, 6, '#7b5634');
+    if (feeding) rect(ctx, tx - 7, a.base - 7, 14, 2, kind === 'chicken' ? '#e3c265' : '#cdb860');
+    const animals = a.herd?.animals ?? [];
+    animals.forEach((beast, i) => {
+      // two rows, the back one smaller; each animal wanders a little about its place
+      const back = i % 2 === 0;
+      const slots = Math.max(1, Math.ceil(animals.length / 2));
+      const k = Math.floor(i / 2);
+      const span = p1 - p0 - 20;
+      const ax = p0 + 10 + (slots === 1 ? span / 2 : (k * span) / (slots - 1)) + Math.sin(a.time * 0.15 + i * 1.7) * 3;
+      const facing = Math.sin(a.time * 0.05 + i * 2.3) > 0 ? 1 : -1;
+      const s = (kind === 'horse' || kind === 'cow' ? 0.62 : 0.85) * (back ? 0.85 : 1);
+      drawAnimal(ctx, kind, beast, ax, a.base - (back ? 5 : 0), facing, a.time, a.seed + i * 13, s);
+    });
+    line(ctx, p0, a.base - 4, p1, a.base - 4, '#8a6a44', 2);
+
+    // the store: the feed by the shed, what the animals give right of the door
+    const feed = def.livestock!.feed;
+    for (let i = 0; i < Math.min(FEED_SLOTS.length, pileItems(a.stock?.[feed] ?? 0)); i++) {
+      const sl = FEED_SLOTS[i];
+      if (feed === 'grain') stook(ctx, a.x + sl.dx, a.base + 2 - sl.lift, 0.45);
+      else drawGood(ctx, feed, a.x + sl.dx, a.base + 2 - sl.lift, 1);
+    }
+    let slot = 0;
+    for (const r of goodsOf(def)) {
+      const n = Math.min(def.storage[r] ?? 0, pileItems(a.stock?.[r] ?? 0));
+      for (let i = 0; i < n; i++) {
+        const sl = GOODS_SLOTS[Math.min(GOODS_SLOTS.length - 1, slot + i)];
+        drawGood(ctx, r, a.x + sl.dx, a.base + 2 - sl.lift, 0.9);
+      }
+      slot += def.storage[r] ?? 0;
+    }
+
+    // a horse farm's sign by the paddock gate, between the stable and the fence: how many cells of pasture it has
+    if (a.pasture !== undefined) {
+      const sx = a.x;
+      rect(ctx, sx - 1, a.base - 30, 2.5, 30, '#5a4030');
+      rect(ctx, sx - 13, a.base - 40, 26, 12, '#e8dcc0');
+      line(ctx, sx - 13, a.base - 40, sx + 13, a.base - 40, '#5a4030', 1);
+      ctx.save();
+      ctx.font = 'bold 9px Georgia, serif';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = '#3e5a26';
+      ctx.fillText(`${a.pasture}`, sx, a.base - 31);
+      ctx.restore();
+    }
+    if (asleep) drawSnore(ctx, x0 + 50, a.base - look.h - 20, a.time);
+  };
+}
+
 function drawStonecutter(ctx: Ctx, a: DrawArgs): void {
   // a squat stone hut with a slate roof, a mason's bench out front
   const w = 64;
@@ -1347,6 +1439,10 @@ export const BUILDING_ART: Record<BuildingType, BuildingArt> = {
   well: { height: 90, draw: drawWell },
   woodcutter: { height: 100, draw: drawWoodcutter },
   sawmill: { height: 100, draw: drawSawmill },
+  chickenfarm: { height: 80, draw: drawLivestockFarm('chickenfarm') },
+  cowfarm: { height: 90, draw: drawLivestockFarm('cowfarm') },
+  sheepfarm: { height: 85, draw: drawLivestockFarm('sheepfarm') },
+  horsefarm: { height: 95, draw: drawLivestockFarm('horsefarm') },
   stonecutter: { height: 100, draw: drawStonecutter },
   intersection: { height: 56, draw: drawCrossroads },
   // a stretch of road being laid: its picture is for the build menu; in the street the road itself is drawn with the ground, as the street's end moves on (roads.ts)

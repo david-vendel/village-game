@@ -6,6 +6,7 @@
 import { chapelBell } from '../game/daynight';
 import { employees } from '../game/people';
 import { drawingAt } from '../game/transport';
+import { pastureCells } from '../game/pasture';
 import { GROUND_PILE_Y } from '../game/piles';
 import type { Worker } from '../game/worker';
 import { laidOut, onSite, upgrading } from '../game/site';
@@ -105,6 +106,8 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     vpX: viewW / 2,
     bell: b.type === 'chapel' ? bell : undefined,
     drawing: b.type === 'well' ? drawingAt(world, b) : null,
+    herd: b.herd,
+    pasture: b.type === 'horsefarm' && b.status === 'done' ? pastureCells(world, b).length : undefined,
     doorOpen: !!b.arriving,
   });
   // people at work, with their workplace's position

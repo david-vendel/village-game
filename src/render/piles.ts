@@ -5,6 +5,7 @@
 import { pileItems } from '../game/layout';
 import type { Pile } from '../game/piles';
 import { breadBasket, sheaf, waterBucket } from './farm';
+import { drawGood } from './livestock';
 import { circle, type Ctx, ellipse, hash, rect } from './util';
 
 /** Most items a heap shows; a bigger pile just looks full. */
@@ -43,6 +44,8 @@ export function drawGroundPile(ctx: Ctx, pile: Pile, x: number, base: number): v
       const by = base - 3 - s.lift;
       rect(ctx, bx, by, 24, 2.6, seed < 0.5 ? '#d2ab74' : '#c49c64');
       rect(ctx, bx, by + 1.8, 24, 0.8, '#a07a4c');
+    } else if (pile.resource === 'hay' || pile.resource === 'milk' || pile.resource === 'wool' || pile.resource === 'eggs' || pile.resource === 'meat') {
+      drawGood(ctx, pile.resource, x + (i % 5) * 11 - 22, base - Math.floor(i / 5) * 9, 0.8);
     } else if (pile.resource === 'water') {
       waterBucket(ctx, x + (i % 5) * 9 - 18, base - Math.floor(i / 5) * 9, 0.8);
     } else if (pile.resource === 'grain') {

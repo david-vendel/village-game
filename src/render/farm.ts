@@ -10,6 +10,7 @@ import { DOOR_TIME, WALK_SPEED, type Worker } from '../game/worker';
 import { BACK_FIELD, BASE_Y, BASKET, FIELD_ROWS, FRONT_FIELD, SHEAF_SLOTS, STORE, VIEW_H } from '../game/layout';
 import { groundX, viewRatio, viewY } from './ground';
 import { buildShown3d } from './life3d';
+import { drawGood } from './livestock';
 import { circle, clamp01, type Ctx, ellipse, hash, lerp, line, mix, poly, rect } from './util';
 
 const SOIL = '#7a5a3a';
@@ -31,7 +32,15 @@ const ground = (a: Anchor, u: number, y: number): [number, number] => [groundX(a
 // --- Crops -----------------------------------------------------------------
 
 /** Colour and height of a crop at growth g (0..1). */
-function cropLook(g: number): { color: string; tip: string; h: number } {
+/** Meadow grass grown for hay: green, then pale and seeding, no ears. */
+function hayLook(g: number): { color: string; tip: string; h: number } {
+  if (g < 0.7) return { color: mix('#7fb04a', '#5f9a3a', g / 0.7), tip: '#9fcf60', h: 2 + g * 14 };
+  const t = (g - 0.7) / 0.3;
+  return { color: mix('#6f9a3a', '#b8b46a', t), tip: '#cfc98a', h: lerp(12, 14, t) };
+}
+
+function cropLook(g: number, crop: FieldPlot['crop'] = 'grain'): { color: string; tip: string; h: number } {
+  if (crop === 'hay') return hayLook(g);
   if (g < 0.2) return { color: '#8fbf4a', tip: '#a9d060', h: 1.5 + g * 12 };
   if (g < 0.7) {
     const t = (g - 0.2) / 0.5;
@@ -79,7 +88,9 @@ function fieldPlot(ctx: Ctx, a: Anchor, p: FieldPlot, seed: number): void {
   ctx.globalAlpha = 1;
   if (p.state === 'fallow') return;
   const g = growth(p);
-  const look = cropLook(g);
+  const look = cropLook(g, p.crop);
+  // grass for hay has no ears
+  const head = p.crop === 'hay' ? Math.min(g, 0.84) : g;
   for (let r = 0; r < rows; r++) {
     const y = lerp(far, near, (r + 0.5) / rows);
     const persp = cropSize(y);
@@ -87,7 +98,7 @@ function fieldPlot(ctx: Ctx, a: Anchor, p: FieldPlot, seed: number): void {
     for (let u = u0 + 2; u < u1 - 1; u += step) {
       const [x, sy] = pt(a, u + hash(seed + p.row * 97 + r * 31, Math.floor(u * 3)) * 1.5, y);
       const sway = g > 0.5 ? Math.sin(a.time * 1.8 + x * 0.05 + r) * 1.5 * g * persp : 0;
-      stalk(ctx, x, sy, look.h * persp, g, sway, look.color, look.tip, 1.25 * persp);
+      stalk(ctx, x, sy, look.h * persp, head, sway, look.color, look.tip, 1.25 * persp);
     }
   }
 }
@@ -98,10 +109,11 @@ function fieldPlot(ctx: Ctx, a: Anchor, p: FieldPlot, seed: number): void {
  */
 export function cropRowAt(ctx: Ctx, p: FieldPlot, at: Array<{ x: number; y: number; s: number }>, time: number, row: number): void {
   const g = growth(p);
-  const look = cropLook(g);
+  const look = cropLook(g, p.crop);
+  const head = p.crop === 'hay' ? Math.min(g, 0.84) : g;
   for (const q of at) {
     const sway = g > 0.5 ? Math.sin(time * 1.8 + q.x * 0.05 + row) * 1.5 * g * q.s : 0;
-    stalk(ctx, q.x, q.y, look.h * q.s, g, sway, look.color, look.tip, 1.25 * q.s);
+    stalk(ctx, q.x, q.y, look.h * q.s, head, sway, look.color, look.tip, 1.25 * q.s);
   }
 }
 
@@ -349,6 +361,17 @@ export function drawWorker(ctx: Ctx, f: Worker, fig: Figure, x: number, y: numbe
     drawArm(ctx, o, sx, sy, ...hand);
     ctx.restore();
     drawProgressPips(ctx, job.t / job.duration);
+  } else if (job && atOven && action === 'feed') {
+    // forking the feed into the trough, a swing down and forward
+    const a = Math.sin(time * 4);
+    const hand: [number, number] = [6 + a * 2, -7 + a * 2];
+    body([hand[0] - 2, hand[1] + 1]);
+    line(ctx, hand[0] - 4, hand[1] - 3, hand[0] + 10, hand[1] + 7, '#8a6a44', 1.3);
+    for (const k of [-1, 0, 1]) line(ctx, hand[0] + 10, hand[1] + 7 + k, hand[0] + 13, hand[1] + 8.5 + k, '#9a9a9a', 0.6);
+    if (f.carrying?.resource === 'hay') rect(ctx, hand[0] + 9, hand[1] + 4, 4, 2.5, '#cdb860');
+    drawArm(ctx, o, sx, sy, ...hand);
+    ctx.restore();
+    drawProgressPips(ctx, job.t / job.duration);
   } else if (job && atOven && action === 'saw') {
     // ripping a log on the saw bench: the far hand holds it steady, the saw
     // goes back and forth along the cut
@@ -382,7 +405,7 @@ export function drawWorker(ctx: Ctx, f: Worker, fig: Figure, x: number, y: numbe
     ctx.restore();
   } else {
     const load = f.carrying?.resource;
-    const onShoulder = load === 'flour' || load === 'grain' || load === 'wood' || load === 'planks' || load === 'water';
+    const onShoulder = load === 'flour' || load === 'grain' || load === 'wood' || load === 'planks' || load === 'water' || load === 'hay' || load === 'meat' || load === 'milk';
     if (load === 'bread') {
       // a basket of loaves held in both arms
       body([6, -7.5]);
@@ -391,15 +414,25 @@ export function drawWorker(ctx: Ctx, f: Worker, fig: Figure, x: number, y: numbe
       breadBasket(ctx, 0, 0, 0.9, Math.ceil(((f.carrying?.amount ?? 0) / BASKET) * 5));
       ctx.restore();
       drawArm(ctx, o, sx, sy, 7, -7);
-    } else if (load === 'water') {
-      // a bucket of water carried in one hand, the arm straight down with its weight
+    } else if (load === 'water' || load === 'milk') {
+      // a pail carried in one hand, the arm straight down with its weight
       body(swingHand(sx - 1.2, sy, swing * 0.5 + 0.05));
       drawArm(ctx, o, sx, sy, 4, 1);
       ctx.save();
       ctx.translate(4, 1);
       ctx.rotate(-swing * 0.15);
-      waterBucket(ctx, 0, 9, 0.9);
+      waterBucket(ctx, 0, 9, 0.9, load === 'milk' ? '#f4f1e8' : '#5d86a8');
       ctx.restore();
+    } else if (load === 'wool' || load === 'eggs') {
+      // a fleece, or a basket of eggs, held in both arms
+      body([6, -7.5]);
+      drawGood(ctx, load, 8, -4, 0.9);
+      drawArm(ctx, o, sx, sy, 7, -7);
+    } else if (load === 'hay' || load === 'meat') {
+      // a bale, or a joint, up on the shoulder
+      body(swingHand(sx - 1.2, sy, swing + 0.05));
+      drawGood(ctx, load, 1, -13, 0.9);
+      drawArm(ctx, o, sx, sy, 3.5, -13);
     } else if (load === 'stone') {
       // a block of stone held in both arms
       body([6, -7.5]);
@@ -470,12 +503,12 @@ function drawProgressPips(ctx: Ctx, t: number): void {
 
 /** A wicker basket of loaves standing on the ground at x (fewer loaves when part-full, of 5). */
 /** A wooden bucket of water standing on the ground at (x, base), scale s. */
-export function waterBucket(ctx: Ctx, x: number, base: number, s = 1): void {
+export function waterBucket(ctx: Ctx, x: number, base: number, s = 1, fill = '#5d86a8'): void {
   const w = 4 * s;
   const h = 8 * s;
   poly(ctx, [x - w, base - h, x + w, base - h, x + w * 0.8, base, x - w * 0.8, base], '#7b5634');
   rect(ctx, x - w * 0.95, base - h * 0.7, w * 1.9, 1.2 * s, '#4a3a2a'); // the iron hoop
-  ellipse(ctx, x, base - h, w, 1.4 * s, '#5d86a8'); // the water
+  ellipse(ctx, x, base - h, w, 1.4 * s, fill); // the water (or milk)
   ctx.strokeStyle = '#4a3a2a';
   ctx.lineWidth = 0.8 * s;
   ctx.beginPath();

@@ -17,6 +17,7 @@ import { crossroadsPlaces, sizeOfBuilding } from '../game/grid';
 import { BASE_Y, CELL_W, EYE_DIST, FIELD_ROWS, QUARRIES, quarryLand, ROAD_FAR_Y, ROAD_NEAR_Y, STREET_LINE_Y, TREE_Y } from '../game/layout';
 import { employees } from '../game/people';
 import { drawingAt } from '../game/transport';
+import { pastureCells } from '../game/pasture';
 import { laidOut, onSite, upgrading } from '../game/site';
 import { backOf, crossings, groundPoint, mapPoint, SIDE_ROAD_HALF, streetOf, type Street, type Vec } from '../game/streets';
 import { getBuilding, type Building, type World } from '../game/world';
@@ -250,6 +251,8 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
       laid: laidOut(b),
       vpX: 0,
       drawing: b.type === 'well' ? drawingAt(world, b) : null,
+      herd: b.herd,
+      pasture: b.type === 'horsefarm' && b.status === 'done' ? pastureCells(world, b).length : undefined,
     };
     const { at, view } = lot(b, x);
     add(at, BUILDINGS[b.type].width, () => {

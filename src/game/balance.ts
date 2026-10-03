@@ -6,6 +6,7 @@
 // Amounts are items: a log (wood), a block (stone), a board (planks).
 
 import type { BuildingType } from './buildings';
+import type { AnimalKind } from './livestock';
 import type { Amounts } from './resources';
 
 /** What a new building type costs until it is balanced. */
@@ -26,6 +27,10 @@ export const COSTS: Record<BuildingType, Amounts> = {
   well: { wood: 1, stone: 3 },
   woodcutter: { wood: 3, stone: 1 },
   sawmill: NEW_BUILDING_COST,
+  chickenfarm: NEW_BUILDING_COST,
+  cowfarm: NEW_BUILDING_COST,
+  sheepfarm: NEW_BUILDING_COST,
+  horsefarm: NEW_BUILDING_COST,
   stonecutter: { wood: 4, stone: 1 },
   intersection: { wood: 1 },
   road: { wood: 3 },
@@ -38,6 +43,20 @@ export const UPGRADE_COSTS: Partial<Record<BuildingType, Amounts>> = {
 
 /** Seconds of work to draw a bucket of water at a well (transport.ts). */
 export const WELL_DRAW_SECONDS = 2;
+
+/**
+ * The animals' lives, in years (one game day is a year), as on a real farm:
+ * grown up (`adult`), giving eggs or milk and breeding until `productiveUntil`,
+ * and butchered for `meat` (items) at the end of their `lifespan`. Every
+ * `feedsPerBirth` feeds a productive pair has a young one, up to `max` animals
+ * (horses: also as their pasture allows, pasture.ts).
+ */
+export const ANIMALS: Record<AnimalKind, { adult: number; productiveUntil: number; lifespan: number; feedsPerBirth: number; max: number; meat: number }> = {
+  chicken: { adult: 0.5, productiveUntil: 3, lifespan: 8, feedsPerBirth: 2, max: 8, meat: 1 },
+  cow: { adult: 2, productiveUntil: 10, lifespan: 20, feedsPerBirth: 4, max: 4, meat: 2 },
+  sheep: { adult: 1, productiveUntil: 7, lifespan: 12, feedsPerBirth: 3, max: 6, meat: 1 },
+  horse: { adult: 4, productiveUntil: 20, lifespan: 30, feedsPerBirth: 4, max: 6, meat: 2 },
+};
 
 /** What the starting village's storage yard holds. */
 export const START_STOCK: Amounts = { wood: 25, stone: 20, planks: 10 };

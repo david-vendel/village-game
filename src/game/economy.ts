@@ -7,7 +7,8 @@
 
 import { START_STOCK } from './balance';
 import { BUILDINGS, type BuildingType, storageOf } from './buildings';
-import { BAKERY_SLOTS, BAKERY_WATER_SLOTS, WELL_SLOTS, BASKET, MILL_SLOTS, SACK, SAWMILL_SLOTS, STONECUTTER_SLOTS, TAVERN_SLOTS, SHEAF_SLOTS, STAND_Y, PILE_UNIT, warehouseSlot, WOODCUTTER_SLOTS, type Slot, type Spot } from './layout';
+import { isYardItem, FEED_SLOTS, GOODS_SLOTS, HAY_SLOTS, BAKERY_SLOTS, BAKERY_WATER_SLOTS, WELL_SLOTS, BASKET, MILL_SLOTS, SACK, SAWMILL_SLOTS, STONECUTTER_SLOTS, TAVERN_SLOTS, SHEAF_SLOTS, STAND_Y, PILE_UNIT, warehouseSlot, WOODCUTTER_SLOTS, type Slot, type Spot } from './layout';
+import { goodsOf } from './livestock';
 import { room, RESOURCES, shortfall, stockOf, type Amounts, type Load, type Resource, type Stock } from './resources';
 import { takeFromPile, type Pile } from './piles';
 import { owed } from './site';
@@ -147,9 +148,22 @@ export function putAway(world: World, load: Load, x: number): number {
  */
 export function storeSlots(b: Building, r: Resource): { unit: number; perTrip: number; slot: (i: number) => Slot } | null {
   const pick = (slots: readonly Slot[]) => (i: number) => slots[Math.max(0, Math.min(i, slots.length - 1))];
-  // a yard keeps no water
-  if (b.type === 'warehouse') return r === 'water' ? null : { unit: PILE_UNIT, perTrip: 1, slot: (i) => warehouseSlot(r, i, b.size ?? 1) };
+  // a yard keeps only what it has piles for (no water, hay or the animals' goods)
+  if (b.type === 'warehouse') return isYardItem(r) ? { unit: PILE_UNIT, perTrip: 1, slot: (i) => warehouseSlot(r, i, b.size ?? 1) } : null;
   if (b.type === 'farm' && r === 'grain') return { unit: 1, perTrip: 1, slot: pick(SHEAF_SLOTS) };
+  if (b.type === 'farm' && r === 'hay') return { unit: 1, perTrip: 1, slot: pick(HAY_SLOTS) };
+  const stock = BUILDINGS[b.type].livestock;
+  if (stock) {
+    const def = BUILDINGS[b.type];
+    if (r === stock.feed) return { unit: 1, perTrip: 1, slot: pick(FEED_SLOTS) };
+    // what the animals give, side by side right of the door, each kind after the one before (livestock.ts goodsOf)
+    const goods = goodsOf(def);
+    const k = goods.indexOf(r);
+    if (k >= 0) {
+      const first = goods.slice(0, k).reduce((n, g) => n + (def.storage[g] ?? 0), 0);
+      return { unit: 1, perTrip: 1, slot: pick(GOODS_SLOTS.slice(first)) };
+    }
+  }
   if (b.type === 'mill' && (r === 'grain' || r === 'flour')) return { unit: SACK, perTrip: 1, slot: pick(MILL_SLOTS[r]) };
   if (b.type === 'bakery' && r === 'flour') return { unit: SACK, perTrip: 1, slot: pick(BAKERY_SLOTS.flour) };
   if (b.type === 'bakery' && r === 'bread') return { unit: BASKET, perTrip: 1, slot: pick(BAKERY_SLOTS.bread) };

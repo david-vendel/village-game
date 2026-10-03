@@ -152,6 +152,13 @@ export const SACK = 1;
 /** What a basket of loaves holds: one bread; one basket per place in a store. */
 export const BASKET = 1;
 
+/** Where each bale of hay stands at a farm, in front of the barn (bottom row first). */
+export const HAY_SLOTS: readonly Slot[] = [
+  { dx: 44, lift: 0 },
+  { dx: 58, lift: 0 },
+  { dx: 51, lift: 9 },
+];
+
 /** Items in a pile holding `amount` (a part-filled item counts). */
 export const pileItems = (amount: number) => Math.ceil(amount / PILE_UNIT - 1e-9);
 
@@ -182,6 +189,8 @@ function pyramid(i: number, rows: readonly number[]): { row: number; col: number
  * (buildings.ts).
  */
 export const YARD_ITEMS = { wood: 15, stone: 15, planks: 10, grain: 5, flour: 5, bread: 5 } as const;
+/** Whether the storage yard keeps r (it has piles for it). */
+export const isYardItem = (r: string): r is keyof typeof YARD_ITEMS => r in YARD_ITEMS;
 /** How many items of each the yard's piles are laid out for: a medium yard's. */
 const YARD_LAID = { wood: 30, stone: 30, planks: 20, grain: 10, flour: 10, bread: 10 } as const;
 
@@ -308,6 +317,22 @@ export const WELL_SLOTS: readonly Slot[] = [
   { dx: 23, lift: 0 },
 ];
 export const WELL_DRAW: Spot = { dx: 36, y: STAND_Y };
+
+/**
+ * The animal farms (chickens, cows, sheep, horses) share one yard: a shed on
+ * the left with its door, the feed (hay, or the hens' grain) stacked left of
+ * the door, what the animals give set out right of it, and a fenced paddock on
+ * the right with the trough the keeper fills, standing at its left end.
+ */
+export const LIVESTOCK_DOOR: Spot = { dx: -30, y: STAND_Y };
+export const LIVESTOCK_TROUGH_DX = 34;
+export const LIVESTOCK_FEED: Spot = { dx: LIVESTOCK_TROUGH_DX - 16, y: STAND_Y };
+export const FEED_SLOTS: readonly Slot[] = [
+  { dx: -66, lift: 0 },
+  { dx: -54, lift: 0 },
+  { dx: -60, lift: 9 },
+];
+export const GOODS_SLOTS: readonly Slot[] = [-18, -11, -4, 3, 10, 17, 24, 31].map((dx) => ({ dx, lift: 0 }));
 
 /** Baskets of loaves on the bench in front of the tavern, where its guests help themselves. */
 export const TAVERN_SLOTS: readonly Slot[] = [

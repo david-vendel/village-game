@@ -20,6 +20,14 @@ Things only you can do or decide, so agents work faster. Tick them off or delete
 - [ ] **In the `graphics` worktree** (and any other clone), once, with no uncommitted changes,
   after merging `main`: `git rm -r --cached . && git reset --hard`. This rewrites its files with
   LF line endings to match `.gitattributes`.
+- [ ] **Say what uses milk, wool, eggs and meat.** The animal farms make them, but nothing uses
+  them yet and storage yards don't keep them, so each farm's store fills up and then the keeper
+  stops feeding except to raise young. A dairy, a weaver, the tavern's kitchen?
+- [ ] **Check the animals' numbers** in `ANIMALS` (`src/game/balance.ts`): grown up / productive
+  until / lifespan in years (a game day is a year), feeds per young one, herd caps, meat per animal.
+  Also `PASTURE_CELLS_PER_HORSE` (8) in `src/game/pasture.ts`.
+- [ ] **Add the new buildings to the showcase scenario** if you want them there; the free spots
+  on its main street are mostly kept for crossroads, so it needs a layout decision.
 
 ## Tips for asking
 

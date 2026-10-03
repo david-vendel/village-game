@@ -23,9 +23,10 @@ const byId = (els: Element[]) => new Map(els.map((e) => [e.id, e]));
 const finished = (els: Element[], variant: 'default' | 'upgraded' = 'default') => els.filter((e) => shows(e, { variant }));
 
 describe('every 3D building', () => {
-  // the sawmill is drawn in 2D until it gets a model of its own
-  it('covers every building type but the crossroads, the road and the sawmill', () => {
-    for (const t of Object.keys(BUILDINGS) as BuildingType[]) if (t !== 'intersection' && t !== 'road' && t !== 'sawmill') expect(TYPES, t).toContain(t);
+  // newer buildings are drawn in 2D until they get a model of their own (graphics work)
+  const NO_MODEL_YET: readonly BuildingType[] = ['intersection', 'road', 'sawmill', 'chickenfarm', 'cowfarm', 'sheepfarm', 'horsefarm'];
+  it('covers every building type but the crossroads, the road and those still 2D only', () => {
+    for (const t of Object.keys(BUILDINGS) as BuildingType[]) if (!NO_MODEL_YET.includes(t)) expect(TYPES, t).toContain(t);
   });
 
   for (const type of TYPES) {

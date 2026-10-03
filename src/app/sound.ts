@@ -208,7 +208,7 @@ export function createSound(initialVolume = 0.6): Sound {
     setDown(x: number, r: Resource, k = 1) {
       if (r === 'water') {
         noise({ x, dur: 0.18, gain: 0.12 * k, filter: 'bandpass', freq: 700, q: 2, attack: 0.03 });
-      } else if (r === 'grain' || r === 'flour' || r === 'bread') {
+      } else if (r === 'grain' || r === 'flour' || r === 'bread' || r === 'hay' || r === 'wool' || r === 'eggs' || r === 'meat' || r === 'milk') {
         noise({ x, dur: 0.12, gain: 0.2 * k, filter: 'bandpass', freq: 1800, attack: 0.02 });
         tone({ x, dur: 0.14, gain: 0.15 * k, freq: 90, to: 55 });
       } else if (r === 'wood' || r === 'planks') {

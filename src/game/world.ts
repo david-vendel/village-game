@@ -30,6 +30,7 @@ import { eatAtTaverns } from './tavern';
 import { serfPositions, transportHub, transportWorkplace } from './transport';
 import { createWorker, currentJob, offDuty, updateWorker, type Nav, type Worker, type Workplace } from './worker';
 import { workshopWorkplace } from './workshop';
+import { ageHerds, livestockWorkplace, type Herd } from './livestock';
 import { parcelsLaid, ROAD_PIECE, roadWorkplace } from './roadwork';
 
 /** Length of each street (streets.ts). */
@@ -120,6 +121,8 @@ export interface Building {
   demolition?: Demolition;
   /** Fields — farms only, once finished. */
   farm?: FarmState;
+  /** An animal farm's animals (livestock.ts). */
+  herd?: Herd;
   /** A newly finished house's people still to come out of its door, one by one: how many, and the seconds until the next (moveIn). */
   arriving?: { left: number; next: number };
 }
@@ -1065,6 +1068,7 @@ export function update(world: World, dt: number, input: MoveInput): void {
   arrive(world, dt);
   staff(world);
   for (const b of world.buildings) if (b.farm) updateCrops(b.farm, dt);
+  ageHerds(world, dt);
   updateForest(world, dt, () => rand(world));
   updateWorkers(world, dt);
   // a site whose builders have done all the work is finished
@@ -1087,6 +1091,8 @@ export function workplaceOf(world: World, b: Building, role: Role): Workplace | 
   if (b.farm) return farmWorkplace(b.farm, b.stock, world.params);
   const recipe = BUILDINGS[b.type].makes;
   if (recipe && b.status === 'done') return workshopWorkplace(world, b, recipe);
+  const stock = BUILDINGS[b.type].livestock;
+  if (stock && b.status === 'done') return livestockWorkplace(world, b, stock);
   if (isGatherHut(b.type) && b.status === 'done') return gatherWorkplace(world, b as Building & { type: typeof b.type });
   if (b === transportHub(world)) return transportWorkplace(world, b);
   return null;

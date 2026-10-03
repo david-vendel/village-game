@@ -30,7 +30,7 @@ import { cellKey, cellName, cellsOf, footprintOf } from './grid';
 import { lowestPlot, streetOf, type Street } from './streets';
 import { createWorld, goneStreet, layStreet, MERGES, PLOT_LAST, setStreetEnds, type Building, type Rider, type World } from './world';
 
-export const SAVE_VERSION = 27;
+export const SAVE_VERSION = 28;
 
 
 /** The persisted part of the world. */
@@ -293,6 +293,17 @@ function building(v: unknown, path: string): Building {
     out.road = { step: dir(r.step, `${path}.road.step`), from: int(r.from, `${path}.road.from`) };
   }
   if (b.farm !== undefined) out.farm = farm(b.farm, `${path}.farm`);
+  if (b.herd !== undefined) {
+    const h = obj(b.herd, `${path}.herd`);
+    out.herd = {
+      fed: Math.max(0, num(h.fed, `${path}.herd.fed`)),
+      born: Math.max(0, int(h.born, `${path}.herd.born`)),
+      animals: arr(h.animals, `${path}.herd.animals`).map((v, i) => {
+        const a = obj(v, `${path}.herd.animals[${i}]`);
+        return { sex: oneOf(a.sex, ['female', 'male'] as const, `${path}.herd.animals[${i}].sex`), age: Math.max(0, num(a.age, `${path}.herd.animals[${i}].age`)) };
+      }),
+    };
+  }
   if (b.demolition !== undefined) {
     const d = obj(b.demolition, `${path}.demolition`);
     out.demolition = { work: Math.max(0, num(d.work, `${path}.demolition.work`)), from: Math.min(1, Math.max(1e-3, num(d.from, `${path}.demolition.from`))), left: stock(d.left, `${path}.demolition.left`) };
@@ -309,7 +320,7 @@ function site(v: unknown, path: string, type: BuildingType): Site {
     const extra = laid.pop()!;
     for (const r of RESOURCES) laid[laid.length - 1][r] += extra[r];
   }
-  while (laid.length < spots) laid.push(stock({ wood: 0, stone: 0, planks: 0, grain: 0, flour: 0, bread: 0, water: 0 }, path));
+  while (laid.length < spots) laid.push(stock(stockOf(), path));
   return { delivered: stock(s.delivered, `${path}.delivered`), pile: stock(s.pile, `${path}.pile`), laid };
 }
 
@@ -385,6 +396,7 @@ function fieldPlot(v: unknown, path: string): FieldPlot {
     width: num(p.width, `${path}.width`),
     tilled: bool(p.tilled, `${path}.tilled`),
     state: oneOf(p.state, ['fallow', 'growing', 'ripe'] as const, `${path}.state`),
+    crop: oneOf(p.crop, ['grain', 'hay'] as const, `${path}.crop`),
     age: num(p.age, `${path}.age`),
   };
 }

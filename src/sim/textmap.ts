@@ -14,6 +14,7 @@ import { FIELD_CELLS, FIELD_REACH } from '../game/land';
 import { BLOCK, CELL_W, QUARRIES, quarryLand, ROAD_GRID, ROAD_GRID_COL, ROAD_GRID_ROW } from '../game/layout';
 import { treePoint } from '../game/nature';
 import { RESOURCES } from '../game/resources';
+import { pastureCells } from '../game/pasture';
 import { groundPoint, mapPoint, streetOf, streetRange, streetStart } from '../game/streets';
 import { MERGES, type Building, type World } from '../game/world';
 
@@ -32,6 +33,10 @@ export const GLYPH: Record<BuildingType, string> = {
   well: 'U',
   woodcutter: 'X',
   sawmill: 'P',
+  chickenfarm: 'G',
+  cowfarm: 'D',
+  sheepfarm: 'E',
+  horsefarm: 'N',
   stonecutter: 'Q',
   intersection: 'I',
   road: 'R',
@@ -185,6 +190,8 @@ export function listBuildings(world: World): string {
       const n = (s: string) => b.farm!.plots.filter((p) => (s === 'grass' ? !p.tilled : p.tilled && p.state === s)).length;
       parts.push(`fields=${b.farm.plots.length} (grass ${n('grass')}, fallow ${n('fallow')}, growing ${n('growing')}, ripe ${n('ripe')})`);
     }
+    if (b.herd) parts.push(`herd: ${b.herd.animals.map((a) => `${a.sex[0]}${Math.floor(a.age)}`).join(' ') || 'none'}`);
+    if (b.type === 'horsefarm' && b.status === 'done') parts.push(`pasture=${pastureCells(world, b).length}`);
     const staff = world.people.filter((p) => p.job?.buildingId === b.id).map((p) => p.job!.role);
     if (staff.length) parts.push(`staff: ${staff.join(', ')}`);
     return parts.join('  ');

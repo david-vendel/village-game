@@ -99,7 +99,7 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   people and animals, the village `stock`pile, rider physics, build menu, construction progress
   and stages, the construction toggle, events. `workplaceOf` says what work a building gives its
   workers. Tested by `world.test.ts`.
-- `resources.ts`: resources (wood (logs), stone, planks, grain, flour, bread, water), `Stock` (an amount of each) and `Amounts` (some
+- `resources.ts`: resources (wood (logs), stone, planks, grain, hay, flour, bread, water, milk, wool, eggs, meat), `Stock` (an amount of each) and `Amounts` (some
   of them, e.g. a cost), with affordability and payment helpers.
 - `economy.ts`: the village's materials are what its warehouses hold (the `warehouse` building is
   shown as an open storage yard: all it holds lies in its piles, `YARD_ITEMS` in `layout.ts`, which
@@ -129,6 +129,19 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   nothing to make and none of the input, they fetch it themselves from the nearest source,
   unless someone is already bringing it. A new production building needs only a recipe, store
   places (`storeSlots`) and its art.
+- `livestock.ts`: the animal farms (chicken, cow, sheep, horse: `BuildingDef.livestock`). Each keeps a
+  herd (`Building.herd`): every animal female or male, with an age in years (one game day is a year,
+  `ageHerds`); a new farm starts with a grown pair. `ANIMALS` in `balance.ts` gives each kind's real
+  life: grown up, productive until, lifespan, feeds per young one, most kept, meat. Productive
+  females give eggs or milk (cows two pails a feed), productive adults wool, and a productive pair
+  breeds (female and male young in turn). The keeper (`herder`) carries the feed (grain for hens,
+  hay for the rest) to the trough, carries back what the animals give, and butchers an animal at the
+  end of its lifespan for meat. They share one yard layout (`LIVESTOCK_DOOR`, `FEED_SLOTS`,
+  `GOODS_SLOTS` in `layout.ts`). Their goods stay in their stores for now: nothing uses them yet.
+- `pasture.ts`: a horse farm's pasture: the free cells reachable from the row behind it, bounded by
+  roads, buildings, fields, the quarries, crossroads land and the road grid's lines, so never past
+  its square of the grid; building there takes from it. A horse needs `PASTURE_CELLS_PER_HORSE`
+  cells (`herdRoom`); the farm's sign shows how many it has.
 - `tavern.ts`: the tavern `needs` bread (serfs bring it from a warehouse to the baskets on its
   bench, `TAVERN_SLOTS`); its guests eat a loaf every `LOAF_HOURS` game hours, worked out from the
   day clock.
@@ -162,7 +175,10 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   field is one land-grid cell (see `land.ts`) in one of the field rows (`FIELD_ROWS` in
   `layout.ts`): the three lot rows behind the road, two in front of it. A new
   farm is just the farmstead: a field stays grass until the farmer first works it (`tilled`). Each
-  field keeps its own state (fallow → growing → ripe) and age (150 s to ripe). Jobs: harvest while
+  field keeps its own state (fallow → growing → ripe) and age (150 s to ripe), and its crop: wheat
+  (a sheaf of grain) or meadow grass (a bale of hay, stacked by the barn, `HAY_SLOTS`); each sowing
+  the farmer picks the crop the store is shorter of (`cropToSow`). Grain goes to the mill and the
+  chicken farm, hay to the cow, sheep and horse farms. Jobs: harvest while
   the farm store has room for the sheaf, else sow, nearest first; each takes `sowPerCell` /
   `harvestPerCell` seconds (tuning sliders). A harvest yields a sheaf, stacked in its own place in the
   store (`SHEAF_SLOTS`), from where serfs carry them to a warehouse (`transport.ts`).

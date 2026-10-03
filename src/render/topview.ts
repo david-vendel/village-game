@@ -38,12 +38,16 @@ const ROOF: Record<BuildingType, string> = {
   well: '#7a8a9a',
   woodcutter: '#6b4a2c',
   sawmill: '#9a7a4e',
+  chickenfarm: '#a07a50',
+  cowfarm: '#b8955a',
+  sheepfarm: '#a8a090',
+  horsefarm: '#7a5a3a',
   stonecutter: '#8a8680',
   intersection: '#a8875b',
   road: '#a8875b',
 };
 
-const RESOURCE_COLOUR: Record<Load['resource'], string> = { wood: '#7b5634', stone: '#a89c88', planks: '#c9a06a', grain: '#d8b850', flour: '#f1ece0', bread: '#c58a46', water: '#5d86a8' };
+const RESOURCE_COLOUR: Record<Load['resource'], string> = { wood: '#7b5634', stone: '#a89c88', planks: '#c9a06a', grain: '#d8b850', flour: '#f1ece0', bread: '#c58a46', water: '#5d86a8', hay: '#cdb860', milk: '#f4f1e8', wool: '#ece6d6', eggs: '#e8dcc4', meat: '#b5523b' };
 
 export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zoom: number, showGrid: boolean, hover: { x: number; y: number } | null = null): void {
   const time = world.time;

@@ -4,15 +4,20 @@
 // neighbour builds). It is also a workplace (worker.ts): farmers sow fallow
 // plots and harvest ripe ones, and stack each sheaf in its own place in the
 // farm's store (the building's stock, see SHEAF_SLOTS), from where serfs
-// carry them to a warehouse (transport.ts). Everything else about a farmer's
-// day is the generic worker routine.
+// carry them to a warehouse (transport.ts). A field grows wheat (a sheaf of
+// grain) or meadow grass (a bale of hay): each sowing the farmer picks the
+// crop the store is shorter of, counting what is already growing. Everything
+// else about a farmer's day is the generic worker routine.
 import { BUILDINGS } from './buildings';
-import { CELL_W, FIELD_ROWS, HOME, SHEAF_SLOTS, STAND_Y, workY, type FieldZone, type Spot } from './layout';
+import { CELL_W, FIELD_ROWS, HAY_SLOTS, HOME, SHEAF_SLOTS, STAND_Y, workY, type FieldZone, type Spot } from './layout';
 import { room, type Load, type Stock } from './resources';
 import { currentJob, retarget, type JobTicket, type Worker, type Workplace } from './worker';
 
 export type { FieldZone };
 export type PlotState = 'fallow' | 'growing' | 'ripe';
+/** What a field grows: wheat, harvested as a sheaf of grain, or meadow grass, as a bale of hay. */
+export type Crop = 'grain' | 'hay';
+export const CROPS: readonly Crop[] = ['grain', 'hay'];
 
 /** Where a field plot lies: zone, row in it (0 = far; see FIELD_ROWS), centre x relative to the farm's centre, width. */
 export interface FieldSpot {
@@ -29,6 +34,8 @@ export interface FieldPlot extends FieldSpot {
    */
   tilled: boolean;
   state: PlotState;
+  /** What it grows (or last grew). */
+  crop: Crop;
   /** Seconds since sowing (only meaningful while growing / ripe). */
   age: number;
 }
@@ -91,7 +98,7 @@ export function setFieldSpots(farm: FarmState, spots: FieldSpot[], workers: Work
     for (const p of farm.plots) {
       if (!taken.has(p) && overlap(p, s) > 0 && (!from || overlap(p, s) > overlap(from, s))) from = p;
     }
-    const plot: FieldPlot = { ...s, tilled: from?.tilled ?? false, state: from?.state ?? 'fallow', age: from?.age ?? 0 };
+    const plot: FieldPlot = { ...s, tilled: from?.tilled ?? false, state: from?.state ?? 'fallow', crop: from?.crop ?? 'grain', age: from?.age ?? 0 };
     if (from) {
       taken.add(from);
       successor.set(from, plot);
@@ -135,7 +142,7 @@ export function repairFarm(farm: FarmState, workers: Worker[]): void {
 
 /** A new farm: just the farmstead. Its fields appear as the farmer first works them. */
 export function createFarm(opts: { spots?: FieldSpot[] } = {}): FarmState {
-  return { plots: (opts.spots ?? openFieldSpots()).map((s): FieldPlot => ({ ...s, tilled: false, state: 'fallow', age: 0 })) };
+  return { plots: (opts.spots ?? openFieldSpots()).map((s): FieldPlot => ({ ...s, tilled: false, state: 'fallow', crop: 'grain', age: 0 })) };
 }
 
 /** Plot growth 0..1. */
@@ -176,12 +183,10 @@ export function farmWorkplace(farm: FarmState, stock: Stock, work: FarmWork = DE
         const p = farm.plots[i];
         return { job: { action, target: i }, dx: p.dx, y: workY(p.zone, p.row) };
       };
-      // sheaves already on their way count against the room in the store
-      const incoming = taken.filter((j) => j.action === 'harvest').length;
-      if (room(stock, capacity, 'grain') > incoming) {
-        const ripe = pick('ripe');
-        if (ripe >= 0) return at(ripe, 'harvest');
-      }
+      // a ripe field whose crop the store has room for; what is already being harvested counts against it
+      const incoming = (c: Crop) => taken.filter((j) => j.action === 'harvest' && farm.plots[j.target]?.crop === c).length;
+      const ripe = pick('ripe', (p) => room(stock, capacity, p.crop) > incoming(p.crop));
+      if (ripe >= 0) return at(ripe, 'harvest');
       const fallow = pick('fallow');
       return fallow >= 0 ? at(fallow, 'sow') : null;
     },
@@ -198,18 +203,26 @@ export function farmWorkplace(farm: FarmState, stock: Stock, work: FarmWork = DE
       p.age = 0;
       if (job.action === 'sow') {
         p.state = 'growing';
+        p.crop = cropToSow(farm, stock, capacity);
         return null;
       }
       p.state = 'fallow';
-      return { resource: 'grain', amount: 1 }; // a sheaf
+      return { resource: p.crop, amount: 1 }; // a sheaf, or a bale
     },
-    dropSpot() {
+    dropSpot(_job, load) {
+      if (load.resource === 'hay') return { dx: HAY_SLOTS[Math.max(0, Math.min(stock.hay, HAY_SLOTS.length - 1))].dx, y: STAND_Y };
       return sheafSpot(stock.grain);
     },
     deliver(load) {
       stock[load.resource] = Math.min(capacity[load.resource] ?? 0, stock[load.resource] + load.amount);
     },
   };
+}
+
+/** The crop the farm is shorter of: what is stored and growing of each, against what its store holds. */
+export function cropToSow(farm: FarmState, stock: Stock, capacity: Partial<Record<Crop, number>>): Crop {
+  const share = (c: Crop) => (stock[c] + farm.plots.filter((p) => p.state !== 'fallow' && p.crop === c).length) / Math.max(1, capacity[c] ?? 0);
+  return share('hay') < share('grain') ? 'hay' : 'grain';
 }
 
 /** A static farm for menu previews: its own land all ripe. */
