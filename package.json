@@ -14,7 +14,12 @@
     "art:render": "tsx tools/art-pipeline/run.ts",
     "art:test": "python -m unittest discover -s tools/art-pipeline/tests",
     "sim": "tsx tools/sim.ts",
-    "versions:build": "tsx tools/versions/build.ts"
+    "versions:build": "tsx tools/versions/build.ts",
+    "paint": "tsx tools/paint/run.ts",
+    "paint:apply": "tsx tools/paint/apply.ts",
+    "paint:flux": "tsx tools/paint/flux.ts",
+    "paint:showroom": "tsx tools/paint/showroom.ts",
+    "paint:tile": "tsx tools/paint/tileable.ts"
   },
   "devDependencies": {
     "@napi-rs/canvas": "^1.0.10",

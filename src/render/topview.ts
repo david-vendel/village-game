@@ -15,6 +15,10 @@ import { getBuilding, type World } from '../game/world';
 import { doorProgress } from './farm';
 import { figureOf, outfitOf } from './figure';
 import { circle, type Ctx, ellipse, hash, line, mix, poly, shade } from './util';
+import { BASE_Y, behindRoad } from '../game/layout';
+import { building3d } from './life3d';
+import { lightAt } from './sky';
+import { drawTop3d, has3d, ready3d, type Top3d } from './world3d';
 
 const SERIF = 'Georgia, "Times New Roman", serif';
 
@@ -128,6 +132,33 @@ export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zo
     }
   }
 
+  /** A building's name on the ground in front of it. */
+  const label = (b: { type: BuildingType }, x: number, front: number) => {
+    if (S <= 0.32) return;
+    const p = lot(x, front - 14);
+    ctx.font = `${Math.round(Math.max(9, 11 * Math.min(1.4, S * 1.6)))}px ${SERIF}`;
+    ctx.textAlign = 'center';
+    ctx.fillStyle = 'rgba(30,22,12,0.85)';
+    ctx.fillText(BUILDINGS[b.type].name, sx(p), sy(p) + 4);
+  };
+  // buildings with a 3D model: the model itself from straight above, its shadow on the ground
+  const tops: Top3d[] = [];
+  for (const b of world.buildings) {
+    if (b.type === 'intersection' || !has3d(b.type)) continue;
+    const s = world.streets[streetOf(b.x)];
+    if (!s) continue;
+    const o = lot(b.x, behindRoad(BASE_Y));
+    if (Math.abs(sx(o) - uiW / 2) > uiW / 2 + 300 * S || Math.abs(sy(o) - uiH / 2) > uiH / 2 + 300 * S) continue;
+    const m = building3d(world, b);
+    if (!ready3d(m)) continue;
+    tops.push({ b: m, ox: o.x, oy: o.y, along: s.dir, back: backOf(s.dir) });
+  }
+  const in3d = new Set(tops.map((t) => t.b.id));
+  if (tops.length) {
+    const light = lightAt(world);
+    drawTop3d(ctx, tops, { cx: c.x, cy: c.y, S, w: uiW, h: uiH, px: ctx.getTransform().a, phase: light.phase, sunHeight: light.sun, night: light.night, time });
+  }
+
   // buildings: a roof on the lot behind the road; sites are open frames filling in
   for (const b of world.buildings) {
     if (b.type === 'intersection') continue;
@@ -141,6 +172,10 @@ export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zo
     const deep = rowFar(f.j1) - front;
     const corners = [lot(x0, front), lot(x1, front), lot(x1, front + deep), lot(x0, front + deep)];
     const roof = ROOF[b.type];
+    if (in3d.has(b.id)) {
+      label(b, x, front);
+      continue;
+    }
     // shadow to the north-east
     shape(corners.map((p) => ({ x: p.x + 6, y: p.y + 6 })), 'rgba(30,24,12,0.25)');
     if (b.status !== 'done') {
@@ -174,13 +209,7 @@ export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zo
       }
       if (b.type === 'well') circle(ctx, sx(lot(x, front + deep / 2)), sy(lot(x, front + deep / 2)), Math.min(12, deep / 3) * S, '#3a4a5a');
     }
-    if (S > 0.32) {
-      const label = lot(x, front - 14);
-      ctx.font = `${Math.round(Math.max(9, 11 * Math.min(1.4, S * 1.6)))}px ${SERIF}`;
-      ctx.textAlign = 'center';
-      ctx.fillStyle = 'rgba(30,22,12,0.85)';
-      ctx.fillText(BUILDINGS[b.type].name, sx(label), sy(label) + 4);
-    }
+    label(b, x, front);
   }
   // the crossroads' fingerposts
   for (const b of world.buildings) {

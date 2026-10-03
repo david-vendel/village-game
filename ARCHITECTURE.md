@@ -58,7 +58,8 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
 
 | I want to… | Edit |
 | --- | --- |
-| Change how a building looks, or its drawn height | `render/buildings.ts` (`BUILDING_ART`) |
+| Change how a building looks, or its drawn height | in 3D: its generator in `render/build3d/` (shared pieces in `build3d/kit/`, materials in `build3d/materials.ts`); in 2D: `render/buildings.ts` (`BUILDING_ART`) |
+| Change when fires burn, lamps are lit, shutters open | `game/hearth.ts` |
 | Change sky, sun, moon, stars, clouds, night darkness | `render/sky.ts` |
 | Change hills, castle, road, grass | `render/background.ts` (trees: `render/nature.ts`, placed by `render/plane.ts`) |
 | Change day length, working hours, lunch | `game/daynight.ts` |
@@ -160,6 +161,10 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   lift it, like a summer far north; 0 is the midnight sun. `timeOfDay` gives villagers what they plan
   by: daylight (enough light to work: from half an hour after sunrise to half an hour before
   sunset, `WORK_MARGIN`), day number, hour, and game hours per second.
+- `hearth.ts`: what is going on inside a building, derived from the time of day and the people who
+  live and work there: a fire in the hearth (chimney smoke only then), a furnace at work (the oven,
+  the forge, the watch's brazier), lamps in the windows, the shutters open or closed, sleepers.
+  Tested by `hearth.test.ts`.
 - `nature.ts`: the woods and the quarries. Trees stand anywhere on the land with room (`treeRoom`):
   in clumps behind the streets and a little in front, never on a road, a building's lot, a field or a
   quarry, nor crowding each other; each keeps its place as a world x along a street and a depth y.
@@ -271,16 +276,38 @@ renderer draws, so a layout that is right in text is right on screen.
   `behind`/`front` art, and the drawn `height`. Art split for sprites also has `body` (the static
   picture a sprite replaces), `overlay` (live details: open door, stock, sleepers, drawn over the
   body or its sprite at named points), `points` and `lights` (for the exported emissive layer).
-- `world3d.ts` and `build3d/`: buildings in real-time 3D (three.js), generated in the game, no
-  model files. `build3d/elements.ts` is the piece model (a construction element: kind, shape,
-  size and place, material, stage, what it rests on, tags for looks/scaffolding/parts),
-  `build3d/farm.ts` the farm's architecture rules (seeded: no two farms alike; tested in
-  `tests/build3d-farm.test.ts`), `build3d/geometry.ts` turns a look's pieces into one mesh per
-  material. `world3d.ts` draws this street's 3D buildings through the game's own pinhole camera
-  (plane.ts), so a building lands where its 2D art would and shows its side as the camera moves;
-  the sun follows the game clock and casts shadows, which fade out as it sets. scene.ts
-  composites the 3D image at the building pass and places the building's live details at its
-  projected points. `?3d=0` keeps everything 2D; the frame rate shows bottom left (`?fps=0` hides it).
+- `world3d.ts` and `build3d/`: every building but the crossroads in real-time 3D (three.js),
+  generated in the game, no model files. `build3d/elements.ts` is the piece model (a construction
+  element: kind, shape, size and place, material, stage and order within it, what it rests on, tags
+  for variants, temporary things (`until:<stage>`: stakes, the open trench, spoil, scaffolding) and
+  moving parts (`anim:<name>`)). `build3d/kit/` is the shared architecture, each built in real
+  order: `site.ts` (staking out, trenches dug run by run with the spoil heaped, scaffolding),
+  `masonry.ts` (footings; stone walls course by course with bonded corners, lintels, sills, gables;
+  round arches turned in voussoirs; round towers; chimneys), `timber.ts` (timber frames member by member, wattle then daub, jetty
+  joists, log and board walls), `roof.ts` (rafters, battens, then thatch, tile, shingle, slate or
+  board covering course by course from the eaves; ridges, verges; flush where a neighbour's wall
+  meets the gable, overhanging alone), `openings.ts` (doors and windows: leaves and shutters as
+  moving parts, glowing panes), `props.ts`, and `body.ts` (a whole rectangular building from
+  storeys, openings, roof and chimneys). One file per kind: `house.ts` (three styles, sizes 1–3),
+  `farm.ts` (a jettied half-timbered farmhouse over an arched stone barn; both looks merged), `mill.ts` (also the well), `workshops.ts` (woodcutter, stonecutter,
+  bakery, smithy), `civic.ts` (tavern, chapel, market, watchtower, storage yard); `index.ts` the
+  registry and model cache; `plot.ts` the footprint in model space: below head height (`HEADROOM`)
+  everything stays on the building's own cells, so people walking round them (paths.ts) never pass
+  through anything; `stock.ts` the store's contents at the game's slots; `geometry.ts` turns pieces
+  into typed-array buffers merged per material; `materials.ts` the one material library (colour,
+  roughness, surface noise, weathering by age: moss on roofs, silvering timber, damp at the foot of
+  walls; glows by the building's light or fire). Tested in `tests/build3d*.test.ts` for every type.
+  `world3d.ts` draws them through the game's own pinhole camera (plane.ts), so a building lands where
+  its 2D art would and shows its side as the camera moves; a building going up is its meshes drawn up
+  to where the builders have got (a draw range in build order) plus its temporary things; one coming
+  down is the same in reverse; doors, shutters, sails, the windlass, the bell and signs move; the sun
+  follows the game clock and casts shadows, which fade out as it sets. New models are made a few
+  milliseconds' worth a frame (2D art meanwhile). `life3d.ts` turns the game state into what a
+  building shows (progress, neighbours, age, door, shutters, light, fire, stock) and draws its live
+  details (smoke only while something burns, sleepers). The top view (`?view=top`, Tab) draws the
+  same models from straight above. `?view=3d` is a gallery of every building (`&hour=`, `&type=` for
+  the construction row, `&rows=`, `&zoom=`); `?3d=0` keeps everything 2D; the frame rate shows bottom
+  left (`?fps=0` hides it).
 - `sprites.ts`: `drawBuilding`, which everything that draws a finished building calls: the
   building's sprite (shadow, colour, parts, smoke, then its `overlay`) when one is decoded, else
   its procedural `draw`. Stage sprites for construction, roadside views for buildings seen up a

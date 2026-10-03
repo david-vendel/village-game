@@ -116,8 +116,8 @@ export function workY(zone: FieldZone, row: number): number {
 }
 /** The farmyard: the farmer's home spot, by the farmhouse door. */
 export const HOME = { dx: -19, y: BASE_Y + 3 };
-/** The grain store, beside the farmhouse at the left end of the farmstead. */
-export const STORE = { dx: -70, y: BASE_Y + 3 };
+/** The grain store, in front of the farmhouse at the left end of the farmstead (its stooks inside the farm's cells). */
+export const STORE = { dx: -52, y: BASE_Y + 3 };
 
 // --- Where things lie ----------------------------------------------------------------
 // Every stored thing has its own place on the ground: each sheaf in a farm's
@@ -153,11 +153,11 @@ export const pileItems = (amount: number) => Math.ceil(amount / PILE_UNIT - 1e-9
 
 /** Where each sheaf stands in the farm's grain store, in the order they are stacked. */
 export const SHEAF_SLOTS: readonly Slot[] = [
-  { dx: STORE.dx - 15, lift: 0 },
+  { dx: STORE.dx - 14, lift: 0 },
   { dx: STORE.dx, lift: 0 },
-  { dx: STORE.dx + 15, lift: 0 },
-  { dx: STORE.dx - 7.5, lift: 13 },
-  { dx: STORE.dx + 7.5, lift: 13 },
+  { dx: STORE.dx + 14, lift: 0 },
+  { dx: STORE.dx - 7, lift: 13 },
+  { dx: STORE.dx + 7, lift: 13 },
 ];
 
 /** Row sizes of a pile stacked in a pyramid (bottom row first). */
@@ -190,8 +190,11 @@ const YARD_LAID = { wood: 30, stone: 30, grain: 10, flour: 10, bread: 10 } as co
 export function warehouseSlot(r: 'wood' | 'stone' | 'grain' | 'flour' | 'bread', i: number, size = 2): Slot {
   // laid out for a medium yard; a small one is squeezed into half the width, a large one spread over half again
   const s = warehouseSlotMedium(r, i);
-  return { dx: (s.dx * size) / 2, lift: s.lift };
+  return { dx: (s.dx * size * YARD_FIT) / 2, lift: s.lift };
 }
+
+/** The yard's piles drawn in from its ends, so every log and block lies on the yard's own cells. */
+const YARD_FIT = 0.84;
 
 function warehouseSlotMedium(r: 'wood' | 'stone' | 'grain' | 'flour' | 'bread', i: number): Slot {
   const n = Math.max(0, Math.min(i, YARD_LAID[r] - 1));
@@ -259,7 +262,7 @@ export const MILL_SLOTS: Record<'grain' | 'flour', readonly Slot[]> = {
 /** The bakery's door, where the baker goes in and out. */
 export const BAKERY_DOOR: Spot = { dx: -9, y: STAND_Y };
 /** The bakery's bread oven, built on at the right; its mouth at BAKERY_OVEN_MOUTH_DX, the baker working it from its left. */
-export const BAKERY_OVEN_MOUTH_DX = 65;
+export const BAKERY_OVEN_MOUTH_DX = 60;
 export const BAKERY_OVEN: Spot = { dx: BAKERY_OVEN_MOUTH_DX - 17, y: STAND_Y };
 
 /** The bakery's store: sacks of flour waiting left of the door, baskets of loaves right of it (bottom row first). */
@@ -330,12 +333,15 @@ export function quarryLand(q: { x: number }): { x0: number; x1: number; y0: numb
 /** Places along a quarry's face where a stonecutter works (dx from its centre). */
 export const QUARRY_SPOTS: readonly number[] = [-46, 0, 46];
 
-/** The woodcutter's hut door, and its store: logs stacked by the wall on the right (bottom row first). */
+/**
+ * The woodcutter's hut door, and its store: the wood yard in front of the hut, a cord of split wood
+ * stacked there per load, side by side along the street (bottom row first).
+ */
 export const WOODCUTTER_DOOR: Spot = { dx: -14, y: STAND_Y };
 export const WOODCUTTER_SLOTS: readonly Slot[] = [
+  { dx: 16, lift: 0 },
   { dx: 36, lift: 0 },
-  { dx: 36, lift: 5 },
-  { dx: 36, lift: 10 },
+  { dx: 56, lift: 0 },
 ];
 
 /** The stonecutter's hut door, and its store: dressed blocks set down on the right. */

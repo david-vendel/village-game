@@ -1,0 +1,184 @@
+[
+  {
+    "src": ".art-raw/building.farm/street/default/color.png",
+    "label": "3D farm (option 1), Blender render",
+    "kind": "cutout",
+    "width": 7.5,
+    "n": 1
+  },
+  {
+    "src": ".art-raw/flux/opt3/d0.55/flux1.png",
+    "label": "3D farm painted by FLUX, light (option 3)",
+    "kind": "cutout",
+    "width": 7.5,
+    "n": 2
+  },
+  {
+    "src": ".art-raw/flux/opt3/d0.72/flux1.png",
+    "label": "3D farm painted by FLUX, heavy (option 3)",
+    "kind": "cutout",
+    "width": 7.5,
+    "n": 3
+  },
+  {
+    "src": ".art-raw/flux/style/1-matrix-farm/serious-g2.0.png",
+    "label": "FLUX farmhouse, serious, g2.0",
+    "kind": "cutout",
+    "width": 16,
+    "n": 4
+  },
+  {
+    "src": ".art-raw/flux/style/1-matrix-farm/serious-g2.5.png",
+    "label": "FLUX farmhouse, serious, g2.5",
+    "kind": "cutout",
+    "width": 16,
+    "n": 5
+  },
+  {
+    "src": ".art-raw/flux/style/1-matrix-farm/cheer-g2.0.png",
+    "label": "FLUX farmhouse, cheerful, g2.0",
+    "kind": "cutout",
+    "width": 16,
+    "n": 6
+  },
+  {
+    "src": ".art-raw/flux/farmhouse-front/flux3.png",
+    "label": "FLUX farmhouse, first try, g3.5",
+    "kind": "cutout",
+    "width": 16,
+    "n": 7
+  },
+  {
+    "src": ".art-raw/flux/farmhouse/flux1.png",
+    "label": "FLUX farmhouse 3/4, first try",
+    "kind": "cutout",
+    "width": 16,
+    "n": 8
+  },
+  {
+    "src": ".art-raw/painted/building.pilot/painted/street/default/seed2.png",
+    "label": "Paint-over of a 3D cottage (SDXL)",
+    "kind": "cutout",
+    "width": 4.5,
+    "n": 9
+  },
+  {
+    "src": ".art-raw/flux/style/1-matrix-scene/serious-g2.0.png",
+    "label": "Scene: FLUX serious, g2.0",
+    "kind": "framed",
+    "width": 8,
+    "n": 10
+  },
+  {
+    "src": ".art-raw/flux/style/1-matrix-scene/cheer-g3.5.png",
+    "label": "Scene: FLUX cheerful, g3.5",
+    "kind": "framed",
+    "width": 8,
+    "n": 11
+  },
+  {
+    "src": ".art-raw/flux/style/3a-ref-img2img/d0.55.png",
+    "label": "Your screenshot repainted, 0.55",
+    "kind": "framed",
+    "width": 8,
+    "n": 12
+  },
+  {
+    "src": ".art-raw/flux/style/3a-ref-img2img/d0.75.png",
+    "label": "Your screenshot repainted, 0.75",
+    "kind": "framed",
+    "width": 8,
+    "n": 13
+  },
+  {
+    "src": ".art-raw/flux/style/3c-redux/mul-0.10.png",
+    "label": "FLUX Redux: style of your screenshot",
+    "kind": "framed",
+    "width": 8,
+    "n": 14
+  },
+  {
+    "src": ".art-raw/flux/style/3c-redux/attn-0.25.png",
+    "label": "FLUX Redux: style of your screenshot (2)",
+    "kind": "framed",
+    "width": 8,
+    "n": 15
+  },
+  {
+    "src": ".art-raw/flux/style/3b-ipadapter/dreamshaper-precise-w0.8-plain.png",
+    "label": "SDXL + IP-Adapter: your screenshot's style",
+    "kind": "framed",
+    "width": 8,
+    "n": 16
+  },
+  {
+    "src": ".art-raw/flux/style/3b-ipadapter/base-w0.9.png",
+    "label": "SDXL + IP-Adapter: your screenshot's style (2)",
+    "kind": "framed",
+    "width": 8,
+    "n": 17
+  },
+  {
+    "src": ".art-raw/flux/style/2-lora/dtthanh-0.8.png",
+    "label": "FLUX + oil LoRA (dtthanh) 0.8",
+    "kind": "cutout",
+    "width": 16,
+    "n": 18
+  },
+  {
+    "src": ".art-raw/flux/style/2-lora/dtthanh-1.0.png",
+    "label": "FLUX + oil LoRA (dtthanh) 1.0",
+    "kind": "cutout",
+    "width": 16,
+    "n": 19
+  },
+  {
+    "src": ".art-raw/flux/style/2-lora/muapi-0.7.png",
+    "label": "FLUX + oil LoRA (textured) 0.7",
+    "kind": "cutout",
+    "width": 16,
+    "n": 20
+  },
+  {
+    "src": ".art-raw/flux/style/2-lora/muapi-1.0.png",
+    "label": "FLUX + oil LoRA (textured) 1.0",
+    "kind": "cutout",
+    "width": 16,
+    "n": 21
+  },
+  {
+    "src": ".art-raw/flux/style/2-lora/oilscape-0.8.png",
+    "label": "FLUX + oil LoRA (oilscape) 0.8",
+    "kind": "cutout",
+    "width": 16,
+    "n": 22
+  },
+  {
+    "src": ".art-raw/flux/style/2-lora/oilscape-1.0.png",
+    "label": "FLUX + oil LoRA (oilscape) 1.0",
+    "kind": "cutout",
+    "width": 16,
+    "n": 23
+  },
+  {
+    "src": ".art-raw/flux/style/2-lora/scene-dtthanh.png",
+    "label": "Scene: oil LoRA (dtthanh)",
+    "kind": "framed",
+    "width": 8,
+    "n": 24
+  },
+  {
+    "src": ".art-raw/flux/style/2-lora/scene-muapi.png",
+    "label": "Scene: oil LoRA (textured)",
+    "kind": "framed",
+    "width": 8,
+    "n": 25
+  },
+  {
+    "src": ".art-raw/flux/style/2-lora/scene-oilscape.png",
+    "label": "Scene: oil LoRA (oilscape)",
+    "kind": "framed",
+    "width": 8,
+    "n": 26
+  }
+]

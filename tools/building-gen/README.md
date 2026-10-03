@@ -12,7 +12,7 @@ npm run art:test      # the harness maths (plain Python)
 
 | Layer | What |
 | --- | --- |
-| **The rules** | Live in the game: `src/render/build3d/` (`elements.ts`, `farm.ts`, tested in `tests/build3d-*.test.ts`). The game builds buildings from them in real-time 3D; `elements.ts` here prints them as JSON for Blender. |
+| **The rules** | Live in the game: `src/render/build3d/` (`elements.ts`, the shared `kit/`, one generator per building, tested in `tests/build3d*.test.ts`). The game builds buildings from them in real-time 3D; `elements.ts` here prints them as JSON for Blender. |
 | `core/elements.py` | Loads that JSON into `Element`s for the Blender layer (runs Node). |
 | `blender/` (needs bpy) | `build.py`: elements → meshes (bevelled timber and boards shared by size, rough fieldstones, the thatch shell, gable boards, the lean-to roof), sorted into the harness's collections, points as empties. `materials.py`: procedural materials (no image textures), varied per element. |
 | `scenes/` | Builders for the harness (`build()`) and their render jobs. |

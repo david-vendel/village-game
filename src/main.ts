@@ -12,7 +12,7 @@ import { installWorkersPanel } from './app/workers';
 import { installVersionsPanel, requestedVersion, showVersion } from './app/versions';
 import { update, type World } from './game/world';
 import { sizePanelButtons } from './app/panel';
-import { type ArtMode, cameraX, HUD_BUTTON, loadArt, renderFrame, showArtPreview, type Toast, viewY } from './render';
+import { type ArtMode, cameraX, HUD_BUTTON, loadArt, renderFrame, showArtPreview, showGallery3d, type Toast, viewY } from './render';
 import { yAt } from './game/layout';
 
 // ?art=procedural ignores sprite assets; ?art=preview shows the asset contact sheet instead of the game
@@ -23,6 +23,8 @@ await loadArt({ mode: art, approvedOnly: import.meta.env.PROD });
 const version = requestedVersion();
 if (version) showVersion(version);
 else if (art === 'preview') showArtPreview();
+// ?view=3d: the 3D buildings on their own (render/gallery3d.ts)
+else if (new URLSearchParams(location.search).get('view') === '3d') showGallery3d();
 else await play();
 
 async function play(): Promise<void> {

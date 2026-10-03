@@ -12,7 +12,7 @@ import { crossings, streetOf, streetRange } from '../game/streets';
 import { BUILDING_TYPES } from '../game/buildings';
 import { blockStartX, crossroadsPlaces, sizeOfBuilding } from '../game/grid';
 import { CELL_W, EYE_DIST } from '../game/layout';
-import { buildingAt, canDemolish, canUpgrade, constructionStage, crossroadAt, getBuilding, roomToBuild, type Building, type World } from '../game/world';
+import { buildingAt, canDemolish, canUpgrade, crossroadAt, getBuilding, roomToBuild, type Building, type World } from '../game/world';
 import { drawBackground, drawForeground, drawHaze, drawSideRoad, drawStreetEnds, type View } from './background';
 import { BUILDING_LINE_DIST, distAt, drawOtherGround, elsewhere3d, eyeOf, standingOn, TREE_LINE_DIST } from './plane';
 import { flushEmissive } from './assets';
@@ -29,7 +29,9 @@ import { drawVillager, walker } from './people';
 import { drawGroundPile } from './piles';
 import { drawBuildingLabel, drawCompletionEffect, drawDemolitionLabel, drawPlotPrompt, drawProgress } from './ui';
 import { type Ctx, GROUND_Y, ROAD_Y, VIEW_H } from './util';
-import { type Building3d, draw3d, has3d, height3d, nearestFootY } from './world3d';
+import { building3d, flushGlows, overlay3d } from './life3d';
+import { drawBuildingNumbers, drawShowroom, EASEL_Y, showroomEasels } from './showroom';
+import { draw3d, has3d, height3d, nearestFootY, ready3d } from './world3d';
 
 const BASE = GROUND_Y + 4;
 
@@ -141,20 +143,24 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   // buildings at their place among the far scenery (hazed with it beyond the tree line), those in front among
   // the people and pictures by where they stand on screen
   const light = lightAt(world);
-  const view3d = () => ({ camX, viewW, top: sv.top, bottom: sv.bottom, pxPerU: ctx.getTransform().a, phase: light.phase, sunHeight: light.sun, night: light.night });
+  const view3d = () => ({ camX, viewW, top: sv.top, bottom: sv.bottom, pxPerU: ctx.getTransform().a, phase: light.phase, sunHeight: light.sun, night: light.night, time: world.time });
   const cx = camX + viewW / 2;
-  const groups3d = { behind: [] as Array<{ m: Building3d; z: number }>, near: [] as Building3d[] };
+  type M3 = ReturnType<typeof building3d>;
+  const groups3d = { behind: [] as Array<{ m: M3; b: Building; z: number }>, near: [] as Array<{ m: M3; b: Building }> };
   for (const e of elsewhere3d(world, eye)) {
-    const b = e.b;
-    const stage = b.status === 'done' ? undefined : constructionStage(b.progress).stage;
-    const m: Building3d = { id: b.id, type: b.type, seed: b.id * 97, x: b.x, upgraded: !!b.upgraded, stage: stage === 'done' ? undefined : stage, parts: [], at: { x: cx + e.u, z: EYE_DIST - e.z, rot: e.rot } };
-    if (e.z >= BUILDING_LINE_DIST) groups3d.behind.push({ m, z: e.z });
-    else groups3d.near.push(m);
+    const m = building3d(world, e.b, { x: cx + e.u, z: EYE_DIST - e.z, rot: e.rot });
+    if (e.z >= BUILDING_LINE_DIST) groups3d.behind.push({ m, b: e.b, z: e.z });
+    else groups3d.near.push({ m, b: e.b });
   }
+  /** One building on another street, drawn on its own (clipped), with its smoke. */
+  const drawElsewhere = (m: M3, b: Building) => {
+    const at = draw3d(ctx, [m], view3d(), { clip: true }).get(b.id);
+    if (at) overlay3d(ctx, world, b, m, at);
+  };
   const behind = [
     ...elsewhere.filter((o) => o.z >= BUILDING_LINE_DIST),
     // each on its own, so a well or a tree behind it is drawn first and hidden, one in front drawn after
-    ...groups3d.behind.map(({ m, z }) => ({ z, y: 0, draw: () => void draw3d(ctx, [m], view3d(), { clip: true }) })),
+    ...groups3d.behind.map(({ m, b, z }) => ({ z, y: 0, draw: () => drawElsewhere(m, b) })),
     ...atWork.filter(({ w }) => w.y < BASE - 4).map(({ w, fig, x }) => ({ z: distAt(w.y), y: w.y, draw: () => drawAtWork(w, fig, x) })),
   ].sort((a, b) => b.z - a.z);
   let hazed = false;
@@ -172,15 +178,18 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   // where the building chosen in the menu would stand: its cells on the ground, green where it fits
   if (world.menu?.kind === 'build') drawSitePreview(ctx, world, BUILDING_TYPES[world.menu.selection], world.menu.x, camX, viewW);
 
-  // buildings: those with a 3D model in one 3D pass (world3d.ts), the rest as 2D art
-  const in3d: Array<{ b: Building; a: DrawArgs; m: Building3d }> = [];
+  // buildings: those with a 3D model in one 3D pass (world3d.ts), the rest as 2D art; a model still
+  // being made (a few a frame) shows its 2D art meanwhile
+  const in3d: Array<{ b: Building; a: DrawArgs; m: ReturnType<typeof building3d> }> = [];
   for (const b of world.buildings) {
     if (!onScreen(b.x)) continue;
     const a = args(b);
-    if (has3d(b.type) && !b.demolition && !upgrading(b)) {
-      const stage = b.status === 'done' ? undefined : constructionStage(b.progress).stage;
-      in3d.push({ b, a, m: { id: b.id, type: b.type, seed: a.seed, x: b.x, upgraded: !!b.upgraded, stage: stage === 'done' ? undefined : stage, parts: BUILDING_ART[b.type].stateParts?.(a) ?? [] } });
-      continue;
+    if (has3d(b.type)) {
+      const m = building3d(world, b);
+      if (ready3d(m)) {
+        in3d.push({ b, a, m });
+        continue;
+      }
     }
     if (b.demolition && b.demolition.from >= 1) drawDemolition(ctx, b.type, a, b.progress); // one still being built comes down through its stages
     else if (upgrading(b)) drawUpgrade(ctx, b.type, a, b.progress);
@@ -190,10 +199,13 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   if (in3d.length) {
     const at = draw3d(ctx, in3d.map((e) => e.m), view3d());
     for (const { b, a, m } of in3d) {
-      if (m.stage) drawSitePiles(ctx, b.type, a);
-      else BUILDING_ART[b.type].overlay?.(ctx, a, { at: at.get(b.id)!, part: (name) => m.parts.includes(name) });
+      if (m.build && !b.demolition) drawSitePiles(ctx, b.type, a);
+      const p = at.get(b.id);
+      if (p) overlay3d(ctx, world, b, m, p, a);
     }
   }
+  // the art experiments standing in the free stretches of the main street (dev)
+  drawShowroom(ctx, world, camX, viewW, BASE);
   // where a crossroads can be built on this street, a signpost
   for (const x of crossroadsPlaces(world)) if (streetOf(x) === street && onScreen(x)) drawCrossroadsSign(ctx, x - camX, BASE, world.time);
   // a crossroads' fingerpost also stands on the street its road leads to
@@ -222,10 +234,12 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
       .filter((p) => streetOf(p.x) === street && onScreen(p.x))
       .map((p) => ({ y: GROUND_PILE_Y, draw: () => atDepth(onGround(p.x, GROUND_PILE_Y), GROUND_PILE_Y, () => drawGroundPile(ctx, p, 0, 0)) })),
     { y: ROAD_Y, draw: () => atDepth(onGround(world.rider.x, ROAD_Y), ROAD_Y, () => drawRider(ctx, world.rider, 0, 0, world.time)) },
+    // the showroom's scenes on easels in front of the road (dev)
+    ...showroomEasels(world, camX, viewW).map((e) => ({ y: EASEL_Y, draw: () => atDepth(onGround(e.x, EASEL_Y), EASEL_Y, () => e.draw(ctx)) })),
     // nearer things (trees in front, the other streets where they run past this one): sorted in by where they stand on screen
     ...elsewhere.filter((o) => o.z < BUILDING_LINE_DIST),
     // and other streets' 3D buildings in front of this street's, each on its own, by where its footprint comes nearest
-    ...groups3d.near.map((m) => ({ y: nearestFootY(m, view3d()), draw: () => void draw3d(ctx, [m], view3d(), { clip: true }) })),
+    ...groups3d.near.map(({ m, b }) => ({ y: nearestFootY(m, view3d()), draw: () => drawElsewhere(m, b) })),
   ];
   for (const s of standing.sort((a, b) => a.y - b.y)) s.draw();
 
@@ -234,11 +248,14 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   tintLand(ctx, v, light);
   // lights (sprites' emissive layers) shine through the dark
   flushEmissive(ctx, light.night);
+  flushGlows(ctx, light.night, world.time);
   drawSkyBehind(ctx, v, light);
   drawGrade(ctx, viewW, sv.top, sv.bottom);
   if (sv.showGrid) drawLandGrid(ctx, world, camX, viewW, sv.hover ?? null);
 
   // world-anchored UI
+  // each building's number over it (with the showroom: to talk about a particular one)
+  drawBuildingNumbers(ctx, world, camX, viewW, BASE, drawnHeight);
   for (const b of world.buildings) {
     const sx = b.x - camX;
     if (!onScreen(b.x)) continue;
@@ -266,7 +283,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
 
 /** How tall a building stands on screen: its 3D model's height, or its 2D art's. */
 function drawnHeight(b: Building): number {
-  return has3d(b.type) ? height3d(b.type) : BUILDING_ART[b.type].height;
+  return has3d(b.type) ? height3d(b.type, b.id * 97, (b.size ?? 1) as 1 | 2 | 3) : BUILDING_ART[b.type].height;
 }
 
 /** The finished building of this street under a point of the scene (its footprint, up to its drawn height). */

@@ -4,3 +4,5 @@ dist/
 __pycache__/
 public/versions/
 .versions-wt/
+# showroom pictures (art tests, some made from reference art): local only, rebuilt by npm run paint:showroom
+public/showroom/

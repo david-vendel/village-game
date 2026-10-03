@@ -11,6 +11,9 @@ import { drawBuildMenu, drawHud, drawToasts, drawTurnFade, type Toast } from './
 export { artMode, loadArt, type ArtMode } from './assets';
 export { GAME_EYE_HEIGHT, setCameraDistance, setCameraHeight, viewY } from './ground';
 export { showArtPreview } from './preview';
+export { showGallery3d } from './gallery3d';
+export { setShowroom } from './showroom';
+export { setStyle as setStyle3d, STYLES as STYLES_3D, DEFAULT_STYLE as DEFAULT_STYLE_3D } from './build3d/style';
 export { cameraX } from './scene';
 export { galloping, STRIDE as HORSE_STRIDE, strideAt } from './horse';
 export { buildingMenuLayout, hit, HUD_BUTTON, hudLayout, menuLayout, type Rect, type Toast } from './ui';

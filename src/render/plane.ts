@@ -163,7 +163,7 @@ export interface Standing {
  * building sites, crossroads' fingerposts and people, and every tree and quarry.
  */
 /** Whether a building on another street is drawn in 3D (elsewhere3d) rather than as a picture. */
-const in3d = (b: Building) => has3d(b.type) && !b.demolition && !upgrading(b);
+const in3d = (b: Building) => has3d(b.type);
 
 /** A building on another street drawn in 3D: where it stands from the camera (plane.ts u, z) and which way it faces. */
 export interface Elsewhere3d {

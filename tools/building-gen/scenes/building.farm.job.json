@@ -1,0 +1,13 @@
+{
+  "id": "building.farm",
+  "views": ["street"],
+  "samples": 64,
+  "emissive_samples": 16,
+  "source": {
+    "method": "render3d",
+    "models": [{ "name": "Blender", "version": "4.5 LTS", "licence": "GPL-3.0 (tool; output is ours)" }],
+    "author": "tools/building-gen (procedural, mesh.ts)",
+    "notes": "Pilot: a building exactly as the game generates it, as the base for the paint-over.",
+    "date": "2026-10-02"
+  }
+}

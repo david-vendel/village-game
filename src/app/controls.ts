@@ -6,7 +6,7 @@
 import { canChoose } from '../game/world';
 import { streetOf } from '../game/streets';
 import type { MoveInput, World } from '../game/world';
-import { buildingMenuLayout, hit, hudLayout, menuLayout } from '../render';
+import { buildingMenuLayout, DEFAULT_STYLE_3D, hit, hudLayout, menuLayout, setShowroom, setStyle3d, STYLES_3D } from '../render';
 import type { Actions } from './actions';
 import { installMenu } from './menu';
 import type { Screen } from './screen';
@@ -36,6 +36,7 @@ const DOUBLE_TAP_MS = 300;
 const VIEW_KEY = 'village-game:view';
 const TOP_ZOOM_KEY = 'village-game:top-zoom';
 const VIEW3D_KEY = 'village-game:view3d';
+const STYLE_KEY = 'village-game:style3d';
 const stored = (key: string): string | null => {
   try {
     return localStorage.getItem(key);
@@ -56,8 +57,9 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
   const keys = new Set<string>();
   const pointers = new Map<number, { role: Role; x: number; y: number }>();
   let pinch: { dist: number; zoom: number } | null = null;
-  // the view from above is a preference, not game state (game/save.ts leaves UI out), so the browser keeps it
-  let topView = stored(VIEW_KEY) === 'top';
+  // the view from above is a preference, not game state (game/save.ts leaves UI out), so the browser keeps it;
+  // ?view=top opens on it (a link)
+  let topView = new URLSearchParams(location.search).get('view') === 'top' || stored(VIEW_KEY) === 'top';
   // 2D or 3D buildings: a preference the browser keeps; the address can set it for a link
   const view3dParam = new URLSearchParams(location.search).get('3d');
   let view3d = view3dParam === '0' ? false : view3dParam === '1' ? true : stored(VIEW3D_KEY) !== '2d';
@@ -65,7 +67,35 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
     view3d = !view3d;
     store(VIEW3D_KEY, view3d ? '3d' : '2d');
   };
-  const menu = installMenu([{ title: '3D buildings', isOn: () => view3d, toggle: toggleView3d }]);
+  // how the 3D buildings are painted and lit: a preference; ?style=<name> sets it for a link
+  const styleParam = new URLSearchParams(location.search).get('style');
+  let style = styleParam && STYLES_3D[styleParam] ? styleParam : (stored(STYLE_KEY) ?? DEFAULT_STYLE_3D);
+  if (!STYLES_3D[style]) style = DEFAULT_STYLE_3D;
+  setStyle3d(style);
+  const styleItems = Object.values(STYLES_3D).map((s) => ({
+    title: `  ${s.label}`,
+    isOn: () => view3d && style === s.name,
+    toggle: () => {
+      style = s.name;
+      setStyle3d(style);
+      store(STYLE_KEY, style);
+      if (!view3d) toggleView3d();
+    },
+  }));
+  // the showroom of art experiments along the main street (render/showroom.ts): on in the dev build; ?showroom=0/1
+  const showroomParam = new URLSearchParams(location.search).get('showroom');
+  let showroom = showroomParam ? showroomParam === '1' : import.meta.env.DEV && stored('village-game:showroom') !== '0';
+  setShowroom(showroom);
+  const showroomItem = {
+    title: 'Showroom (art tests)',
+    isOn: () => showroom,
+    toggle: () => {
+      showroom = !showroom;
+      setShowroom(showroom);
+      store('village-game:showroom', showroom ? '1' : '0');
+    },
+  };
+  const menu = installMenu([{ title: '3D buildings', isOn: () => view3d, toggle: toggleView3d }, ...styleItems, showroomItem]);
   /** Open the Menu under its HUD button (UI units to CSS px). */
   const toggleMenu = (r: { x: number; y: number; w: number; h: number }) => {
     const s = screen.vp.uiScale / screen.dpr;

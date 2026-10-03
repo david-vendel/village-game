@@ -241,10 +241,12 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     door: WOODCUTTER_DOOR,
     name: "Woodcutter's hut",
     purpose: 'Fells grown trees in the woods behind the street for wood.',
+    // the hut at the back, its wood yard in front of it by the street
     width: 150,
+    depth: 3,
     buildTime: 9,
     cost: { wood: 30, stone: 10 },
-    // logs stacked by the wall (layout.ts WOODCUTTER_SLOTS); the woods: nature.ts
+    // a cord of split wood per load in the yard (layout.ts WOODCUTTER_SLOTS); the woods: nature.ts
     storage: { wood: 30 },
     jobs: { woodcutter: 1 },
     ships: ['wood'],

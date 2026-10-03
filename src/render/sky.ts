@@ -127,22 +127,43 @@ function drawSky(ctx: Ctx, v: View, light: Light): void {
 
   drawStars(ctx, v, light);
 
-  // moon: opposite the sun
+  // moon: opposite the sun, a big pale disc with its seas, a halo round it and a wide glow
   const moonPhase = (light.phase + 0.5) % 1;
   const moonAlt = -light.sun;
   if (moonAlt > -0.15) {
     const [mx, my] = bodyPos(v, moonPhase, moonAlt);
-    const glow = ctx.createRadialGradient(mx, my, 0, mx, my, 120);
-    glow.addColorStop(0, `rgba(220,228,255,${0.35 * light.night})`);
-    glow.addColorStop(1, 'rgba(220,228,255,0)');
+    const R = 21;
+    const glow = ctx.createRadialGradient(mx, my, 0, mx, my, 260);
+    glow.addColorStop(0, `rgba(205,220,255,${0.42 * light.night})`);
+    glow.addColorStop(0.18, `rgba(170,190,240,${0.16 * light.night})`);
+    glow.addColorStop(1, 'rgba(160,180,240,0)');
     ctx.fillStyle = glow;
-    ctx.fillRect(mx - 120, my - 120, 240, 240);
-    ctx.globalAlpha = 0.25 + 0.75 * light.night;
-    circle(ctx, mx, my, 15, '#f4f1e0');
-    ctx.globalAlpha *= 0.35;
-    circle(ctx, mx - 4, my - 3, 3.5, '#c9c4b0');
-    circle(ctx, mx + 5, my + 4, 2.5, '#c9c4b0');
-    circle(ctx, mx + 2, my - 6, 1.8, '#c9c4b0');
+    ctx.fillRect(mx - 260, my - 260, 520, 520);
+    // a faint ring of ice crystals
+    ctx.globalAlpha = 0.12 * light.night;
+    ctx.strokeStyle = '#dfe6ff';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(mx, my, R * 3.2, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.globalAlpha = 0.3 + 0.7 * light.night;
+    const disc = ctx.createRadialGradient(mx - R * 0.3, my - R * 0.3, 0, mx, my, R);
+    disc.addColorStop(0, '#fffdf2');
+    disc.addColorStop(0.75, '#efecd8');
+    disc.addColorStop(1, '#d8d4bf');
+    ctx.fillStyle = disc;
+    ctx.beginPath();
+    ctx.arc(mx, my, R, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha *= 0.32;
+    for (const [dx, dy, r] of [
+      [-6, -5, 5],
+      [6, 4, 4],
+      [3, -9, 2.6],
+      [-3, 8, 3],
+      [9, -3, 2],
+    ])
+      circle(ctx, mx + dx, my + dy, r, '#b9b49e');
     ctx.globalAlpha = 1;
   }
 
@@ -161,22 +182,91 @@ function drawSky(ctx: Ctx, v: View, light: Light): void {
   }
 }
 
+/** The star field, made once: places in a repeating tile, size, colour, brightness, twinkle; the Milky Way's denser. */
+const STARS: Array<{ x: number; y: number; r: number; c: string; a: number; tw: number }> = [];
+const STAR_TILE = 1400;
+const STAR_COLOURS = ['#f4f1ff', '#f4f1ff', '#f4f1ff', '#dfe7ff', '#fff1d8', '#ffe2c4', '#cfdcff'];
+/** The Milky Way: a band from low on the left up across the sky (y = a + b·x in the tile, half-width w). */
+const BAND = { a: 150, b: -0.085, w: 70 };
+function makeStars(): void {
+  if (STARS.length) return;
+  for (let i = 0; i < 1400; i++) {
+    const x = hash(i, 101) * STAR_TILE;
+    // most stars anywhere; a third gathered into the band
+    const inBand = i % 2 === 0;
+    const y = inBand ? BAND.a + BAND.b * x + (hash(i, 106) - 0.5) * 2 * BAND.w * hash(i, 107) : hash(i, 102) * HORIZON_Y;
+    const big = hash(i, 105);
+    STARS.push({ x, y, r: big > 0.985 ? 2.2 : big > 0.9 ? 1.5 : inBand ? 0.7 : 1, c: STAR_COLOURS[Math.floor(hash(i, 108) * STAR_COLOURS.length)], a: 0.35 + 0.65 * hash(i, 104), tw: 1 + hash(i, 103) * 2.5 });
+  }
+}
+
 function drawStars(ctx: Ctx, v: View, light: Light): void {
   if (light.night <= 0) return;
+  makeStars();
   const top = Math.min(0, v.top);
-  const T = 900; // the star field repeats every T px, drifting very slowly with the camera
-  const off = v.camX * 0.005;
-  for (let tile = Math.floor(off / T) - 1; tile * T - off < v.width; tile++) {
-    for (let i = 0; i < 70; i++) {
-      const x = tile * T + hash(i, 101) * T - off;
-      if (x < -2 || x > v.width + 2) continue;
-      const y = top + hash(i, 102) * (HORIZON_Y - top);
-      const twinkle = 0.7 + 0.3 * Math.sin(v.time * (1 + hash(i, 103) * 2) + i);
-      ctx.globalAlpha = light.night * twinkle * (0.4 + 0.6 * hash(i, 104)) * clamp01((HORIZON_Y - y) / 70);
-      const r = hash(i, 105) < 0.9 ? 0.9 : 1.6;
-      ctx.fillStyle = '#f4f1ff';
-      ctx.fillRect(x - r / 2, y - r / 2, r, r);
+  const off = v.camX * 0.005; // drifting very slowly with the camera
+  for (let tile = Math.floor(off / STAR_TILE) - 1; tile * STAR_TILE - off < v.width; tile++) {
+    const ox = tile * STAR_TILE - off;
+    if (ox > v.width || ox + STAR_TILE < 0) continue;
+    // the Milky Way's glow: soft clouds along the band, a darker lane of dust down its middle
+    for (let k = 0; k <= 28; k++) {
+      const x = (STAR_TILE * k) / 28;
+      const y = BAND.a + BAND.b * x + (hash(k + tile * 31, 121) - 0.5) * 20;
+      // a wide faint haze, and a brighter, warmer core of clouds along it
+      for (const [rad, alpha, col] of [
+        [BAND.w * (1.3 + 0.6 * hash(k + tile * 31, 120)), 0.14, '185,200,255'],
+        [BAND.w * (0.45 + 0.35 * hash(k + tile * 31, 122)), 0.2, '235,225,255'],
+      ] as const) {
+        const g = ctx.createRadialGradient(ox + x, y, 0, ox + x, y, rad);
+        g.addColorStop(0, `rgba(${col},${alpha * light.night})`);
+        g.addColorStop(1, `rgba(${col},0)`);
+        ctx.fillStyle = g;
+        ctx.fillRect(ox + x - rad, y - rad, rad * 2, rad * 2);
+      }
     }
+    // the dark lane of dust down its middle: soft, a few wide faint strokes
+    ctx.strokeStyle = '#0b1028';
+    ctx.lineCap = 'round';
+    for (const [lw, al] of [
+      [18, 0.05],
+      [10, 0.07],
+      [4, 0.08],
+    ] as const) {
+      ctx.globalAlpha = al * light.night;
+      ctx.lineWidth = lw;
+      ctx.beginPath();
+      ctx.moveTo(ox, BAND.a + 6);
+      for (let x = 0; x <= STAR_TILE; x += 70) ctx.lineTo(ox + x, BAND.a + BAND.b * x + 6 + Math.sin(x * 0.017) * 9);
+      ctx.stroke();
+    }
+    for (const st of STARS) {
+      const x = ox + st.x;
+      if (x < -3 || x > v.width + 3 || st.y < top) continue;
+      const twinkle = 0.65 + 0.35 * Math.sin(v.time * st.tw + st.x);
+      ctx.globalAlpha = light.night * st.a * twinkle * clamp01((HORIZON_Y - st.y) / 60);
+      ctx.fillStyle = st.c;
+      ctx.fillRect(x - st.r / 2, st.y - st.r / 2, st.r, st.r);
+      // the brightest with a little cross of light
+      if (st.r > 2) {
+        ctx.globalAlpha *= 0.5;
+        ctx.fillRect(x - 3, st.y - 0.3, 6, 0.6);
+        ctx.fillRect(x - 0.3, st.y - 3, 0.6, 6);
+      }
+    }
+  }
+  // now and then a shooting star
+  const n = Math.floor(v.time / 9);
+  const t = (v.time % 9) / 0.8;
+  if (t < 1 && hash(n, 130) < 0.5) {
+    const sx = hash(n, 131) * v.width;
+    const sy = 20 + hash(n, 132) * (HORIZON_Y * 0.5);
+    ctx.globalAlpha = light.night * (1 - t) * 0.9;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(sx + t * 90, sy + t * 30);
+    ctx.lineTo(sx + t * 90 - 40, sy + t * 30 - 13);
+    ctx.stroke();
   }
   ctx.globalAlpha = 1;
 }

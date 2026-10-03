@@ -1,0 +1,65 @@
+{
+  "plaster": {
+    "file": "plaster.webp",
+    "mean": [
+      223,
+      209,
+      191
+    ],
+    "source": ".art-raw/textures/plaster-11.png"
+  },
+  "oak": {
+    "file": "oak.webp",
+    "mean": [
+      62,
+      46,
+      37
+    ],
+    "source": ".art-raw/textures/oak-11.png"
+  },
+  "planks": {
+    "file": "planks.webp",
+    "mean": [
+      61,
+      45,
+      35
+    ],
+    "source": ".art-raw/textures/oak-23.png"
+  },
+  "stone": {
+    "file": "stone.webp",
+    "mean": [
+      176,
+      144,
+      113
+    ],
+    "source": ".art-raw/textures/stone-23.png"
+  },
+  "tile": {
+    "file": "tile.webp",
+    "mean": [
+      131,
+      72,
+      49
+    ],
+    "source": ".art-raw/textures/tile-11.png"
+  },
+  "thatch": {
+    "file": "thatch.webp",
+    "mean": [
+      166,
+      120,
+      62
+    ],
+    "source": ".art-raw/textures/thatch-23.png"
+  },
+  "bricks": {
+    "file": "bricks.webp",
+    "mean": [
+      128,
+      69,
+      45
+    ],
+    "source": ".art-raw/textures/tile-23.png"
+  }
+}

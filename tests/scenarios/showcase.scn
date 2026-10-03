@@ -1,0 +1,27 @@
+# Every kind of building on one street, some side by side, some still going up:
+# for looking at the buildings (?scenario=showcase in the dev build).
+new village
+free on
+construction off
+build house at s0:139
+build bakery next
+build tavern next
+build house next
+build well next
+build woodcutter at s0:193
+build stonecutter next
+build blacksmith next
+build chapel next
+build mill at s0:220
+build watchtower next
+build market next
+build farm next
+build warehouse next
+construction on
+build house at s0:166
+build tavern at s0:178
+build stonecutter at s0:247
+run 50s
+ride s0:150
+map ids
+list
