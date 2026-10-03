@@ -11,7 +11,10 @@ import { DAY_LENGTH } from '../game/daynight';
 import { footprintOf } from '../game/grid';
 import { type Hearth, hearthOf } from '../game/hearth';
 import { employees } from '../game/people';
-import { constructionStage, type Building, type World } from '../game/world';
+import { BUILD_CHUNK, builders, siteWork } from '../game/site';
+import { total } from '../game/resources';
+import type { Worker } from '../game/worker';
+import type { Building, World } from '../game/world';
 import { type Progress } from './build3d/elements';
 import type { Sides } from './build3d/plot';
 import type { DrawArgs } from './buildings';
@@ -47,29 +50,80 @@ export function ageOf(world: World, b: Building): number {
 }
 
 /**
- * How far a building is shown built: its progress, followed smoothly. The game moves it on in a
- * jump each time a builder finishes a spell of work (site.ts BUILD_CHUNK, a sixth of a farm at
- * once); shown, the stones and timbers go up one by one while the builders work (within about a
- * second of the game's progress).
+ * How far a building is shown built. The game moves its progress on in a jump each time a builder
+ * finishes a spell of work (site.ts BUILD_CHUNK); shown, the stones and timbers go up while each
+ * builder hammers: the game's progress plus each one's share of their spell done so far, so when the
+ * spell ends and the game counts it, nothing jumps.
  */
 const shown = new Map<number, { p: number; time: number }>();
-/** Seconds the shown progress takes to make up most of a jump. */
-const FOLLOW = 0.9;
+/** Seconds the shown progress takes to make up most of what is left (a little give, no jumps). */
+const FOLLOW = 0.25;
+
+/** Builders hammering at this frame's sites, at the world time they were seen (they show no work ring then). */
+const hammering = new WeakMap<Worker, number>();
+
+/** True if this worker's work shows on a 3D building going up, rather than on a ring over their head. */
+export function buildShown3d(w: Worker, time: number): boolean {
+  return hammering.get(w) === time;
+}
+
+/** What the builders at work on a site have done of their spells so far, not yet counted by the game. */
+function underway(world: World, b: Building): number {
+  const site = b.site;
+  if (!site || b.demolition) return 0;
+  const work = siteWork(b);
+  const cost = total(work.cost);
+  if (cost <= 0 || work.buildTime <= 0) return 0;
+  // as site.ts works it in: a spell's share of the materials, at most what lies at the spot
+  const perJob = (BUILD_CHUNK * world.params.buildSpeed * cost) / work.buildTime;
+  let p = 0;
+  for (const person of builders(world, b)) {
+    const w = person.job!.worker;
+    const t = w.task;
+    if (t.kind !== 'job' || t.job.action !== 'build') continue;
+    hammering.set(w, world.time);
+    const here = total(site.laid[t.job.target] ?? {});
+    p += (Math.min(here, perJob) / cost) * Math.max(0, Math.min(1, t.t / t.duration));
+  }
+  return p;
+}
 
 function shownProgress(world: World, b: Building): number {
+  const target = Math.min(1, b.progress + underway(world, b));
   const s = shown.get(b.id);
   // new, or a jump no one could have built (a loaded game, construction switched off): as it is
-  if (!s || Math.abs(b.progress - s.p) > 0.5) {
-    shown.set(b.id, { p: b.progress, time: world.time });
-    return b.progress;
+  if (!s || Math.abs(target - s.p) > 0.5) {
+    shown.set(b.id, { p: target, time: world.time });
+    return target;
   }
   const dt = Math.max(0, Math.min(0.5, world.time - s.time));
   s.time = world.time;
-  const gap = b.progress - s.p;
-  // an even pace for the last bit too, rather than creeping up on it
+  const gap = target - s.p;
   const step = Math.max(Math.abs(gap) * Math.min(1, dt / FOLLOW), 0.03 * dt);
-  s.p = Math.abs(gap) <= step ? b.progress : s.p + Math.sign(gap) * step;
+  s.p = Math.abs(gap) <= step ? target : s.p + Math.sign(gap) * step;
   return s.p;
+}
+
+/**
+ * The stages as the 3D building shows them, each ending at this much of the work. The game's own
+ * (world.ts STAGE_BOUNDS) give staking and the foundation a quarter of it; shown, they go by
+ * quickly and the walls and the roof, the part worth watching, take two thirds.
+ */
+const STAGES_3D: Array<[Progress['stage'], number]> = [
+  ['staking', 0.05],
+  ['foundation', 0.13],
+  ['frame', 0.33],
+  ['walls', 0.72],
+  ['roof', 1],
+];
+
+function stage3d(p: number): Progress | undefined {
+  let start = 0;
+  for (const [stage, end] of STAGES_3D) {
+    if (p < end) return { stage, t: (p - start) / (end - start) };
+    start = end;
+  }
+  return undefined;
 }
 
 /** How far a building has got: building it, building on its upgrade, or pulling it down. */
@@ -78,8 +132,7 @@ function progressOf(world: World, b: Building): Progress | undefined {
     shown.delete(b.id);
     return undefined;
   }
-  const s = constructionStage(shownProgress(world, b));
-  return s.stage === 'done' ? undefined : { stage: s.stage, t: s.t };
+  return stage3d(shownProgress(world, b));
 }
 
 /** Its door stands open while someone steps through it (or a new house's people come out). */

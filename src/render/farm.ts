@@ -9,6 +9,7 @@ import { drawArm, drawHead, drawLegs, drawTorso, type Figure, HEAD, outfitOf, SH
 import { DOOR_TIME, WALK_SPEED, type Worker } from '../game/worker';
 import { BACK_FIELD, BASE_Y, BASKET, FIELD_ROWS, FRONT_FIELD, SHEAF_SLOTS, STORE, VIEW_H } from '../game/layout';
 import { groundX, viewRatio, viewY } from './ground';
+import { buildShown3d } from './life3d';
 import { circle, clamp01, type Ctx, ellipse, hash, lerp, line, mix, poly, rect } from './util';
 
 const SOIL = '#7a5a3a';
@@ -321,7 +322,8 @@ export function drawWorker(ctx: Ctx, f: Worker, fig: Figure, x: number, y: numbe
     ctx.restore();
     drawArm(ctx, o, sx, sy, hx, hy);
     ctx.restore();
-    drawProgressPips(ctx, job.t / job.duration);
+    // advanced graphics shows the work on the building itself
+    if (!buildShown3d(f, time)) drawProgressPips(ctx, job.t / job.duration);
   } else if (job && (action === 'chop' || action === 'cut')) {
     // an axe swung into the trunk, or a pick into the rock face: both hands on
     // the haft, raised over the shoulder and brought down hard
