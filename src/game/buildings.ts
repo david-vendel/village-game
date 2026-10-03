@@ -6,7 +6,7 @@
 // To add a building: add an entry here, its cost in balance.ts (NEW_BUILDING_COST)
 // and an entry in BUILDING_ART.
 
-import { BAKERY_DOOR, BAKERY_OVEN, CHAPEL_DOOR, HOME, HOUSE_DOOR_DX, MILL_DOOR, SAWMILL_DOOR, SAWMILL_SAW, SMITHY_DOOR, STAND_Y, STONECUTTER_DOOR, TAVERN_DOOR, PILE_UNIT, LIVESTOCK_DOOR, WELL_DRAW, WOODCUTTER_DOOR, YARD_ITEMS, type Spot } from './layout';
+import { WORKSHOP_DOOR, BAKERY_DOOR, BAKERY_OVEN, CHAPEL_DOOR, HOME, HOUSE_DOOR_DX, MILL_DOOR, SAWMILL_DOOR, SAWMILL_SAW, SMITHY_DOOR, STAND_Y, STONECUTTER_DOOR, TAVERN_DOOR, PILE_UNIT, LIVESTOCK_DOOR, WELL_DRAW, WOODCUTTER_DOOR, YARD_ITEMS, type Spot } from './layout';
 import { COSTS, UPGRADE_COSTS } from './balance';
 import type { Livestock } from './livestock';
 import type { Amounts, Resource } from './resources';
@@ -25,6 +25,17 @@ export type BuildingType =
   | 'well'
   | 'woodcutter'
   | 'sawmill'
+  | 'dairy'
+  | 'smokehouse'
+  | 'weaver'
+  | 'storehouse'
+  | 'tannery'
+  | 'chandler'
+  | 'saddler'
+  | 'stable'
+  | 'brewery'
+  | 'pastrycook'
+  | 'reeve'
   | 'chickenfarm'
   | 'cowfarm'
   | 'sheepfarm'
@@ -40,8 +51,10 @@ export type BuildingType =
  * work takes it for as long as there is carrying to do. Serf comes last:
  * hiring fills the other jobs first.
  */
-export type Role = 'farmer' | 'builder' | 'miller' | 'baker' | 'woodcutter' | 'sawyer' | 'stonecutter' | 'herder' | 'serf';
-export const ROLES: readonly Role[] = ['farmer', 'builder', 'miller', 'baker', 'woodcutter', 'sawyer', 'stonecutter', 'herder', 'serf'];
+export type Role = 'farmer' | 'builder' | 'miller' | 'baker' | 'woodcutter' | 'sawyer' | 'stonecutter' | 'herder' | 'dairymaid' | 'smoker' | 'weaver' | 'tanner' | 'chandler' | 'saddler' | 'brewer' | 'pastrycook' | 'smith' | 'serf';
+export const ROLES: readonly Role[] = ['farmer', 'builder', 'miller', 'baker', 'woodcutter', 'sawyer', 'stonecutter', 'herder', 'dairymaid', 'smoker', 'weaver', 'tanner', 'chandler', 'saddler', 'brewer', 'pastrycook', 'smith', 'serf'];
+/** Skilled work: only freemen take it, people whose home is a farmstead or better (people.ts). */
+export const SKILLED: ReadonlySet<Role> = new Set<Role>(['weaver', 'saddler', 'smith']);
 
 /**
  * What a workshop makes (workshop.ts): its worker takes `batch` of `from` out
@@ -62,6 +75,8 @@ export interface Recipe {
   at?: Spot;
   /** A second thing each batch uses up, `amount` of it per one of `from` (the bakery's water). */
   also?: { resource: Resource; amount: number };
+  /** Used if there is any, one a batch, for `factor` times as much made (the smokehouse's salt: two joints cured from one). */
+  boost?: { resource: Resource; factor: number };
 }
 
 /**
@@ -74,7 +89,34 @@ export interface Upgrade {
   cost: Amounts;
   buildTime: number;
   jobs: Partial<Record<Role, number>>;
+  /** Once upgraded, what its store holds instead (a farmstead's shelf holds more). */
+  storage?: Amounts;
+  /** Once upgraded, what it needs instead. */
+  needs?: Resource[];
+  /** The upgrade after this one, if it has one (a farmstead becomes a townhouse). */
+  next?: Upgrade;
+  /** How many of the castle's charters it takes (castle.ts). */
+  charter?: number;
 }
+
+/** How many upgrades a building has had (0, 1 or 2). */
+export const upgradesDone = (b: { upgraded?: true; level?: number }): number => b.level ?? (b.upgraded ? 1 : 0);
+
+/** The upgrades a type has, in order. */
+export function upgradesOf(type: BuildingType): Upgrade[] {
+  const out: Upgrade[] = [];
+  for (let u = BUILDINGS[type].upgrade; u; u = u.next) out.push(u);
+  return out;
+}
+
+/** The upgrade a building has had last, if any: what it now is. */
+export const currentUpgrade = (b: { type: BuildingType; upgraded?: true; level?: number }): Upgrade | undefined => upgradesOf(b.type)[upgradesDone(b) - 1];
+/** The upgrade it can have next, if any. */
+export const nextUpgrade = (b: { type: BuildingType; upgraded?: true; level?: number }): Upgrade | undefined => upgradesOf(b.type)[upgradesDone(b)];
+/** Its name: its type's, or its last upgrade's. */
+export const nameOf = (b: { type: BuildingType; upgraded?: true; level?: number }): string => currentUpgrade(b)?.name ?? BUILDINGS[b.type].name;
+/** What it needs brought: its type's, or its last upgrade's. */
+export const needsOf = (b: { type: BuildingType; upgraded?: true; level?: number }): Resource[] => currentUpgrade(b)?.needs ?? BUILDINGS[b.type].needs ?? [];
 
 export interface BuildingDef {
   type: BuildingType;
@@ -115,6 +157,10 @@ export interface BuildingDef {
    */
   drawn?: { resource: Resource; at: Spot };
   upgrade?: Upgrade;
+  /** How many of the castle's charters it takes before the lord may build one (castle.ts). */
+  charter?: number;
+  /** Only one in the village (the reeve's house). */
+  unique?: true;
 }
 
 export const BUILDINGS: Record<BuildingType, BuildingDef> = {
@@ -142,6 +188,25 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     storage: { bread: 2, water: 2 },
     needs: ['bread', 'water'],
     jobs: {},
+    // the house's levels: cottage (peasants), farmstead (freemen), townhouse (burghers); households.ts NEEDS
+    upgrade: {
+      name: 'Farmstead',
+      cost: UPGRADE_COSTS.farmstead!,
+      buildTime: 8,
+      jobs: {},
+      storage: { bread: 2, water: 2, cheese: 1, smokedmeat: 1, cloth: 1 },
+      needs: ['bread', 'water', 'cheese', 'smokedmeat', 'cloth'],
+      charter: 1,
+      next: {
+        name: 'Townhouse',
+        cost: UPGRADE_COSTS.townhouse!,
+        buildTime: 10,
+        jobs: {},
+        storage: { bread: 2, water: 2, cheese: 1, smokedmeat: 1, cloth: 1, ale: 1, candles: 1, pastries: 1 },
+        needs: ['bread', 'water', 'cheese', 'smokedmeat', 'cloth', 'ale', 'candles', 'pastries'],
+        charter: 2,
+      },
+    },
   },
   farm: {
     type: 'farm',
@@ -154,9 +219,11 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     buildTime: 12,
     cost: COSTS.farm,
     // sheaves on the pallet (layout.ts SHEAF_SLOTS), bales of hay by the barn (HAY_SLOTS)
-    storage: { grain: 5, hay: 3 },
+    storage: { grain: 5, hay: 3, horse: 1 },
     jobs: { farmer: 1 },
     ships: ['grain', 'hay'],
+    // a plough horse makes the work go quicker (carts.ts PLOUGH_SPEED)
+    needs: ['horse'],
     // a second room built on: two farmers live and work here
     upgrade: { name: 'Large farm', cost: UPGRADE_COSTS.farm!, buildTime: 8, jobs: { farmer: 2 } },
   },
@@ -195,23 +262,29 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     type: 'blacksmith',
     door: SMITHY_DOOR,
     name: 'Blacksmith',
-    purpose: 'Forges tools and arms at the glowing anvil.',
+    purpose: 'Forges the merchant\'s iron into tools. Tools in store make every worker quicker. Skilled work.',
     width: 150,
     buildTime: 14,
     cost: COSTS.blacksmith,
-    storage: {},
-    jobs: {},
+    // iron by the anvil, tools hung up beside it (layout.ts SMITHY_SLOTS)
+    storage: { iron: 3, tools: 3 },
+    jobs: { smith: 1 },
+    ships: ['tools'],
+    needs: ['iron'],
+    makes: { from: 'iron', to: 'tools', batch: 1, per: 1, seconds: 10, verb: 'forge', door: SMITHY_DOOR },
   },
   market: {
     type: 'market',
     door: null, // open stalls
     name: 'Market',
-    purpose: 'Stalls where merchants trade goods and coin.',
+    purpose: 'Every few days a merchant comes: he buys surplus wool, cloth and cheese and sells iron and salt (market.ts).',
     width: 150,
     buildTime: 9,
     cost: COSTS.market,
-    storage: {},
+    // what is for sale to him on the left stall, what he sold on the right (layout.ts MARKET_SLOTS)
+    storage: { wool: 3, cloth: 3, cheese: 3, iron: 4, salt: 4 },
     jobs: {},
+    ships: ['iron', 'salt'],
   },
   chapel: {
     type: 'chapel',
@@ -292,6 +365,168 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     needs: ['wood'],
     makes: { from: 'wood', to: 'planks', batch: 1, per: 2, seconds: 5, verb: 'saw', door: SAWMILL_DOOR, at: SAWMILL_SAW },
   },
+  dairy: {
+    type: 'dairy',
+    door: WORKSHOP_DOOR,
+    name: 'Dairy',
+    purpose: 'Makes the cow and sheep farms\' milk into cheese, which keeps: two pails a cheese.',
+    width: 150,
+    buildTime: 10,
+    cost: COSTS.dairy,
+    charter: 1,
+    // what comes in left of the door, what is made right of it (layout.ts WORKSHOP_IN, WORKSHOP_OUT)
+    storage: { milk: 4, cheese: 4 },
+    jobs: { dairymaid: 1 },
+    ships: ['cheese'],
+    needs: ['milk'],
+    makes: { from: 'milk', to: 'cheese', batch: 2, per: 0.5, seconds: 8, verb: 'churn', door: WORKSHOP_DOOR },
+  },
+  smokehouse: {
+    type: 'smokehouse',
+    door: WORKSHOP_DOOR,
+    name: 'Smokehouse',
+    purpose: 'Smokes the animal farms\' meat, so it keeps through the winter; with salt, each joint cures into two.',
+    width: 150,
+    buildTime: 10,
+    cost: COSTS.smokehouse,
+    charter: 1,
+    // salt from the merchant (market.ts) left of the meat: with it a joint cures into two
+    storage: { meat: 3, smokedmeat: 4, salt: 2 },
+    jobs: { smoker: 1 },
+    ships: ['smokedmeat'],
+    needs: ['meat', 'salt'],
+    makes: { from: 'meat', to: 'smokedmeat', batch: 1, per: 1, seconds: 8, verb: 'smoke', door: WORKSHOP_DOOR, boost: { resource: 'salt', factor: 2 } },
+  },
+  weaver: {
+    type: 'weaver',
+    door: WORKSHOP_DOOR,
+    name: "Weaver's",
+    purpose: 'Spins and weaves the sheep farms\' wool into cloth for clothes. Skilled work: a freeman weaves.',
+    width: 150,
+    buildTime: 10,
+    cost: COSTS.weaver,
+    charter: 1,
+    storage: { wool: 4, cloth: 4 },
+    jobs: { weaver: 1 },
+    ships: ['cloth'],
+    needs: ['wool'],
+    makes: { from: 'wool', to: 'cloth', batch: 2, per: 0.5, seconds: 10, verb: 'weave', door: WORKSHOP_DOOR },
+  },
+  storehouse: {
+    type: 'storehouse',
+    door: null, // an open-fronted barn
+    name: 'Storehouse',
+    purpose: 'A barn where goods that keep are stored on shelves: cheese, smoked meat, cloth, leather, candles, ale, tools and more.',
+    charter: 1,
+    width: 150,
+    buildTime: 12,
+    cost: COSTS.storehouse,
+    // a shelf for each kind of good (layout.ts storehouseSlot)
+    storage: { cheese: 8, smokedmeat: 8, cloth: 8, hides: 8, tallow: 8, leather: 8, candles: 8, harness: 8, ale: 8, pastries: 8, iron: 8, tools: 8, salt: 8 },
+    jobs: {},
+  },
+  tannery: {
+    type: 'tannery',
+    door: WORKSHOP_DOOR,
+    name: 'Tannery',
+    purpose: 'Tans the hides left from butchering into leather, in pits of water.',
+    width: 150,
+    buildTime: 10,
+    cost: COSTS.tannery,
+    charter: 1,
+    storage: { hides: 4, water: 2, leather: 4 },
+    jobs: { tanner: 1 },
+    ships: ['leather'],
+    needs: ['hides', 'water'],
+    makes: { from: 'hides', to: 'leather', batch: 1, per: 1, seconds: 10, verb: 'tan', door: WORKSHOP_DOOR, also: { resource: 'water', amount: 1 } },
+  },
+  chandler: {
+    type: 'chandler',
+    door: WORKSHOP_DOOR,
+    name: "Chandler's",
+    purpose: 'Renders tallow from butchering into candles: two from each.',
+    width: 150,
+    buildTime: 9,
+    cost: COSTS.chandler,
+    charter: 1,
+    storage: { tallow: 4, candles: 4 },
+    jobs: { chandler: 1 },
+    ships: ['candles'],
+    needs: ['tallow'],
+    makes: { from: 'tallow', to: 'candles', batch: 1, per: 2, seconds: 8, verb: 'dip', door: WORKSHOP_DOOR },
+  },
+  saddler: {
+    type: 'saddler',
+    door: WORKSHOP_DOOR,
+    name: "Saddler's",
+    purpose: 'Makes harness out of leather, for the stable\'s cart horses. Skilled work.',
+    width: 150,
+    buildTime: 10,
+    cost: COSTS.saddler,
+    charter: 2,
+    storage: { leather: 4, harness: 3 },
+    jobs: { saddler: 1 },
+    ships: ['harness'],
+    needs: ['leather'],
+    makes: { from: 'leather', to: 'harness', batch: 2, per: 0.5, seconds: 10, verb: 'stitch', door: WORKSHOP_DOOR },
+  },
+  stable: {
+    type: 'stable',
+    door: null, // horses stand in its stalls
+    name: 'Stable',
+    purpose: 'Keeps cart horses: each horse with a harness lets a serf carry four loads at once. They eat hay.',
+    width: 150,
+    buildTime: 12,
+    cost: COSTS.stable,
+    charter: 2,
+    // a horse in each stall, harness on pegs, hay in the rack (layout.ts STABLE_SLOTS)
+    storage: { horse: 4, harness: 4, hay: 4 },
+    jobs: {},
+    needs: ['horse', 'harness', 'hay'],
+  },
+  brewery: {
+    type: 'brewery',
+    door: WORKSHOP_DOOR,
+    name: 'Brewery',
+    purpose: 'Brews ale from grain and well water, for the tavern and the burghers.',
+    width: 150,
+    buildTime: 11,
+    cost: COSTS.brewery,
+    charter: 2,
+    storage: { grain: 4, water: 2, ale: 4 },
+    jobs: { brewer: 1 },
+    ships: ['ale'],
+    needs: ['grain', 'water'],
+    makes: { from: 'grain', to: 'ale', batch: 1, per: 1, seconds: 10, verb: 'brew', door: WORKSHOP_DOOR, also: { resource: 'water', amount: 1 } },
+  },
+  pastrycook: {
+    type: 'pastrycook',
+    door: WORKSHOP_DOOR,
+    name: 'Pastry cook',
+    purpose: 'Bakes pastries from flour and eggs for the burghers.',
+    width: 150,
+    buildTime: 10,
+    cost: COSTS.pastrycook,
+    charter: 2,
+    storage: { flour: 3, eggs: 2, pastries: 4 },
+    jobs: { pastrycook: 1 },
+    ships: ['pastries'],
+    needs: ['flour', 'eggs'],
+    makes: { from: 'flour', to: 'pastries', batch: 1, per: 2, seconds: 8, verb: 'bake-pastries', door: WORKSHOP_DOOR, also: { resource: 'eggs', amount: 1 } },
+  },
+  reeve: {
+    type: 'reeve',
+    door: WORKSHOP_DOOR,
+    name: "Reeve's house",
+    purpose: 'Where the castle\'s requests come down and what it asks for is gathered and sent up (castle.ts). One in the village.',
+    width: 150,
+    buildTime: 10,
+    cost: COSTS.reeve,
+    unique: true,
+    // whatever the castle may ask for, on the cart in the yard (layout.ts reeveSlot)
+    storage: { bread: 12, planks: 12, cheese: 12, smokedmeat: 12, cloth: 12, horse: 4, leather: 12, candles: 12, ale: 12, tools: 12, eggs: 12, wool: 12 },
+    jobs: {},
+  },
   chickenfarm: {
     type: 'chickenfarm',
     door: LIVESTOCK_DOOR,
@@ -340,9 +575,11 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     width: 150,
     buildTime: 12,
     cost: COSTS.horsefarm,
-    storage: { hay: 3, meat: 2 },
+    // grown horses beyond a breeding pair are haltered and led out to the stables and farms
+    storage: { hay: 3, horse: 2, meat: 2 },
     jobs: { herder: 1 },
     needs: ['hay'],
+    ships: ['horse'],
     livestock: { animal: 'horse', feed: 'hay' },
   },
   stonecutter: {
@@ -387,10 +624,10 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
 
 export const BUILDING_TYPES = Object.keys(BUILDINGS) as BuildingType[];
 
-/** What a building's store holds, and how much of each: a merged one (Building.size) holds as much as all its parts. */
-export function storageOf(b: { type: BuildingType; size?: number }): Amounts {
+/** What a building's store holds, and how much of each: a merged one (Building.size) holds as much as all its parts; an upgraded one, its upgrade's store. */
+export function storageOf(b: { type: BuildingType; size?: number; upgraded?: true; level?: number }): Amounts {
   const out: Amounts = {};
-  for (const [r, n] of Object.entries(BUILDINGS[b.type].storage)) out[r as keyof Amounts] = (n ?? 0) * (b.size ?? 1);
+  for (const [r, n] of Object.entries(currentUpgrade(b)?.storage ?? BUILDINGS[b.type].storage)) out[r as keyof Amounts] = (n ?? 0) * (b.size ?? 1);
   return out;
 }
 

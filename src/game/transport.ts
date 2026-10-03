@@ -28,8 +28,8 @@
 // more errands (people.ts). Like builders, serfs work day and night.
 
 import { WELL_DRAW_SECONDS } from './balance';
-import { BUILDINGS, storageOf } from './buildings';
-import { putAway, storeSpot, tripLoad, warehouses } from './economy';
+import { BUILDINGS, needsOf, storageOf } from './buildings';
+import { isStore, putAway, storeSpot, tripLoad, warehouses } from './economy';
 import { STAND_Y, type Spot } from './layout';
 import { employees } from './people';
 import { dropOnGround, GROUND_LOAD, pileById, pileSpot, takeFromPile, type Pile } from './piles';
@@ -37,6 +37,9 @@ import { RESOURCES, room, type Load, type Resource } from './resources';
 import { streetDist } from './streets';
 import { currentJob, delivering, type JobTicket, type Workplace } from './worker';
 import type { Building, World } from './world';
+import { CART_LOAD, carts } from './carts';
+import { stillAsked } from './castle';
+import { marketWants } from './market';
 
 /** Most serfs the village hires at once. */
 export const SERFS_MAX = 5;
@@ -86,9 +89,20 @@ const drawSpot = (b: Building, fromX: number): Spot => {
 /** Where an errand's load is picked up (or drawn), relative to fromX. */
 export const errandSpot = (world: World, e: Errand, fromX: number): Spot => (isDraw(e.job.action) && !isPile(e.from) ? drawSpot(e.from, fromX) : pickSpot(world, e.from, e.r, fromX));
 
+/**
+ * What a building wants brought now: what it needs (BuildingDef.needs, a
+ * house's by its level), the reeve's house what the castle still asks for,
+ * the market the village's surplus for the merchant.
+ */
+export function wantsOf(world: World, b: Building): Resource[] {
+  if (b.type === 'reeve') return Object.keys(stillAsked(world)) as Resource[];
+  if (b.type === 'market') return marketWants(world);
+  return needsOf(b);
+}
+
 /** The warehouse that employs the village's serfs: the oldest finished one. */
 export function transportHub(world: World): Building | null {
-  return warehouses(world)[0] ?? null;
+  return warehouses(world).find((b) => b.type === 'warehouse') ?? null;
 }
 
 /** An errand someone is on: on the way to pick up (amount: what they'll likely take), or carrying it (what they hold). */
@@ -107,7 +121,7 @@ function underway(world: World): Underway[] {
     const pending = currentJob(w);
     const r = pending && errandResource(pending.action);
     const from = pending && sourceOf(world, pending);
-    if (pending && r && from) out.push({ job: pending, amount: loadAt(from, r), carrying: false });
+    if (pending && r && from) out.push({ job: pending, amount: loadAt(from, r) * (pending.cart ? CART_LOAD : 1), carrying: false });
     const carried = delivering(w);
     if (carried && w.carrying && errandResource(carried.action)) out.push({ job: carried, amount: w.carrying.amount, carrying: true });
   }
@@ -126,10 +140,10 @@ const roomLeft = (runs: Underway[], b: Building, r: Resource) =>
 function nearestSource(world: World, runs: Underway[], r: Resource, x: number, not: Building): Building | null {
   // (what lies on the ground is collected by serfs, not fetched from)
   const places = world.buildings.filter(
-    (b) => b !== not && b.status === 'done' && (b.type === 'warehouse' || BUILDINGS[b.type].ships?.includes(r)) && (unclaimed(runs, b, r) > 1e-9 || drawnAt(b, r)),
+    (b) => b !== not && b.status === 'done' && (isStore(b) || BUILDINGS[b.type].ships?.includes(r)) && (unclaimed(runs, b, r) > 1e-9 || drawnAt(b, r)),
   );
   const d = (b: Building) => streetDist(world, x, xOf(world, b));
-  return places.sort((a, b) => d(a) - d(b) || Number(a.type === 'warehouse') - Number(b.type === 'warehouse'))[0] ?? null;
+  return places.sort((a, b) => d(a) - d(b) || Number(isStore(a)) - Number(isStore(b)))[0] ?? null;
 }
 
 /** The errand bringing b some of r, if it has room for it and it can be had somewhere. */
@@ -154,6 +168,14 @@ function wellToFill(world: World, x: number): Errand | null {
   return { job: { action: drawAction(r), target: near.id, to: near.id }, from: near, r };
 }
 
+/** Carts out with serfs now. */
+function cartsInUse(world: World): number {
+  return world.people.filter((p) => {
+    const w = p.job?.worker;
+    return !!w && (!!currentJob(w)?.cart || (!!w.carrying && !!delivering(w)?.cart));
+  }).length;
+}
+
 /** How far through drawing a bucket someone at well b is (0..1), or null if nobody is drawing there. */
 export function drawingAt(world: World, b: Building): number | null {
   for (const p of world.people) {
@@ -172,7 +194,7 @@ export function fetchFor(world: World, b: Building, r: Resource): (Errand & { fr
 function shipTo(world: World, runs: Underway[], b: Source, r: Resource): Building | null {
   const d = (o: Building) => streetDist(world, xOf(world, b), xOf(world, o));
   const byDistance = (list: Building[]) => list.sort((a, c) => d(a) - d(c))[0] ?? null;
-  const users = world.buildings.filter((o) => o !== b && o.status === 'done' && BUILDINGS[o.type].needs?.includes(r) && roomLeft(runs, o, r) > 1e-9);
+  const users = world.buildings.filter((o) => o !== b && o.status === 'done' && wantsOf(world, o).includes(r) && roomLeft(runs, o, r) > 1e-9);
   return byDistance(users) ?? byDistance(warehouses(world).filter((w) => roomLeft(runs, w, r) > 1e-9));
 }
 
@@ -204,7 +226,7 @@ export function errands(world: World, x = 0): Errand[] {
   }
   // then what is still needed is fetched from wherever it can be had
   for (const b of finished) {
-    for (const r of BUILDINGS[b.type].needs ?? []) {
+    for (const r of wantsOf(world, b)) {
       const e = supplyErrand(world, runs, b, r);
       if (e) plan(e);
     }
@@ -258,7 +280,8 @@ export function errandWork(world: World, x: number): Pick<Workplace, 'jobSpot' |
       const to = done(world, job.to);
       // a supply takes only what the store it goes to has room for
       const fits = job.action === supplyAction(r) && to ? room(to.stock, storageOf(to), r) : Infinity;
-      const n = Math.min(loadAt(from, r), amountAt(from, r), fits);
+      // a serf with a cart takes several
+      const n = Math.min(loadAt(from, r) * (job.cart ? CART_LOAD : 1), amountAt(from, r), fits);
       if (n <= 0) return null;
       if (isPile(from)) takeFromPile(world, from, n);
       else from.stock[r] -= n;
@@ -290,7 +313,10 @@ export function transportWorkplace(world: World, hub: Building): Workplace {
     nextJob(w) {
       // an errand if there is one; with none, fill a well close by
       const next = errands(world, x + w.dx)[0] ?? wellToFill(world, x + w.dx);
-      return next ? { job: next.job, ...errandSpot(world, next, x) } : null;
+      if (!next) return null;
+      // a cart for it if one is free in a stable (carts.ts), not for drawing water
+      const job = !isDraw(next.job.action) && cartsInUse(world) < carts(world) ? { ...next.job, cart: true as const } : next.job;
+      return { job, ...errandSpot(world, next, x) };
     },
     ...errandWork(world, x),
   };

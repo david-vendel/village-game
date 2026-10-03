@@ -10,7 +10,9 @@ import { DOOR_TIME, WALK_SPEED, type Worker } from '../game/worker';
 import { BACK_FIELD, BASE_Y, BASKET, FIELD_ROWS, FRONT_FIELD, SHEAF_SLOTS, STORE, VIEW_H } from '../game/layout';
 import { groundX, viewRatio, viewY } from './ground';
 import { buildShown3d } from './life3d';
-import { drawGood } from './livestock';
+import { drawAnimal, drawGood } from './livestock';
+import { drawItem } from './goods';
+import { currentJob, delivering } from '../game/worker';
 import { circle, clamp01, type Ctx, ellipse, hash, lerp, line, mix, poly, rect } from './util';
 
 const SOIL = '#7a5a3a';
@@ -274,6 +276,15 @@ export function drawWorker(ctx: Ctx, f: Worker, fig: Figure, x: number, y: numbe
               ? 0.25 + Math.sin(time * 4) * 0.08
               : 0.4;
 
+  // a serf running an errand with a horse and cart (game/carts.ts): the cart behind, the horse ahead
+  const ticket = currentJob(f) ?? (f.carrying ? delivering(f) : null);
+  if (ticket?.cart) {
+    rect(ctx, -34, -14, 22, 9, '#8a6a44');
+    circle(ctx, -28, -4, 4.5, '#4a3020');
+    circle(ctx, -18, -4, 4.5, '#4a3020');
+    if (f.carrying) drawItem(ctx, f.carrying.resource, -23, -14, 0.7, time);
+    drawAnimal(ctx, 'horse', { sex: 'male', age: 10 }, 14, 0, 1, time, 9, 0.6);
+  }
   const hipY = drawLegs(ctx, o, phase, walking);
   ctx.save();
   ctx.translate(0, hipY);
@@ -406,6 +417,8 @@ export function drawWorker(ctx: Ctx, f: Worker, fig: Figure, x: number, y: numbe
   } else {
     const load = f.carrying?.resource;
     const onShoulder = load === 'flour' || load === 'grain' || load === 'wood' || load === 'planks' || load === 'water' || load === 'hay' || load === 'meat' || load === 'milk';
+    // anything else is held in both arms (or, a horse, led by its halter)
+    const inArms = !!load && !onShoulder && load !== 'bread' && load !== 'stone' && load !== 'wool' && load !== 'eggs';
     if (load === 'bread') {
       // a basket of loaves held in both arms
       body([6, -7.5]);
@@ -433,6 +446,19 @@ export function drawWorker(ctx: Ctx, f: Worker, fig: Figure, x: number, y: numbe
       body(swingHand(sx - 1.2, sy, swing + 0.05));
       drawGood(ctx, load, 1, -13, 0.9);
       drawArm(ctx, o, sx, sy, 3.5, -13);
+    } else if (load === 'horse') {
+      // leading a horse by its halter, the horse walking behind
+      body(swingHand(sx - 1.2, sy, swing + 0.05));
+      drawArm(ctx, o, sx, sy, -5, -6);
+      ctx.save();
+      ctx.translate(-22, -hipY);
+      drawAnimal(ctx, 'horse', { sex: 'female', age: 10 }, 0, 0, 1, time, 7, 0.75);
+      ctx.restore();
+      line(ctx, -5, -6, -3, -24 - hipY * 0, '#6b4226', 0.8);
+    } else if (inArms) {
+      body([6, -7.5]);
+      drawItem(ctx, load!, 8, -4, 0.9, time);
+      drawArm(ctx, o, sx, sy, 7, -7);
     } else if (load === 'stone') {
       // a block of stone held in both arms
       body([6, -7.5]);

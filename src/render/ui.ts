@@ -6,7 +6,10 @@
 //   in world coordinates, scaled by `k` around their anchor so they stay
 //   readable when zoomed out.
 
-import { BUILDINGS, BUILDING_TYPES, ROLES, type Role, storageOf } from '../game/buildings';
+import { BUILDINGS, BUILDING_TYPES, nameOf, nextUpgrade, ROLES, type Role, storageOf } from '../game/buildings';
+import { stillAsked, upgradeLocked, whyLocked } from '../game/castle';
+import { merchantHere } from '../game/market';
+import { MARKET } from '../game/balance';
 import { clock, season } from '../game/daynight';
 import { WINTER_DAYS, YEAR_DAYS } from '../game/balance';
 import { buildShortfall, upgradeShortfall, villageStock } from '../game/economy';
@@ -47,7 +50,7 @@ const HERD_WORDS: Record<AnimalKind, { female: string; male: string; young: stri
   horse: { female: 'mares', male: 'stallions', young: 'foals' },
 };
 
-const ROLE_NAME: Record<Role, string> = { farmer: 'Farmer', builder: 'Builders', miller: 'Miller', baker: 'Baker', woodcutter: 'Woodcutter', sawyer: 'Sawyer', herder: 'Keeper', stonecutter: 'Stonecutter', serf: 'Serfs' };
+const ROLE_NAME: Record<Role, string> = { farmer: 'Farmer', builder: 'Builders', miller: 'Miller', baker: 'Baker', woodcutter: 'Woodcutter', sawyer: 'Sawyer', herder: 'Keeper', dairymaid: 'Dairymaid', smoker: 'Smoker', weaver: 'Weaver', tanner: 'Tanner', chandler: 'Chandler', saddler: 'Saddler', brewer: 'Brewer', pastrycook: 'Pastry cook', smith: 'Smith', stonecutter: 'Stonecutter', serf: 'Serfs' };
 
 /** "50 wood · 20 stone" (only the resources present). */
 function amounts(a: Amounts): string {
@@ -236,8 +239,16 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
   const when = s.winter ? `winter, day ${s.dayOfYear - (YEAR_DAYS - WINTER_DAYS)} of ${WINTER_DAYS}` : `winter in ${YEAR_DAYS - WINTER_DAYS + 1 - s.dayOfYear} days`;
   text(ctx, `Day ${c.day} (${when}) · ${hhmm}   Buildings: ${built}`, 16, y + 2, 12, '#cbbfa4');
   const working = world.people.filter((p) => p.job).length;
-  const stockLine = `Stored: ${amounts(villageStock(world))}   People ${world.people.length} (${working} at work)`;
+  const stockLine = `Stored: ${amounts(villageStock(world))}   People ${world.people.length} (${working} at work)   Coin ${Math.floor(world.treasury)}   Charters ${world.castle.charters}`;
   text(ctx, stockLine, 16, y + 18, fitSize(ctx, stockLine, 12, maxW), '#e8d9a8');
+  // the castle's request, while there is one
+  const req = world.castle.request;
+  if (req) {
+    const asked = RESOURCES.filter((r) => req.goods[r]).map((r) => `${req.goods[r]} ${r}`).join(', ');
+    const left = amounts(stillAsked(world));
+    const line2 = `The castle asks for ${asked} by day ${req.due}` + (left === 'nothing' ? ' — all gathered' : ` — still wanting ${left}`);
+    text(ctx, line2, 16, y + 34, fitSize(ctx, line2, 12, maxW), '#f0c878');
+  }
 
   if (!st.topView) drawMiniMap(ctx, world, L.map);
   else {
@@ -466,14 +477,13 @@ function drawBuildingMenu(ctx: Ctx, world: World, uiW: number, uiH: number): voi
   if (menu?.kind !== 'building') return;
   const b = getBuilding(world, menu.buildingId);
   if (!b) return;
-  const def = BUILDINGS[b.type];
-  const upgrade = def.upgrade;
+  const upgrade = nextUpgrade(b);
   const M = buildingMenuLayout(uiW, uiH, menu.options.length);
 
   ctx.fillStyle = 'rgba(20,14,8,0.35)';
   ctx.fillRect(0, 0, uiW, uiH);
   panel(ctx, M.panel.x, M.panel.y, M.panel.w, M.panel.h, 0.9);
-  const title = `The ${b.upgraded && upgrade ? upgrade.name : def.name}`;
+  const title = `The ${nameOf(b)}`;
   text(ctx, title, uiW / 2, M.titleY, 17, GOLD, 'center', true);
 
   menu.options.forEach((option, i) => {
@@ -490,7 +500,7 @@ function drawBuildingMenu(ctx: Ctx, world: World, uiW: number, uiH: number): voi
     }
     roundRect(ctx, r.x, r.y, r.w, r.h - 24, 6);
     ctx.clip();
-    if (option === 'upgrade' && Object.keys(upgradeShortfall(world, b)).length) ctx.globalAlpha = 0.4;
+    if (option === 'upgrade' && (Object.keys(upgradeShortfall(world, b)).length || upgradeLocked(world, b))) ctx.globalAlpha = 0.4;
     if (option !== 'upgrade' && whyNotDemolish(world, b)) ctx.globalAlpha = 0.4;
     const previewH = r.h - 34;
     // this very building, as it stands: its width (a merged one), look, store and fields
@@ -611,7 +621,7 @@ export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number):
   const lack = buildShortfall(world, def.type);
   const cost = `Costs ${amounts(def.cost)}` + (Object.keys(lack).length ? ` — need ${amounts(lack)} more` : '');
   const { w, d } = sizeOf(def.type);
-  const why = whyNotBuild(world, def.type, menuX);
+  const why = whyNotBuild(world, def.type, menuX) ?? whyLocked(world, def.type);
   const size = def.type === 'intersection' ? 'a road across' : def.type === 'road' ? `the road ${w} squares on` : `${w} × ${d} squares`;
   const info = `${cost}   ·   ${time}   ·   ${size}` + (why ? `   ·   ${why}` : '');
   text(ctx, info, uiW / 2, M.infoY + 20, fitSize(ctx, info, 12, M.panel.w - 24), Object.keys(lack).length || why ? '#e89a7a' : '#cbbfa4', 'center');
@@ -654,7 +664,7 @@ export function drawPlotPrompt(ctx: Ctx, sx: number, base: number, time: number,
  */
 export function drawBuildingLabel(ctx: Ctx, world: World, b: Building, sx: number, y: number, k: number, viewW: number, upgradeHint: string | null, turnHint: string | null = null): void {
   const def = BUILDINGS[b.type];
-  const name = b.upgraded && def.upgrade ? def.upgrade.name : def.name;
+  const name = nameOf(b);
   const lines = [def.purpose];
   const storage = storageOf(b);
   const stored = RESOURCES.filter((r) => storage[r]);
@@ -694,11 +704,16 @@ export function drawBuildingLabel(ctx: Ctx, world: World, b: Building, sx: numbe
     const n = (st: string) => near.filter((t) => t.state === st).length;
     lines.push(`Woods in reach: ${n('grown')} trees to fell · ${n('growing')} growing`);
   }
-  if (upgradeHint && def.upgrade) {
-    const cost = RESOURCES.filter((r) => def.upgrade!.cost[r]).map((r) => `${def.upgrade!.cost[r]} ${r}`).join(' · ');
-    const short = Object.keys(upgradeShortfall(world, b)).length ? ' — not enough yet' : '';
-    lines.push(`${upgradeHint} to a ${def.upgrade.name} (${cost})${short}`);
+  const next = nextUpgrade(b);
+  if (upgradeHint && next) {
+    const cost = RESOURCES.filter((r) => next.cost[r]).map((r) => `${next.cost[r]} ${r}`).join(' · ');
+    const locked = upgradeLocked(world, b);
+    const short = locked ? ` — ${locked.toLowerCase()}` : Object.keys(upgradeShortfall(world, b)).length ? ' — not enough yet' : '';
+    lines.push(`${upgradeHint} to a ${next.name} (${cost})${short}`);
   }
+  if (b.type === 'reeve') lines.push(world.castle.request ? `Gathering for the castle: still wanting ${amounts(stillAsked(world))}` : `No request from the castle just now (standing ${world.castle.standing})`);
+  if (b.type === 'market') lines.push(merchantHere(world) ? 'The merchant is here today' : `The merchant comes every ${MARKET.everyDays} days`);
+  if (b.type === 'stable') lines.push(`Carts: ${Math.floor(Math.min(b.stock.horse, b.stock.harness) + 1e-9)}${b.stock.hay < 1e-9 && b.stock.horse >= 1 ? ' — the horses want hay' : ''}`);
   if (turnHint) lines.push(turnHint);
   ctx.font = `12px ${SERIF}`;
   const lineW = Math.max(...lines.map((l) => ctx.measureText(l).width));
@@ -720,7 +735,7 @@ export function drawProgress(ctx: Ctx, world: World, b: Building, sx: number, y:
   const w = 110;
   const { stage } = constructionStage(b.progress);
   const def = BUILDINGS[b.type];
-  const caption = upgrading(b) && def.upgrade ? `${def.name} — upgrading to a ${def.upgrade.name}` : `${def.name} — ${STAGE_LABEL[stage]}`;
+  const caption = upgrading(b) && nextUpgrade(b) ? `${nameOf(b)} — upgrading to a ${nextUpgrade(b)!.name}` : `${def.name} — ${STAGE_LABEL[stage]}`;
   const cost = siteWork(b).cost;
   const delivered = b.site?.delivered;
   const builders = employees(world, b).filter((p) => p.job!.role === 'builder').length;

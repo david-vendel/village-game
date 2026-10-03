@@ -8,6 +8,8 @@ import { employees } from '../game/people';
 import { drawingAt } from '../game/transport';
 import { pastureCells } from '../game/pasture';
 import { lacking } from '../game/households';
+import { merchantHere } from '../game/market';
+import { upgradesDone } from '../game/buildings';
 import { snowfall, snowOnLand } from './winter';
 import { GROUND_PILE_Y } from '../game/piles';
 import type { Worker } from '../game/worker';
@@ -109,6 +111,8 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     bell: b.type === 'chapel' ? bell : undefined,
     drawing: b.type === 'well' ? drawingAt(world, b) : null,
     herd: b.herd,
+    level: upgradesDone(b),
+    merchant: b.type === 'market' && merchantHere(world),
     wants: b.type === 'house' && b.status === 'done' ? lacking(b) : undefined,
     pasture: b.type === 'horsefarm' && b.status === 'done' ? pastureCells(world, b).length : undefined,
     doorOpen: !!b.arriving,

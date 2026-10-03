@@ -20,7 +20,7 @@ const HERD_NAME = { chicken: 'hens', cow: 'cows', sheep: 'sheep', horse: 'horses
 const ONE_NAME = { chicken: 'bird', cow: 'beast', sheep: 'sheep', horse: 'horse' } as const;
 
 /** A workshop's work by its recipe's verb, and where it is done when that is outdoors. */
-const WORKING: Record<string, string> = { grind: 'grinding', bake: 'baking', saw: 'sawing' };
+const WORKING: Record<string, string> = { grind: 'grinding', bake: 'baking', saw: 'sawing', churn: 'churning', smoke: 'smoking', weave: 'weaving', tan: 'tanning', dip: 'dipping', stitch: 'stitching', brew: 'brewing', 'bake-pastries': 'baking', forge: 'forging' };
 const WORKED_AT: Record<string, string> = { bake: 'oven', saw: 'saw bench' };
 const resource = (action: string, verb: string) => (action.startsWith(`${verb}-`) ? action.slice(verb.length + 1) : null);
 
@@ -69,6 +69,7 @@ function activity(world: World, p: Person): string {
       const kept = BUILDINGS[b.type].livestock;
       if (kept && a === 'feed') return t.carried ? `feeding the ${HERD_NAME[kept.animal]} at the trough` : `taking ${kept.feed} off the store`;
       if (kept && a === 'butcher') return `butchering an old ${ONE_NAME[kept.animal]} for meat`;
+      if (kept && a === 'halter') return 'haltering a grown horse to lead away';
       const recipe = BUILDINGS[b.type].makes;
       if (recipe && a === recipe.verb) {
         const doing = `${WORKING[recipe.verb] ?? recipe.verb} ${recipe.from} into ${recipe.to}`;

@@ -25,6 +25,14 @@ Things only you can do or decide, so agents work faster. Tick them off or delete
 - [ ] **Add the new buildings to the showcase scenario** if you want them there; the free spots
   on its main street are mostly kept for crossroads, so it needs a layout decision.
 
+- [ ] **Check the castle's requests** (`CASTLE_REQUESTS` in `balance.ts`): what it asks, how many
+  days, how much coin; and which charter unlocks what (`charter:` on each building in
+  `src/game/buildings.ts`: 1 for the food and leather chains and the farmstead, 2 for the saddler,
+  stable, brewery, pastry cook and the townhouse).
+- [ ] **Decide what coin buys** besides the merchant's iron and salt (DESIGN.md "As built").
+- [ ] **3D models** are missing for the sawmill, the animal farms and every building from steps
+  2–6 (they show as 2D with advanced graphics on).
+
 ## Tips for asking
 
 - Send work in batches, each with a check for "done", e.g. "add the iron mine and the smithy

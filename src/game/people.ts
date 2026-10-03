@@ -3,7 +3,7 @@
 // with open jobs hires the nearest of them, who then lives by the worker
 // routine (worker.ts) at that building. Animals (chickens) just stroll.
 
-import { BUILDINGS, ROLES, type Role } from './buildings';
+import { BUILDINGS, currentUpgrade, ROLES, SKILLED, upgradesDone, type Role } from './buildings';
 import { ROAD_Y, yAt } from './layout';
 import { findPath, terrainSpeed } from './paths';
 import { fromStreet, groundPoint, streetDist, streetOf, streetRange, type Vec } from './streets';
@@ -91,8 +91,7 @@ export function employees(world: World, b: Building): Person[] {
 
 /** The jobs a finished building gives: its own, or its upgrade's once upgraded. */
 export function jobsOf(b: Building): Partial<Record<Role, number>> {
-  const def = BUILDINGS[b.type];
-  return b.upgraded && def.upgrade ? def.upgrade.jobs : def.jobs;
+  return currentUpgrade(b)?.jobs ?? BUILDINGS[b.type].jobs;
 }
 
 /**
@@ -126,11 +125,13 @@ function betweenErrands(p: Person): boolean {
  * building, then free seekers; for errands, free seekers only.
  */
 function candidates(world: World, role: Role): Person[][] {
-  const free = (p: Person) => !p.job && !p.leaving;
+  // skilled work only for freemen: people whose home is a farmstead or better
+  const able = (p: Person) => !SKILLED.has(role) || upgradesDone(world.buildings.find((b) => b.id === p.home) ?? { upgraded: undefined }) >= 1;
+  const free = (p: Person) => !p.job && !p.leaving && able(p);
   if (role === 'serf') return [world.people.filter((p) => free(p) && p.seeker)];
   const pros = world.people.filter((p) => free(p) && p.profession === role);
   if (role === 'builder') return [pros, world.people.filter((p) => free(p) && p.seeker)];
-  return [pros, world.people.filter((p) => free(p) && p.seeker), world.people.filter((p) => p.seeker && !p.leaving && betweenErrands(p))];
+  return [pros, world.people.filter((p) => free(p) && p.seeker), world.people.filter((p) => p.seeker && !p.leaving && able(p) && betweenErrands(p))];
 }
 
 /**

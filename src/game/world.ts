@@ -11,9 +11,9 @@
 // stand (hired, let go, or done for the day), and goods only move in
 // someone's arms, from the place they lie to the place they will lie.
 
-import { BUILDINGS, BUILDING_TYPES, doorOf, type BuildingType, type Role } from './buildings';
+import { BUILDINGS, BUILDING_TYPES, doorOf, nextUpgrade, upgradesDone, type BuildingType, type Role } from './buildings';
 import { clockRate, timeOfDay } from './daynight';
-import { buildShortfall, putAway, takeFromWarehouses, upgradeShortfall, WAREHOUSE_START } from './economy';
+import { buildShortfall, putAway, takeFromWarehouses, upgradeShortfall, WAREHOUSE_START, warehouses } from './economy';
 import { createFarm, DEFAULT_WORK, farmWorkplace, updateCrops, type FarmState } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
 import { BASE_Y, BLOCK, CELL_W, FIRST_PLOT_X, FRONT_LIMIT, PLOT_SPACING, ROAD_GRID, STREET_BAND_HALF, STREET_LENGTH, yAt } from './layout';
@@ -36,6 +36,10 @@ import { updateSpoilage } from './spoilage';
 import { isWinter } from './daynight';
 import { ageHerds, livestockWorkplace, type Herd } from './livestock';
 import { parcelsLaid, ROAD_PIECE, roadWorkplace } from './roadwork';
+import { newCastle, updateCastle, upgradeLocked, whyLocked, type Castle } from './castle';
+import { feedStables, PLOUGH_SPEED } from './carts';
+import { updateMarkets } from './market';
+import { TOOL_SPEED } from './balance';
 
 /** Length of each street (streets.ts). */
 export const WORLD_WIDTH = STREET_LENGTH;
@@ -117,6 +121,8 @@ export interface Building {
   site?: Site;
   /** Upgraded (BuildingDef.upgrade): it gives the upgrade's jobs. */
   upgraded?: true;
+  /** How many upgrades it has had, when more than one is possible (a house: farmstead, townhouse). */
+  level?: number;
   /** A crossroads made where a new street met an old one (not built from the menu). */
   junction?: true;
   /** A road piece: which way it lays its street on, and the street's end plot when it was placed (roadwork.ts). */
@@ -155,7 +161,7 @@ export type BuildMenu =
   | { kind: 'building'; buildingId: number; options: BuildingOption[]; selection: number; x: number };
 
 export interface GameEvent {
-  kind: 'placed' | 'completed' | 'upgraded' | 'demolished';
+  kind: 'placed' | 'completed' | 'upgraded' | 'demolished' | 'charter';
   buildingId: number;
 }
 
@@ -187,6 +193,10 @@ export interface World {
   dayClock: number;
   /** Events produced during the last update/action; drained by the caller. */
   events: GameEvent[];
+  /** The castle's requests and the charters earned (castle.ts). */
+  castle: Castle;
+  /** The village's coin: from the castle, burghers' taxes and the merchant. */
+  treasury: number;
 }
 
 export interface MoveInput {
@@ -257,6 +267,8 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
     nextId: 1,
     rngState: opts.seed ?? 1337,
     dayClock: 0,
+    castle: newCastle(),
+    treasury: 0,
     events: [],
   };
   layPlots(world, world.streets[0]);
@@ -457,6 +469,8 @@ export function placeBuilding(
 ): Building | null {
   const x = placeAt(world, type, wantX);
   if (x === null || whyNotBuild(world, type, wantX)) return null;
+  // the castle's charters (the starting village and free placements need none)
+  if (!opts.free && whyLocked(world, type)) return null;
   // the warehouses must hold its materials, beyond what other sites are owed
   if (!opts.free && Object.keys(buildShortfall(world, type)).length) return null;
   const instant = opts.instant ?? !world.constructionEnabled;
@@ -514,7 +528,7 @@ export function buildingAt(world: World, x: number): Building | undefined {
 
 /** Whether a building can be upgraded now: finished, with an upgrade it hasn't had, and not already being upgraded. */
 export function canUpgrade(b: Building): boolean {
-  return b.status === 'done' && !!BUILDINGS[b.type].upgrade && !b.upgraded && !b.site;
+  return b.status === 'done' && !!nextUpgrade(b) && !b.site;
 }
 
 /**
@@ -523,8 +537,8 @@ export function canUpgrade(b: Building): boolean {
  * Returns whether it started; the warehouses must hold the materials.
  */
 export function upgradeBuilding(world: World, b: Building): boolean {
-  const upgrade = BUILDINGS[b.type].upgrade;
-  if (!upgrade || !canUpgrade(b) || Object.keys(upgradeShortfall(world, b)).length) return false;
+  const upgrade = nextUpgrade(b);
+  if (!upgrade || !canUpgrade(b) || upgradeLocked(world, b) || Object.keys(upgradeShortfall(world, b)).length) return false;
   if (world.constructionEnabled) {
     b.site = createSite(b.type);
     b.progress = 0;
@@ -706,6 +720,7 @@ function complete(world: World, b: Building): void {
   }
   if (upgrade) {
     // the building's own workers carry on; it now gives the upgrade's jobs (a farm, more fields)
+    b.level = upgradesDone(b) + 1;
     b.upgraded = true;
     if (b.farm) syncFarmFields(world);
     world.events.push({ kind: 'upgraded', buildingId: b.id });
@@ -1021,7 +1036,7 @@ export function openMenu(world: World): boolean {
     const options: BuildingOption[] = [...(canUpgrade(b) ? ['upgrade' as const] : []), ...((b.size ?? 1) > 1 ? ['demolishSection' as const] : []), 'demolish'];
     world.menu = { kind: 'building', buildingId: b.id, options, selection: 0, x };
   } else {
-    const fits = BUILDING_TYPES.map((t) => !whyNotBuild(world, t, x));
+    const fits = BUILDING_TYPES.map((t) => !whyNotBuild(world, t, x) && !whyLocked(world, t));
     if (!fits.includes(true)) return false;
     world.menu = { kind: 'build', x, selection: fits[world.lastSelection] ? world.lastSelection : fits.indexOf(true), fits };
   }
@@ -1074,6 +1089,9 @@ export function update(world: World, dt: number, input: MoveInput): void {
   const clockBefore = world.dayClock;
   world.dayClock += dt * clockRate(world);
   eatAtTaverns(world, clockBefore);
+  updateMarkets(world, clockBefore);
+  updateCastle(world);
+  feedStables(world, dt);
   updateRider(world, dt, world.menu ? { left: false, right: false } : input);
   arrive(world, dt);
   staff(world);
@@ -1098,10 +1116,21 @@ export function update(world: World, dt: number, input: MoveInput): void {
  * is a site for them, and its usual workplace for everyone else).
  */
 export function workplaceOf(world: World, b: Building, role: Role): Workplace | null {
+  const place = baseWorkplace(world, b, role);
+  if (place && role !== 'serf' && role !== 'builder') place.workSpeed = toolSpeed(world);
+  return place;
+}
+
+/** How fast work goes: quicker while the stores hold tools (the blacksmith's; they wear out). */
+export function toolSpeed(world: World): number {
+  return warehouses(world).some((w) => w.stock.tools >= 1) ? TOOL_SPEED : 1;
+}
+
+function baseWorkplace(world: World, b: Building, role: Role): Workplace | null {
   if (b.status === 'demolishing') return role === 'builder' ? demolitionWorkplace(world, b) : null;
   if (b.site && b.type === 'road') return role === 'builder' ? roadWorkplace(world, b, world.params.buildSpeed) : null;
   if (b.site && (b.status !== 'done' || role === 'builder')) return siteWorkplace(world, b, world.params.buildSpeed);
-  if (b.farm) return farmWorkplace(b.farm, b.stock, world.params, isWinter(world));
+  if (b.farm) return farmWorkplace(b.farm, b.stock, world.params, isWinter(world), b.stock.horse >= 1 ? PLOUGH_SPEED : 1);
   const recipe = BUILDINGS[b.type].makes;
   if (recipe && b.status === 'done') return workshopWorkplace(world, b, recipe);
   const stock = BUILDINGS[b.type].livestock;

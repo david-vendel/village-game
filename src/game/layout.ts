@@ -3,6 +3,8 @@
 // Moving something here moves it for both; e.g. if the farmhouse is redrawn
 // wider, move HOME/STORE so the farmer still walks to its door and store.
 
+import type { Resource } from './resources';
+
 // --- Street (vertical layout, world units) --------------------------------------
 
 /** Length of a street (px); its plots start at FIRST_PLOT_X from its start. */
@@ -338,9 +340,56 @@ export const GOODS_SLOTS: readonly Slot[] = [-18, -11, -4, 3, 10, 17, 24, 31].ma
  * A house's store: a shelf beside its door, a basket of bread then a bucket of
  * water per place, outwards from the door. dx from the door, by the house's size.
  */
-export function houseSlot(r: 'bread' | 'water', i: number): Slot {
-  return { dx: (r === 'bread' ? 12 : -12) + (r === 'bread' ? 1 : -1) * i * 9, lift: 0 };
+export function houseSlot(r: Resource, i: number): Slot {
+  // bread and water either side of the door; a farmstead's other goods beyond the bread
+  const right: Resource[] = ['bread', 'cheese', 'smokedmeat', 'cloth', 'ale', 'candles', 'pastries'];
+  if (r === 'water') return { dx: -12 - i * 9, lift: 0 };
+  const k = Math.max(0, right.indexOf(r));
+  return { dx: 12 + k * 18 + i * 8, lift: 0 };
 }
+
+/**
+ * The newer workshops (dairy, smokehouse, weaver, …) share one yard: the door
+ * in the middle of the front, what comes in stacked left of it, a second input
+ * (Recipe.also) further left, what is made right of it.
+ */
+export const WORKSHOP_DOOR: Spot = { dx: -8, y: STAND_Y };
+export const WORKSHOP_IN: readonly Slot[] = [-26, -36, -46, -56].map((dx) => ({ dx, lift: 0 }));
+export const WORKSHOP_ALSO: readonly Slot[] = [-66, -74].map((dx) => ({ dx, lift: 0 }));
+export const WORKSHOP_OUT: readonly Slot[] = [12, 22, 32, 42, 52, 62].map((dx) => ({ dx, lift: 0 }));
+
+/** The storehouse: a shelf for each kind of good it keeps (k: which), items along it (i), two shelves high. */
+export function storehouseSlot(k: number, i: number): Slot {
+  const col = k % 4;
+  const shelf = Math.floor(k / 4);
+  return { dx: -60 + col * 32 + (i % 4) * 7, lift: shelf * 22 + Math.floor(i / 4) * 9 };
+}
+
+/** The smithy's store: iron by the anvil on the left, tools hung up on the right. */
+export const SMITHY_SLOTS: Record<'iron' | 'tools', readonly Slot[]> = {
+  iron: [-50, -42, -46].map((dx, i) => ({ dx, lift: i === 2 ? 6 : 0 })),
+  tools: [40, 48, 56].map((dx) => ({ dx, lift: 0 })),
+};
+
+/** The market's two stalls: what is for the merchant on the left, what he sold on the right; by kind, side by side. */
+export function marketSlot(side: 'buys' | 'sells', k: number, i: number): Slot {
+  return { dx: (side === 'buys' ? -62 : 18) + k * 16 + (i % 2) * 6, lift: 18 + Math.floor(i / 2) * 7 };
+}
+
+/** The stable: a horse in each stall along it, harness on pegs by the door, hay in the rack. */
+export const STABLE_SLOTS: Record<'horse' | 'harness' | 'hay', readonly Slot[]> = {
+  horse: [-48, -20, 8, 36].map((dx) => ({ dx, lift: 0 })),
+  harness: [58, 64, 70, 76].map((dx) => ({ dx, lift: 20 })),
+  hay: [-70, -64, -58, -64].map((dx, i) => ({ dx, lift: i === 3 ? 9 : 0 })),
+};
+
+/** The reeve's cart in the yard, loaded for the castle: a place per kind of good (k), items along it. */
+export function reeveSlot(k: number, i: number): Slot {
+  return { dx: 6 + (k % 6) * 11, lift: Math.floor(k / 6) * 8 + Math.floor(i / 6) * 4 };
+}
+
+/** A farm's plough horse, tethered by the barn. */
+export const FARM_HORSE: Slot = { dx: 70, lift: 0 };
 
 /** Baskets of loaves on the bench in front of the tavern, where its guests help themselves. */
 export const TAVERN_SLOTS: readonly Slot[] = [

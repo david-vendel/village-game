@@ -2,13 +2,14 @@
 // a sunlit front face, a shaded side face receding up-right, and a pitched
 // roof. The sun is to the left, so right-hand faces are in shadow.
 
-import { BUILDINGS, doorOf, type BuildingType } from '../game/buildings';
+import { BUILDINGS, doorOf, storageOf, type BuildingType } from '../game/buildings';
 import type { FarmState } from '../game/farm';
-import { BAKERY_OVEN_MOUTH_DX, BAKERY_SLOTS, BAKERY_WATER_SLOTS, BASKET, WELL_SLOTS, MILL_SLOTS, PILE_UNIT, SACK, SAWMILL_BENCH_DX, SAWMILL_SLOTS, houseSlot, pileItems, FEED_SLOTS, GOODS_SLOTS, HAY_SLOTS, LIVESTOCK_TROUGH_DX, STONECUTTER_SLOTS, TAVERN_SLOTS, warehouseSlot, WOODCUTTER_SLOTS, YARD_ITEMS, type Slot } from '../game/layout';
+import { BAKERY_OVEN_MOUTH_DX, BAKERY_SLOTS, BAKERY_WATER_SLOTS, BASKET, WELL_SLOTS, MILL_SLOTS, PILE_UNIT, SACK, SAWMILL_BENCH_DX, SAWMILL_SLOTS, houseSlot, pileItems, FARM_HORSE, marketSlot, reeveSlot, SMITHY_SLOTS, STABLE_SLOTS, storehouseSlot, WORKSHOP_ALSO, WORKSHOP_IN, WORKSHOP_OUT, FEED_SLOTS, GOODS_SLOTS, HAY_SLOTS, LIVESTOCK_TROUGH_DX, STONECUTTER_SLOTS, TAVERN_SLOTS, warehouseSlot, WOODCUTTER_SLOTS, YARD_ITEMS, type Slot } from '../game/layout';
 import type { Amounts, Resource, Stock } from '../game/resources';
 import type { Worker } from '../game/worker';
 import { goodsOf, type Herd } from '../game/livestock';
 import { drawAnimal, drawGood } from './livestock';
+import { drawItem } from './goods';
 import { breadBasket, waterBucket, doorProgress, drawBackFences, drawBackField, drawFrontField, drawStore, stook } from './farm';
 import { drawArm, drawHead, drawLegs, drawTorso, type Figure, HEAD, outfitOf, SHOULDER } from './figure';
 import { circle, clamp01, type Ctx, ellipse, hash, line, mix, poly, rect, shade, smoke } from './util';
@@ -41,6 +42,10 @@ export interface DrawArgs {
   doorOpen?: boolean;
   /** An animal farm's herd (game/livestock.ts). */
   herd?: Herd;
+  /** How many upgrades it has had (a house: 1 farmstead, 2 townhouse). */
+  level?: number;
+  /** A market: the merchant is there today (game/market.ts). */
+  merchant?: boolean;
   /** A house: what its family lacks now (game/households.ts), shown in a bubble over its door. */
   wants?: Resource[];
   /** A horse farm: how many cells of pasture it has (game/pasture.ts). */
@@ -415,10 +420,27 @@ function drawHouse(ctx: Ctx, a: DrawArgs): void {
   if (size > 1 && hash(a.seed, 7) < 0.6) {
     barrel(ctx, x0 + w + 16, a.base + 4, 0.9);
   }
-  // the family's shelf by the door: bread one side, water the other (game/layout.ts houseSlot)
   const doorMid = x0 + doorU + 10;
-  for (let i = 0; i < pileItems(a.stock?.bread ?? 0); i++) breadBasket(ctx, doorMid + houseSlot('bread', i).dx, a.base + 3, 0.6, 4);
-  for (let i = 0; i < pileItems(a.stock?.water ?? 0); i++) waterBucket(ctx, doorMid + houseSlot('water', i).dx, a.base + 3, 0.9);
+  // a farmstead: flower boxes and a low garden fence; a townhouse also a gilt sign and a lantern by the door
+  if ((a.level ?? 0) >= 1) {
+    for (let fx = x0 + 6; fx < x0 + w - 6; fx += 30) {
+      rect(ctx, fx, a.base - 22, 16, 4, '#6b4a2c');
+      for (let k = 0; k < 4; k++) circle(ctx, fx + 2 + k * 4, a.base - 23, 1.6, ['#c0392b', '#e8c35a', '#d86a9a', '#f0f0e0'][(k + Math.floor(hash(a.seed, fx) * 4)) % 4]);
+    }
+    for (let px = x0 + w + 4; px <= x0 + w + 30; px += 6) rect(ctx, px, a.base - 9, 1.6, 9, '#8a6a44');
+    line(ctx, x0 + w + 4, a.base - 6, x0 + w + 31, a.base - 6, '#8a6a44', 1.2);
+  }
+  if ((a.level ?? 0) >= 2) {
+    rect(ctx, doorMid + 14, a.base - 52, 18, 12, '#2e4a7a');
+    rect(ctx, doorMid + 14, a.base - 52, 18, 1.5, '#d8b860');
+    rect(ctx, doorMid + 14, a.base - 41.5, 18, 1.5, '#d8b860');
+    line(ctx, doorMid - 14, a.base - 44, doorMid - 14, a.base - 34, '#2a2a2a', 1);
+    ellipse(ctx, doorMid - 14, a.base - 31, 2.5, 3.5, '#f3c46a');
+  }
+  // the family's shelf by the door: water one side, bread and the rest the other (game/layout.ts houseSlot)
+  for (const r of Object.keys(storageOf({ type: 'house', level: a.level })) as Resource[]) {
+    for (let i = 0; i < pileItems(a.stock?.[r] ?? 0); i++) drawItem(ctx, r, doorMid + houseSlot(r, i).dx, a.base + 3, r === 'water' ? 1 : 0.9, a.time);
+  }
   // what the family lacks, in a bubble over the door
   if (a.wants?.length) wantBubble(ctx, doorMid, a.base - (twoStorey ? 92 : 78), a.wants, a.time);
 }
@@ -437,7 +459,7 @@ function wantBubble(ctx: Ctx, x: number, y: number, wants: Resource[], time: num
     const ix = x - (wants.length - 1) * 7 + i * 14;
     if (r === 'bread') breadBasket(ctx, ix, y + 5 + bob, 0.5, 4);
     else if (r === 'water') waterBucket(ctx, ix, y + 5 + bob, 0.8);
-    else drawGood(ctx, r, ix, y + 5 + bob, 0.7);
+    else drawItem(ctx, r, ix, y + 5 + bob, 0.7);
   });
   ctx.restore();
 }
@@ -501,6 +523,8 @@ function farmOverlay(ctx: Ctx, a: DrawArgs, s: Surface): void {
   // the grain store between the house and the street, bales of hay by the barn
   drawStore(ctx, a, a.stock?.grain ?? 0);
   for (let i = 0; i < Math.min(HAY_SLOTS.length, pileItems(a.stock?.hay ?? 0)); i++) drawGood(ctx, 'hay', a.x + HAY_SLOTS[i].dx, a.base + 2 - HAY_SLOTS[i].lift, 1);
+  // a plough horse tethered by the barn
+  if ((a.stock?.horse ?? 0) >= 1) drawAnimal(ctx, 'horse', { sex: 'female', age: 10 }, a.x + FARM_HORSE.dx, a.base + 2, -1, a.time, a.seed, 0.6);
   // the farmers asleep inside, each in their own room
   const sleepers = (a.workers ?? []).filter((wk) => wk.task.kind === 'home' && wk.task.activity === 'sleep').length;
   for (let i = 0; i < Math.min(sleepers, 2); i++) {
@@ -1316,6 +1340,167 @@ function drawLivestockFarm(type: keyof typeof SHEDS) {
   };
 }
 
+/** How each of the newer workshops looks: wall, roof, and what its sign shows (what it makes); smoke from its chimney if it has a fire. */
+const WORKSHOPS: Partial<Record<BuildingType, { wall: string; roof: string; style: 'thatch' | 'tile' | 'slate'; smoke?: boolean }>> = {
+  dairy: { wall: '#eee6d4', roof: '#b8955a', style: 'thatch' },
+  smokehouse: { wall: '#8a7a66', roof: '#5f646e', style: 'slate', smoke: true },
+  weaver: { wall: '#e2d0b0', roof: '#a4553a', style: 'tile' },
+  tannery: { wall: '#9a8466', roof: '#7a5a3a', style: 'tile' },
+  chandler: { wall: '#e9d6b0', roof: '#8e4a33', style: 'tile', smoke: true },
+  saddler: { wall: '#d8c4a0', roof: '#6f6a74', style: 'slate' },
+  brewery: { wall: '#c9b48a', roof: '#a4553a', style: 'tile', smoke: true },
+  pastrycook: { wall: '#f0e2c4', roof: '#b0603e', style: 'tile', smoke: true },
+};
+
+/**
+ * One of the newer workshops (game/layout.ts WORKSHOP_DOOR): a timber-framed
+ * shop with its door in the middle and a sign of what it makes; what comes in
+ * stacked left of the door, a second input further left, what it makes right.
+ */
+function drawWorkshop(type: BuildingType) {
+  return (ctx: Ctx, a: DrawArgs): void => {
+    const look = WORKSHOPS[type]!;
+    const recipe = BUILDINGS[type].makes!;
+    const w = 112;
+    const d = 30;
+    const x0 = a.x - 64;
+    stonePlinth(ctx, x0, a.base, w, 8, d);
+    block(ctx, x0, a.base - 8, w, 36, d, look.wall);
+    timberFrame(ctx, x0, a.base - 8, w, 36, a.seed + 9);
+    const { doorOpen, asleep } = atHome(a);
+    hutDoor(ctx, a, type, doorOpen, '#5a3d24');
+    window_(ctx, x0 + 12, a.base - 34, 13, 12, true, a.time, a.seed);
+    window_(ctx, x0 + w - 26, a.base - 34, 13, 12, true, a.time, a.seed + 3);
+    const r = gableRoof(ctx, x0, a.base - 44, w, d, 34, look.roof, look.wall, look.style, a.seed);
+    if (look.smoke) chimney(ctx, r.ridgeX1 + 18, r.ridgeY + 10, 16, a, 0.8);
+    // the sign: what it makes, hung over the door
+    const sx = a.x + (doorOf(type)?.dx ?? 0);
+    line(ctx, sx, a.base - 46, sx + 16, a.base - 46, '#3a281b', 2);
+    rect(ctx, sx + 4, a.base - 44, 14, 12, '#7a5230');
+    drawItem(ctx, recipe.to, sx + 11, a.base - 34, 0.7, a.time);
+    // the store
+    const lay = (r: Resource | undefined, slots: readonly Slot[], s: number) => {
+      if (!r) return;
+      for (let i = 0; i < Math.min(slots.length, pileItems(a.stock?.[r] ?? 0)); i++) drawItem(ctx, r, a.x + slots[i].dx, a.base + 2 - slots[i].lift, s, a.time);
+    };
+    lay(recipe.from, WORKSHOP_IN, 0.9);
+    lay(recipe.also?.resource, WORKSHOP_ALSO, 0.9);
+    lay(recipe.boost?.resource, WORKSHOP_ALSO, 0.9);
+    lay(recipe.to, WORKSHOP_OUT, 0.9);
+    if (asleep) drawSnore(ctx, x0 + 20, a.base - 66, a.time);
+  };
+}
+
+/** The storehouse: an open-fronted barn, its shelves of goods that keep, a shelf to each kind. */
+function drawStorehouse(ctx: Ctx, a: DrawArgs): void {
+  const w = 150;
+  const d = 30;
+  const x0 = a.x - 75;
+  block(ctx, x0, a.base, w, 70, d, '#8b6440');
+  rect(ctx, x0 + 4, a.base - 66, w - 8, 66, '#3a2a1c');
+  for (const lift of [0, 16, 32, 48]) rect(ctx, x0 + 6, a.base - lift - 1, w - 12, 2, '#9a7650');
+  gableRoof(ctx, x0, a.base - 70, w, d, 32, '#7a5a3a', '#8b6440', 'tile', a.seed);
+  const kinds = Object.keys(storageOf({ type: 'storehouse' })) as Resource[];
+  kinds.forEach((r, k) => {
+    for (let i = 0; i < pileItems(a.stock?.[r] ?? 0); i++) {
+      const s = storehouseSlot(k, i);
+      drawItem(ctx, r, a.x + s.dx, a.base - s.lift, 0.6, a.time);
+    }
+  });
+  rect(ctx, x0 + 2, a.base - 70, 4, 70, '#5e452e');
+  rect(ctx, x0 + w - 6, a.base - 70, 4, 70, '#5e452e');
+}
+
+/** The stable: a long timber shed open at the front, a horse in each stall, harness on pegs, hay in the rack. */
+function drawStable(ctx: Ctx, a: DrawArgs): void {
+  const w = 150;
+  const d = 30;
+  const x0 = a.x - 75;
+  block(ctx, x0, a.base, w, 40, d, '#8b6440');
+  rect(ctx, x0 + 22, a.base - 34, 100, 34, '#3a2a1c');
+  for (let px = x0 + 22; px <= x0 + 122; px += 25) rect(ctx, px - 1.5, a.base - 34, 3, 34, '#6b4f33');
+  gableRoof(ctx, x0, a.base - 40, w, d, 30, '#7a5a3a', '#8b6440', 'tile', a.seed);
+  const horses = Math.min(STABLE_SLOTS.horse.length, pileItems(a.stock?.horse ?? 0));
+  for (let i = 0; i < horses; i++) drawAnimal(ctx, 'horse', { sex: i % 2 ? 'male' : 'female', age: 10 }, a.x + STABLE_SLOTS.horse[i].dx + 12, a.base, 1, a.time, a.seed + i * 7, 0.55);
+  rect(ctx, x0 + w - 22, a.base - 28, 18, 2, '#5e452e'); // the peg rail
+  for (const [r, slots] of [['harness', STABLE_SLOTS.harness], ['hay', STABLE_SLOTS.hay]] as const) {
+    for (let i = 0; i < Math.min(slots.length, pileItems(a.stock?.[r] ?? 0)); i++) drawItem(ctx, r, a.x + slots[i].dx, a.base + 2 - slots[i].lift, r === 'harness' ? 0.7 : 0.9, a.time);
+  }
+}
+
+/** The reeve's house: a stone house flying the castle's banner, the cart in its yard loaded for the castle. */
+function drawReeve(ctx: Ctx, a: DrawArgs): void {
+  const w = 70;
+  const d = 34;
+  const x0 = a.x - 64;
+  stonePlinth(ctx, x0, a.base, w, 10, d);
+  block(ctx, x0, a.base - 10, w, 40, d, shade(STONE, 0.12));
+  const { doorOpen } = atHome(a);
+  hutDoor(ctx, a, 'reeve', doorOpen, '#4a3020');
+  window_(ctx, x0 + 10, a.base - 36, 12, 12, true, a.time, a.seed);
+  const r = gableRoof(ctx, x0, a.base - 50, w, d, 34, '#5f646e', shade(STONE, 0.12), 'slate', a.seed);
+  // the castle's banner on a pole
+  line(ctx, r.ridgeX1, r.ridgeY, r.ridgeX1, r.ridgeY - 26, '#3a2a1c', 1.5);
+  const wave = Math.sin(a.time * 2) * 2;
+  poly(ctx, [r.ridgeX1, r.ridgeY - 26, r.ridgeX1 + 16, r.ridgeY - 23 + wave, r.ridgeX1, r.ridgeY - 18], '#8e2a2a');
+  // the cart, its load
+  const cx = a.x + 34;
+  rect(ctx, cx - 30, a.base - 12, 64, 4, '#6b4a2c');
+  for (const wx of [cx - 20, cx + 22]) {
+    circle(ctx, wx, a.base - 5, 5, '#4a3020');
+    circle(ctx, wx, a.base - 5, 1.5, '#8a6a44');
+  }
+  line(ctx, cx - 30, a.base - 10, cx - 44, a.base - 4, '#6b4a2c', 2);
+  (Object.keys(storageOf({ type: 'reeve' })) as Resource[]).forEach((res, k) => {
+    for (let i = 0; i < pileItems(a.stock?.[res] ?? 0); i++) {
+      const s = reeveSlot(k, i);
+      drawItem(ctx, res, a.x + s.dx, a.base - 12 - s.lift, 0.55, a.time);
+    }
+  });
+}
+
+/** The blacksmith's store: iron by the anvil, tools hung up. */
+function smithyStore(ctx: Ctx, a: DrawArgs): void {
+  for (const r of ['iron', 'tools'] as const) {
+    const slots = SMITHY_SLOTS[r];
+    for (let i = 0; i < Math.min(slots.length, pileItems(a.stock?.[r] ?? 0)); i++) drawItem(ctx, r, a.x + slots[i].dx, a.base + 2 - slots[i].lift, 0.9, a.time);
+  }
+}
+
+/** The market's stalls: what is for the merchant on the left, what he sold on the right; and him, on his days, with his cart. */
+function marketStalls(ctx: Ctx, a: DrawArgs): void {
+  for (const [side, kinds] of [['buys', ['wool', 'cloth', 'cheese']], ['sells', ['iron', 'salt']]] as const) {
+    kinds.forEach((r, k) => {
+      for (let i = 0; i < pileItems(a.stock?.[r] ?? 0); i++) {
+        const s = marketSlot(side, k, i);
+        drawItem(ctx, r, a.x + s.dx, a.base - s.lift, 0.7, a.time);
+      }
+    });
+  }
+  if (!a.merchant) return;
+  // the merchant's covered cart and his mule, and him in a green hat
+  const cx = a.x + 92;
+  rect(ctx, cx - 18, a.base - 26, 36, 18, '#c9b48a');
+  ctx.fillStyle = '#e8dcc0';
+  ctx.beginPath();
+  ctx.arc(cx, a.base - 26, 18, Math.PI, 0);
+  ctx.fill();
+  for (const wx of [cx - 11, cx + 11]) circle(ctx, wx, a.base - 5, 5, '#4a3020');
+  drawAnimal(ctx, 'horse', { sex: 'male', age: 10 }, cx + 34, a.base, 1, a.time, 5, 0.45);
+  const mx = a.x + 62;
+  rect(ctx, mx - 4, a.base - 22, 8, 14, '#2e5a3a');
+  line(ctx, mx - 2, a.base - 8, mx - 2, a.base, '#3a2a1c', 2);
+  line(ctx, mx + 2, a.base - 8, mx + 2, a.base, '#3a2a1c', 2);
+  circle(ctx, mx, a.base - 26, 4, '#e0b896');
+  ellipse(ctx, mx, a.base - 30, 6, 2, '#2e5a3a');
+}
+
+/** A building's art, then more drawn over it. */
+const withStore = (draw: (ctx: Ctx, a: DrawArgs) => void, more: (ctx: Ctx, a: DrawArgs) => void) => (ctx: Ctx, a: DrawArgs) => {
+  draw(ctx, a);
+  more(ctx, a);
+};
+
 function drawStonecutter(ctx: Ctx, a: DrawArgs): void {
   // a squat stone hut with a slate roof, a mason's bench out front
   const w = 64;
@@ -1458,14 +1643,25 @@ export const BUILDING_ART: Record<BuildingType, BuildingArt> = {
   farm: { height: 120, behind: drawFarmField, draw: drawFarm, front: drawFarmFrontField, body: farmBody, overlay: farmOverlay, points: FARM_POINTS, lights: farmLights, stateParts: farmStateParts },
   mill: { height: 250, draw: drawMill },
   bakery: { height: 120, draw: drawBakery },
-  blacksmith: { height: 150, draw: drawBlacksmith },
-  market: { height: 110, draw: drawMarket },
+  blacksmith: { height: 150, draw: withStore(drawBlacksmith, smithyStore) },
+  market: { height: 110, draw: withStore(drawMarket, marketStalls) },
   chapel: { height: 270, draw: drawChapel },
   tavern: { height: 170, draw: drawTavern },
   watchtower: { height: 260, draw: drawWatchtower },
   well: { height: 90, draw: drawWell },
   woodcutter: { height: 100, draw: drawWoodcutter },
   sawmill: { height: 100, draw: drawSawmill },
+  dairy: { height: 100, draw: drawWorkshop('dairy') },
+  smokehouse: { height: 100, draw: drawWorkshop('smokehouse') },
+  weaver: { height: 100, draw: drawWorkshop('weaver') },
+  storehouse: { height: 110, draw: drawStorehouse },
+  tannery: { height: 100, draw: drawWorkshop('tannery') },
+  chandler: { height: 100, draw: drawWorkshop('chandler') },
+  saddler: { height: 100, draw: drawWorkshop('saddler') },
+  stable: { height: 90, draw: drawStable },
+  brewery: { height: 100, draw: drawWorkshop('brewery') },
+  pastrycook: { height: 100, draw: drawWorkshop('pastrycook') },
+  reeve: { height: 120, draw: drawReeve },
   chickenfarm: { height: 80, draw: drawLivestockFarm('chickenfarm') },
   cowfarm: { height: 90, draw: drawLivestockFarm('cowfarm') },
   sheepfarm: { height: 85, draw: drawLivestockFarm('sheepfarm') },

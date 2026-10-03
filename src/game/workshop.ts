@@ -25,11 +25,13 @@ const PICK_UP_TIME = 0.4;
 export function workshopWorkplace(world: World, b: Building, recipe: Recipe): Workplace {
   const x = b.x;
   const capacity = storageOf(b);
-  const { from, to, batch, per, seconds, verb, door, at, also } = recipe;
+  const { from, to, batch, per, seconds, verb, door, at, also, boost } = recipe;
   const errand = errandWork(world, x);
   const isErrand = (job: JobTicket) => errandResource(job.action) !== null;
   /** How much of `from` the next batch takes: as much as is there, up to a batch, that what it makes has room for. */
+  // only a whole batch is worked (two pails make a cheese)
   const nextBatch = () =>
+    b.stock[from] < batch - 1e-9 ? 0 :
     Math.min(batch, b.stock[from], also ? b.stock[also.resource] / also.amount : Infinity, Math.floor(room(b.stock, capacity, to) / per + 1e-9));
   /** What a batch is made of: `amount` of each per one of `from`. */
   const inputs = [{ resource: from, amount: 1 }, ...(also ? [also] : [])];
@@ -55,6 +57,11 @@ export function workshopWorkplace(world: World, b: Building, recipe: Recipe): Wo
     finish(job, carried): Load | null {
       if (isErrand(job)) return errand.finish(job);
       // inside: what was carried in is made into what the workshop makes
+      if (carried && carried.resource === from && boost && b.stock[boost.resource] >= 1) {
+        // salt to hand: it goes in, and the batch makes more
+        b.stock[boost.resource] -= 1;
+        return { resource: to, amount: carried.amount * per * boost.factor };
+      }
       if (carried) return carried.resource === from ? { resource: to, amount: carried.amount * per } : carried;
       // outside: a sack taken off the store, to carry in
       const n = nextBatch();

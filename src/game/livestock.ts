@@ -58,6 +58,8 @@ export interface Livestock {
 /** Seconds to feed the herd at the trough, and to butcher an animal. */
 const FEED_SECONDS = 5;
 const BUTCHER_SECONDS = 6;
+/** Seconds to halter a grown horse to lead it away. */
+const HALTER_SECONDS = 3;
 /** Seconds to lift the feed off the store. */
 const PICK_UP_TIME = 0.4;
 
@@ -128,11 +130,23 @@ export function livestockWorkplace(world: World, b: Building, def: Livestock): W
   };
   const worthFeeding = () => canBreed() || yieldOf() !== null;
   const canButcher = () => due() >= 0 && room(b.stock, capacity, 'meat') >= meat - 1e-9;
+  /** A grown horse the farm can spare (beyond a productive mare and stallion, and not past it), if it has room to tether one. */
+  const spare = (): number => {
+    if (kind !== 'horse' || room(b.stock, capacity, 'horse') < 1) return -1;
+    const h = herdOf(b).animals;
+    const keep = new Set<Beast>();
+    for (const sex of ['female', 'male'] as const) {
+      const one = h.find((a) => a.sex === sex && isProductive(kind, a));
+      if (one) keep.add(one);
+    }
+    return h.findIndex((a) => !keep.has(a) && isAdult(kind, a) && !isDue(kind, a));
+  };
 
   return {
     door: BUILDINGS[b.type].door!,
     nextJob() {
       if (canButcher()) return { job: { action: 'butcher', target: 0 }, ...trough };
+      if (spare() >= 0) return { job: { action: 'halter', target: 0 }, ...trough };
       if (!worthFeeding()) return null;
       if (b.stock[feed] >= 1 - 1e-9) return { job: { action: 'feed', target: 0 }, ...storeSpot(world, b, feed, x, true) };
       // no feed left: go and get some, if nobody is bringing it already
@@ -141,12 +155,13 @@ export function livestockWorkplace(world: World, b: Building, def: Livestock): W
     },
     jobSpot(job) {
       if (isErrand(job)) return errand.jobSpot!(job);
-      if (job.action === 'butcher') return trough;
+      if (job.action === 'butcher' || job.action === 'halter') return trough;
       return b.stock[feed] >= 1 - 1e-9 ? storeSpot(world, b, feed, x, true) : null;
     },
     begin(job) {
       if (isErrand(job)) return errand.begin(job);
       if (job.action === 'butcher') return canButcher() ? BUTCHER_SECONDS : null;
+      if (job.action === 'halter') return spare() >= 0 ? HALTER_SECONDS : null;
       return b.stock[feed] >= 1 - 1e-9 && worthFeeding() ? PICK_UP_TIME : null;
     },
     finish(job, carried): Load | null {
@@ -155,7 +170,16 @@ export function livestockWorkplace(world: World, b: Building, def: Livestock): W
         const i = due();
         if (i < 0) return null;
         herdOf(b).animals.splice(i, 1);
+        // the hide and the tallow are left by the paddock, for serfs to take to the tannery and the chandler
+        dropOnGround(world, x + trough.dx + 8, { resource: 'hides', amount: 1 });
+        dropOnGround(world, x + trough.dx + 8, { resource: 'tallow', amount: 1 });
         return { resource: 'meat', amount: meat };
+      }
+      if (job.action === 'halter') {
+        const i = spare();
+        if (i < 0) return null;
+        herdOf(b).animals.splice(i, 1);
+        return { resource: 'horse', amount: 1 };
       }
       // fed at the trough: the young that are due are born, and what the animals give is carried back
       if (carried) {
@@ -195,6 +219,6 @@ export function livestockWorkplace(world: World, b: Building, def: Livestock): W
 /** The goods an animal farm keeps right of its door, in order: what it gives, then meat. */
 export function goodsOf(def: BuildingDef): Resource[] {
   const l = def.livestock;
-  const all: Array<Resource | undefined> = l ? [l.gives, l.or, 'meat'] : [];
+  const all: Array<Resource | undefined> = l ? [l.gives, l.or, 'horse', 'meat'] : [];
   return all.filter((r): r is Resource => !!r && !!def.storage[r]);
 }

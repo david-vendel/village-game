@@ -84,7 +84,7 @@
   #80  house  s0:157-159  done  [water=2]  home: 3/3 content 100%
   #81  well  s0:160-162  done
   #82  sawmill  s0:112-117  done  [wood=1 planks=3]  staff: sawyer
-  #83  woodcutter  s0:193-198  done  [wood=2]  staff: woodcutter
+  #83  woodcutter  s0:193-198  done  [wood=1]  staff: woodcutter
   #84  stonecutter  s0:199-204  done  [stone=2]  staff: stonecutter
   #85  blacksmith  s0:205-210  done
   #86  chapel  s0:211-216  done

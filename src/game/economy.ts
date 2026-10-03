@@ -6,8 +6,8 @@
 // own place (storeSlot), where it is picked up from and put down.
 
 import { START_STOCK } from './balance';
-import { BUILDINGS, doorOf, type BuildingType, storageOf } from './buildings';
-import { houseSlot, isYardItem, FEED_SLOTS, GOODS_SLOTS, HAY_SLOTS, BAKERY_SLOTS, BAKERY_WATER_SLOTS, WELL_SLOTS, BASKET, MILL_SLOTS, SACK, SAWMILL_SLOTS, STONECUTTER_SLOTS, TAVERN_SLOTS, SHEAF_SLOTS, STAND_Y, PILE_UNIT, warehouseSlot, WOODCUTTER_SLOTS, type Slot, type Spot } from './layout';
+import { BUILDINGS, doorOf, nextUpgrade, type BuildingType, storageOf } from './buildings';
+import { FARM_HORSE, marketSlot, reeveSlot, SMITHY_SLOTS, STABLE_SLOTS, WORKSHOP_DOOR, storehouseSlot, WORKSHOP_ALSO, WORKSHOP_IN, WORKSHOP_OUT, houseSlot, isYardItem, FEED_SLOTS, GOODS_SLOTS, HAY_SLOTS, BAKERY_SLOTS, BAKERY_WATER_SLOTS, WELL_SLOTS, BASKET, MILL_SLOTS, SACK, SAWMILL_SLOTS, STONECUTTER_SLOTS, TAVERN_SLOTS, SHEAF_SLOTS, STAND_Y, PILE_UNIT, warehouseSlot, WOODCUTTER_SLOTS, type Slot, type Spot } from './layout';
 import { goodsOf } from './livestock';
 import { room, RESOURCES, shortfall, stockOf, type Amounts, type Load, type Resource, type Stock } from './resources';
 import { takeFromPile, type Pile } from './piles';
@@ -16,6 +16,8 @@ import { streetDist } from './streets';
 import { delivering } from './worker';
 import type { Building, World } from './world';
 
+const WORKSHOP_DOOR_DX = WORKSHOP_DOOR.dx;
+
 /** What the starting village's warehouse holds. */
 export const WAREHOUSE_START: Stock = stockOf(START_STOCK);
 
@@ -23,9 +25,12 @@ const xOf = (_world: World, b: Building) => b.x;
 /** How far building b is from world x, along the streets. */
 const away = (world: World, b: Building, x: number) => streetDist(world, x, xOf(world, b));
 
-/** Finished warehouses. */
+/** Places the village keeps its goods: storage yards and storehouses. */
+export const isStore = (b: { type: BuildingType }) => b.type === 'warehouse' || b.type === 'storehouse';
+
+/** Finished warehouses: storage yards and storehouses (the transport hub is the oldest yard: transport.ts). */
 export function warehouses(world: World): Building[] {
-  return world.buildings.filter((b) => b.type === 'warehouse' && b.status === 'done');
+  return world.buildings.filter((b) => isStore(b) && b.status === 'done');
 }
 
 /** Everything the village has in its warehouses. */
@@ -50,7 +55,7 @@ export function committed(world: World): Stock {
 }
 
 /** Whether builders can fetch r from b: a finished warehouse, or a finished building that makes r (a woodcutter's hut for wood). */
-const holdsFor = (b: Building, r: Resource) => b.status === 'done' && (b.type === 'warehouse' || !!BUILDINGS[b.type].ships?.includes(r));
+const holdsFor = (b: Building, r: Resource) => b.status === 'done' && (isStore(b) || !!BUILDINGS[b.type].ships?.includes(r));
 
 /**
  * What the village can still spend on a new building: in the warehouses, the
@@ -77,7 +82,7 @@ export function buildShortfall(world: World, type: BuildingType): Amounts {
 
 /** What the village still lacks to upgrade this building (empty when it can). */
 export function upgradeShortfall(world: World, b: Building): Amounts {
-  return shortfall(available(world), BUILDINGS[b.type].upgrade?.cost ?? {});
+  return shortfall(available(world), nextUpgrade(b)?.cost ?? {});
 }
 
 /**
@@ -90,7 +95,7 @@ export function materialSource(world: World, r: Resource, x: number): Building |
   for (const b of world.buildings) {
     if (b.stock[r] <= 0 || !holdsFor(b, r)) continue;
     const d = away(world, b, x);
-    if (!best || d < away(world, best, x) || (d === away(world, best, x) && b.type === 'warehouse' && best.type !== 'warehouse')) best = b;
+    if (!best || d < away(world, best, x) || (d === away(world, best, x) && isStore(b) && !isStore(best))) best = b;
   }
   return best;
 }
@@ -121,7 +126,7 @@ export function takeFromWarehouses(world: World, amounts: Amounts, x: number): S
   const near = [...warehouses(world)].sort((a, b) => away(world, a, x) - away(world, b, x));
   for (const r of RESOURCES) {
     for (const w of near) got[r] += takeOut(w, r, (amounts[r] ?? 0) - got[r]);
-    for (const b of world.buildings) if (b.type !== 'warehouse' && holdsFor(b, r)) got[r] += takeOut(b, r, (amounts[r] ?? 0) - got[r]);
+    for (const b of world.buildings) if (!isStore(b) && holdsFor(b, r)) got[r] += takeOut(b, r, (amounts[r] ?? 0) - got[r]);
     for (const p of [...world.piles]) if (p.resource === r) got[r] += takeFromPile(world, p, (amounts[r] ?? 0) - got[r]);
   }
   return got;
@@ -150,12 +155,28 @@ export function storeSlots(b: Building, r: Resource): { unit: number; perTrip: n
   const pick = (slots: readonly Slot[]) => (i: number) => slots[Math.max(0, Math.min(i, slots.length - 1))];
   // a yard keeps only what it has piles for (no water, hay or the animals' goods)
   if (b.type === 'warehouse') return isYardItem(r) ? { unit: PILE_UNIT, perTrip: 1, slot: (i) => warehouseSlot(r, i, b.size ?? 1) } : null;
-  if (b.type === 'house' && (r === 'bread' || r === 'water')) {
+  if (b.type === 'storehouse') {
+    const k = Math.max(0, Object.keys(storageOf(b)).indexOf(r));
+    return { unit: 1, perTrip: 1, slot: (i) => storehouseSlot(k, i) };
+  }
+  if (b.type === 'house' && storageOf(b)[r]) {
     const door = doorOf('house', b.size ?? 1)!.dx;
     return { unit: 1, perTrip: 1, slot: (i) => ({ dx: door + houseSlot(r, i).dx, lift: 0 }) };
   }
   if (b.type === 'farm' && r === 'grain') return { unit: 1, perTrip: 1, slot: pick(SHEAF_SLOTS) };
   if (b.type === 'farm' && r === 'hay') return { unit: 1, perTrip: 1, slot: pick(HAY_SLOTS) };
+  if (b.type === 'farm' && r === 'horse') return { unit: 1, perTrip: 1, slot: () => FARM_HORSE };
+  if (b.type === 'blacksmith' && (r === 'iron' || r === 'tools')) return { unit: 1, perTrip: 1, slot: pick(SMITHY_SLOTS[r]) };
+  if (b.type === 'stable' && (r === 'horse' || r === 'harness' || r === 'hay')) return { unit: 1, perTrip: 1, slot: pick(STABLE_SLOTS[r]) };
+  if (b.type === 'market') {
+    const side = r === 'iron' || r === 'salt' ? 'sells' : 'buys';
+    const kinds = side === 'sells' ? ['iron', 'salt'] : ['wool', 'cloth', 'cheese'];
+    if (kinds.includes(r)) return { unit: 1, perTrip: 1, slot: (i) => marketSlot(side, kinds.indexOf(r), i) };
+  }
+  if (b.type === 'reeve' && storageOf(b)[r]) {
+    const k = Object.keys(storageOf(b)).indexOf(r);
+    return { unit: 1, perTrip: 1, slot: (i) => reeveSlot(k, i) };
+  }
   const stock = BUILDINGS[b.type].livestock;
   if (stock) {
     const def = BUILDINGS[b.type];
@@ -177,6 +198,13 @@ export function storeSlots(b: Building, r: Resource): { unit: number; perTrip: n
   if (b.type === 'sawmill' && (r === 'wood' || r === 'planks')) return { unit: 1, perTrip: 1, slot: pick(SAWMILL_SLOTS[r]) };
   if (b.type === 'woodcutter' && r === 'wood') return { unit: 1, perTrip: 1, slot: pick(WOODCUTTER_SLOTS) };
   if (b.type === 'stonecutter' && r === 'stone') return { unit: 1, perTrip: 1, slot: pick(STONECUTTER_SLOTS) };
+  // the newer workshops' shared yard (layout.ts WORKSHOP_IN)
+  const recipe = BUILDINGS[b.type].makes;
+  if (recipe && BUILDINGS[b.type].door?.dx === WORKSHOP_DOOR_DX) {
+    if (r === recipe.from) return { unit: 1, perTrip: 1, slot: pick(WORKSHOP_IN) };
+    if (r === recipe.also?.resource) return { unit: 1, perTrip: 1, slot: pick(WORKSHOP_ALSO) };
+    if (r === recipe.to) return { unit: 1, perTrip: 1, slot: pick(WORKSHOP_OUT) };
+  }
   return null;
 }
 

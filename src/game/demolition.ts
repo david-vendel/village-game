@@ -4,7 +4,7 @@
 // in front of it (piles.ts), a share for every bit of work, for serfs to
 // carry off; once it is down, the plot is free again (world.ts).
 
-import { BUILDINGS } from './buildings';
+import { BUILDINGS, nextUpgrade, upgradesDone, upgradesOf } from './buildings';
 import { STAND_Y } from './layout';
 import { dropOnGround, PILE_GAP } from './piles';
 import { RESOURCES, stockOf, type Amounts, type Stock } from './resources';
@@ -28,7 +28,7 @@ export function materialsIn(b: Building): Stock {
   const def = BUILDINGS[b.type];
   // a merged house is two or three small ones
   if (b.status === 'done') for (let i = 0; i < (b.size ?? 1); i++) add(def.cost);
-  if (b.upgraded && def.upgrade) add(def.upgrade.cost);
+  for (const u of upgradesOf(b.type).slice(0, upgradesDone(b))) add(u.cost);
   if (b.site) add(b.site.delivered);
   if (b.demolition) add(b.demolition.left);
   return out;
@@ -38,7 +38,8 @@ export function materialsIn(b: Building): Stock {
 export function demolitionWork(b: Building): number {
   const def = BUILDINGS[b.type];
   const built = def.buildTime * (b.status === 'done' ? (b.size ?? 1) : b.progress);
-  const upgrade = def.upgrade ? def.upgrade.buildTime * (b.upgraded ? 1 : b.site && b.status === 'done' ? b.progress : 0) : 0;
+  const done = upgradesOf(b.type).slice(0, upgradesDone(b)).reduce((n, u) => n + u.buildTime, 0);
+  const upgrade = done + (b.site && b.status === 'done' ? (nextUpgrade(b)?.buildTime ?? 0) * b.progress : 0);
   return (built + upgrade) / 2;
 }
 

@@ -139,6 +139,33 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   `balance.ts` holds the rates. A house lacking something shows it in a bubble over its door.
 - `spoilage.ts`: fresh goods (`SHELF_LIFE` in `balance.ts`: milk, eggs, meat, bread) spoil a whole
   item at a time, about n / life a day, in any store or pile on the ground.
+- House levels: a house upgrades to a farmstead (freemen) and then a townhouse (burghers): `Upgrade.next`
+  chains upgrades (`upgradesDone`, `nextUpgrade`, `currentUpgrade`, `nameOf`, `needsOf` in
+  `buildings.ts`; `Building.level`). Each level has its store, needs (`NEEDS` in `balance.ts`: a need
+  can be any of several goods, cheese or smoked meat) and room; burghers also want the chapel within
+  `CHAPEL_REACH` and pay taxes. Skilled work (`SKILLED`: weaver, saddler, smith) goes only to people
+  whose home is a farmstead or better.
+- Workshops in the newer, shared yard (`WORKSHOP_DOOR`, `WORKSHOP_IN`/`ALSO`/`OUT` in `layout.ts`,
+  drawn by one art function): dairy (2 milk → cheese), smokehouse (meat → smoked meat; with salt,
+  two), weaver (2 wool → cloth), tannery (hides + water → leather), chandler (tallow → 2 candles),
+  saddler (2 leather → harness), brewery (grain + water → ale), pastry cook (flour + eggs → 2
+  pastries); the blacksmith forges iron into tools. A workshop works whole batches only.
+- The storehouse: a barn of shelves for goods that keep; it is one of the village stores
+  (`isStore`, `warehouses` in `economy.ts`) with the storage yards.
+- `carts.ts`: the stable's horses with harness are carts; a serf given one (`JobTicket.cart`, while
+  carts are free) carries `CART_LOAD` items a trip. Stabled horses eat hay. A farm with a horse of its
+  own (`needs: ['horse']`) works `PLOUGH_SPEED` times as fast. The horse farm halters grown horses
+  beyond a breeding pair, and they are led (carried) like any good. Butchering also leaves a hide
+  and tallow on the ground by the paddock.
+- `castle.ts`: the castle's requests (`CASTLE_REQUESTS` in `balance.ts`), gathered at the reeve's
+  house (one in the village) by serfs (`wantsOf` in `transport.ts`). Met: a charter, coin, standing;
+  missed: standing falls. Charters unlock buildings and upgrades (`charter` on a def; `whyLocked`,
+  `upgradeLocked`); free placements (the starting village, tests, showcases) need none.
+  `World.treasury` is the village's coin.
+- `market.ts`: every `MARKET.everyDays` days a merchant is at the market through the day: serfs bring
+  the stores' surplus (more than `MARKET.keep`) to its stall and he buys it for coin; he sells iron and
+  salt onto the other stall while there is coin. Tools in the stores make all work (not errands or
+  building) `TOOL_SPEED` times as fast (`Workplace.workSpeed`); they wear out (`SHELF_LIFE`).
 - `livestock.ts`: the animal farms (chicken, cow, sheep, horse: `BuildingDef.livestock`). Each keeps a
   herd (`Building.herd`): every animal female or male, with an age in years (one game day is a year,
   `ageHerds`); a new farm starts with a grown pair. `ANIMALS` in `balance.ts` gives each kind's real

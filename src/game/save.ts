@@ -22,6 +22,7 @@ import { FIELD_ROWS, type FieldZone } from './layout';
 import { BUILDERS_PER_SITE, createSite, workSpots, type Site } from './site';
 import { transportHub } from './transport';
 import { employees, openings, type Animal, type Job, type Person, type Stroll } from './people';
+import type { Castle } from './castle';
 import { RESOURCES, stockOf, type Load, type Resource, type Stock } from './resources';
 import type { Worker, WorkerTask } from './worker';
 import { clearLand, type Tree } from './nature';
@@ -30,7 +31,7 @@ import { cellKey, cellName, cellsOf, footprintOf } from './grid';
 import { lowestPlot, streetOf, type Street } from './streets';
 import { createWorld, goneStreet, layStreet, MERGES, PLOT_LAST, setStreetEnds, type Building, type Rider, type World } from './world';
 
-export const SAVE_VERSION = 29;
+export const SAVE_VERSION = 31;
 
 
 /** The persisted part of the world. */
@@ -38,6 +39,8 @@ export type SavedWorld = Pick<
   World,
   | 'time'
   | 'dayClock'
+  | 'castle'
+  | 'treasury'
   | 'buildings'
   | 'rider'
   | 'people'
@@ -67,6 +70,8 @@ export function saveWorld(world: World): SaveData {
   const saved: SavedWorld = {
     time: world.time,
     dayClock: world.dayClock,
+    castle: world.castle,
+    treasury: world.treasury,
     buildings: world.buildings,
     rider: world.rider,
     people: world.people,
@@ -255,6 +260,8 @@ function savedWorld(v: unknown): SavedWorld {
   return {
     time: num(w.time, 'time'),
     dayClock: num(w.dayClock, 'dayClock'),
+    castle: castle(w.castle, 'castle'),
+    treasury: Math.max(0, num(w.treasury, 'treasury')),
     buildings: arr(w.buildings, 'buildings').map((b, i) => building(b, `buildings[${i}]`)),
     rider: rider(w.rider, 'rider'),
     people: arr(w.people, 'people').map((x, i) => person(x, `people[${i}]`)),
@@ -285,6 +292,7 @@ function building(v: unknown, path: string): Building {
     stock: stock(b.stock, `${path}.stock`),
   };
   if (b.upgraded !== undefined && bool(b.upgraded, `${path}.upgraded`)) out.upgraded = true;
+  if (b.level !== undefined) out.level = Math.max(0, Math.min(2, int(b.level, `${path}.level`)));
   if (b.size !== undefined && MERGES[out.type]) out.size = oneOf(b.size, [2, 3] as const, `${path}.size`);
   if (b.junction !== undefined && bool(b.junction, `${path}.junction`) && out.type === 'intersection') out.junction = true;
   if (b.site !== undefined) out.site = site(b.site, `${path}.site`, out.type);
@@ -297,7 +305,7 @@ function building(v: unknown, path: string): Building {
     const h = obj(b.household, `${path}.household`);
     out.household = {
       content: Math.min(1, Math.max(0, num(h.content, `${path}.household.content`))),
-      owed: amounts(h.owed, `${path}.household.owed`),
+      owed: Object.fromEntries(Object.entries(obj(h.owed, `${path}.household.owed`)).map(([k, v]) => [k, Math.max(0, num(v, `${path}.household.owed.${k}`))])),
       growIn: Math.max(0, num(h.growIn, `${path}.household.growIn`)),
       leaveIn: Math.max(0, num(h.leaveIn, `${path}.household.leaveIn`)),
     };
@@ -439,6 +447,7 @@ function ticket(v: unknown, path: string) {
     target: int(j.target, `${path}.target`),
     ...(j.slot === undefined ? {} : { slot: int(j.slot, `${path}.slot`) }),
     ...(j.to === undefined ? {} : { to: int(j.to, `${path}.to`) }),
+    ...(j.cart !== undefined && bool(j.cart, `${path}.cart`) ? { cart: true as const } : {}),
   };
 }
 
@@ -486,4 +495,20 @@ function amounts(v: unknown, path: string): Partial<Record<Resource, number>> {
   const out: Partial<Record<Resource, number>> = {};
   for (const r of RESOURCES) if (a[r] !== undefined) out[r] = Math.max(0, num(a[r], `${path}.${r}`));
   return out;
+}
+
+function castle(v: unknown, path: string): Castle {
+  const c = obj(v, path);
+  const req = c.request === null ? null : obj(c.request, `${path}.request`);
+  return {
+    request: req && {
+      goods: amounts(req.goods, `${path}.request.goods`),
+      due: int(req.due, `${path}.request.due`),
+      coin: Math.max(0, num(req.coin, `${path}.request.coin`)),
+    },
+    charters: Math.max(0, int(c.charters, `${path}.charters`)),
+    standing: int(c.standing, `${path}.standing`),
+    nextOn: int(c.nextOn, `${path}.nextOn`),
+    asked: Math.max(0, int(c.asked, `${path}.asked`)),
+  };
 }

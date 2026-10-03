@@ -22,6 +22,8 @@ export interface JobTicket {
   slot?: number;
   /** The building a load from this job is carried to, for jobs that carry between buildings (transport). */
   to?: number;
+  /** Run with a horse and cart: several loads at once (carts.ts). */
+  cart?: true;
 }
 
 export type WorkerTask =
@@ -72,6 +74,8 @@ export interface Workplace {
   temporary?: boolean;
   /** Multiplies the walking speed, loaded and empty-handed (default 1). */
   walkSpeed?: number;
+  /** Multiplies how fast the work itself goes (default 1): tools in store (world.ts toolSpeed). */
+  workSpeed?: number;
   /** The front door, where workers go in and out and wait for work. */
   door: Spot;
   /** The next job for this worker (not one in `taken`, which others are on), with where to do it. */
@@ -318,14 +322,14 @@ export function updateWorker(w: Worker, place: Workplace, dt: number, now: TimeO
     if (task.then === 'job' && task.job) {
       const duration = place.begin(task.job);
       // the job changed on the way (someone else did it, the land was built on): pick another
-      w.task = duration === null ? { kind: 'idle', wait: 0.3 } : { kind: 'job', job: task.job, t: 0, duration };
+      w.task = duration === null ? { kind: 'idle', wait: 0.3 } : { kind: 'job', job: task.job, t: 0, duration: duration / (place.workSpeed ?? 1) };
     } else if (task.then === 'deliver') {
       // work on the load here, or in through the door with it
       const work = w.carrying && task.job ? (place.workOn?.(task.job, w.carrying) ?? null) : null;
       if (work) {
         w.task = work.indoors
-          ? { kind: 'enter', t: 0, job: task.job!, duration: work.seconds }
-          : { kind: 'job', job: task.job!, t: 0, duration: work.seconds, carried: true };
+          ? { kind: 'enter', t: 0, job: task.job!, duration: work.seconds / (place.workSpeed ?? 1) }
+          : { kind: 'job', job: task.job!, t: 0, duration: work.seconds / (place.workSpeed ?? 1), carried: true };
         return;
       }
       if (w.carrying && task.job) place.deliver(w.carrying, task.job);

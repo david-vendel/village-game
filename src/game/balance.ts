@@ -28,6 +28,17 @@ export const COSTS: Record<BuildingType, Amounts> = {
   woodcutter: { wood: 3, stone: 1 },
   sawmill: NEW_BUILDING_COST,
   chickenfarm: NEW_BUILDING_COST,
+  dairy: NEW_BUILDING_COST,
+  smokehouse: NEW_BUILDING_COST,
+  weaver: NEW_BUILDING_COST,
+  storehouse: NEW_BUILDING_COST,
+  tannery: NEW_BUILDING_COST,
+  chandler: NEW_BUILDING_COST,
+  saddler: NEW_BUILDING_COST,
+  stable: NEW_BUILDING_COST,
+  brewery: NEW_BUILDING_COST,
+  pastrycook: NEW_BUILDING_COST,
+  reeve: NEW_BUILDING_COST,
   cowfarm: NEW_BUILDING_COST,
   sheepfarm: NEW_BUILDING_COST,
   horsefarm: NEW_BUILDING_COST,
@@ -37,8 +48,10 @@ export const COSTS: Record<BuildingType, Amounts> = {
 };
 
 /** What builders bring to upgrade a building that can be (BuildingDef.upgrade). */
-export const UPGRADE_COSTS: Partial<Record<BuildingType, Amounts>> = {
+export const UPGRADE_COSTS: Partial<Record<BuildingType | 'farmstead' | 'townhouse', Amounts>> = {
   farm: { wood: 2, planks: 2, stone: 2 },
+  farmstead: NEW_BUILDING_COST,
+  townhouse: NEW_BUILDING_COST,
 };
 
 /** Seconds of work to draw a bucket of water at a well (transport.ts). */
@@ -65,10 +78,44 @@ export const WINTER_DAYS = 3;
 /** People a small house holds (a merged one, as many as its parts). */
 export const HOUSE_RESIDENTS = 3;
 
-/** What a household needs, per person per game day, by its house's level. */
-export const NEEDS = {
-  cottage: { bread: 1 / 3, water: 1 / 2 },
+/**
+ * What a household needs, by its house's level: each need is one of `goods`
+ * (any will do), `perDay` per person per game day. Clothing is a cloth a
+ * person a year (YEAR_DAYS).
+ */
+export interface Need {
+  goods: Resource[];
+  perDay: number;
+}
+export const NEEDS: Record<'cottage' | 'farmstead' | 'townhouse', Need[]> = {
+  cottage: [
+    { goods: ['bread'], perDay: 1 / 3 },
+    { goods: ['water'], perDay: 1 / 2 },
+  ],
+  farmstead: [
+    { goods: ['bread'], perDay: 1 / 3 },
+    { goods: ['water'], perDay: 1 / 2 },
+    { goods: ['cheese', 'smokedmeat'], perDay: 1 / 4 },
+    { goods: ['cloth'], perDay: 1 / 12 },
+  ],
+  townhouse: [
+    { goods: ['bread'], perDay: 1 / 3 },
+    { goods: ['water'], perDay: 1 / 2 },
+    { goods: ['cheese', 'smokedmeat'], perDay: 1 / 4 },
+    { goods: ['cloth'], perDay: 1 / 12 },
+    { goods: ['ale'], perDay: 1 / 4 },
+    { goods: ['candles'], perDay: 1 / 6 },
+    { goods: ['pastries'], perDay: 1 / 6 },
+  ],
 };
+/** Burghers also want the chapel within this many px along the streets of home; without, that need is unmet. */
+export const CHAPEL_REACH = 1200;
+/** Coin a content burgher pays the village a day. */
+export const TAX_PER_DAY = 2;
+/** Extra people a house holds per small house's width once it is a farmstead. */
+export const FARMSTEAD_EXTRA = 1;
+/** And once it is a townhouse. */
+export const TOWNHOUSE_EXTRA = 2;
 
 /**
  * How households live (households.ts): contentment follows how well needs are
@@ -79,7 +126,36 @@ export const NEEDS = {
 export const HOUSEHOLD = { settleRate: 1.5, growAbove: 0.8, growDays: 1, leaveBelow: 0.35, leaveDays: 0.5 };
 
 /** Days fresh goods keep before they spoil (spoilage.ts); what is not here keeps. */
-export const SHELF_LIFE: Partial<Record<Resource, number>> = { milk: 1, eggs: 2, meat: 1, bread: 3 };
+export const SHELF_LIFE: Partial<Record<Resource, number>> = { milk: 1, eggs: 2, meat: 1, bread: 3, hides: 3, tools: 12 };
+
+/**
+ * The castle's requests, in order (castle.ts): goods for the reeve's house, the
+ * days to gather them, the coin given. After the last, it repeats, half as much
+ * again each time.
+ */
+export const CASTLE_REQUESTS: Array<{ goods: Amounts; days: number; coin: number }> = [
+  { goods: { bread: 6, planks: 6 }, days: 6, coin: 20 },
+  { goods: { cheese: 4, cloth: 3, eggs: 6 }, days: 8, coin: 40 },
+  { goods: { horse: 2, leather: 4, candles: 6 }, days: 10, coin: 60 },
+  { goods: { ale: 6, smokedmeat: 6, tools: 3 }, days: 10, coin: 80 },
+];
+/** Days between one request ending and the next coming down. */
+export const CASTLE_GAP_DAYS = 2;
+
+/**
+ * The merchant (market.ts): comes every `everyDays` days; buys wool, cloth and
+ * cheese (coin each) the stores hold more than `keep` of; sells iron and salt.
+ */
+export const MARKET = {
+  everyDays: 4,
+  keep: 4,
+  buys: { wool: 2, cloth: 6, cheese: 4 } as Partial<Record<Resource, number>>,
+  sells: { iron: 5, salt: 3 } as Partial<Record<Resource, number>>,
+};
+/** What a stabled horse eats a day (carts.ts). */
+export const HORSE_HAY = 0.25;
+/** Work goes this many times as fast while the stores hold tools (tools wear out: SHELF_LIFE). */
+export const TOOL_SPEED = 1.25;
 
 /** What the starting village's storage yard holds. */
 export const START_STOCK: Amounts = { wood: 25, stone: 20, planks: 10, bread: 10 };

@@ -165,7 +165,7 @@ export function updateCrops(farm: FarmState, dt: number): void {
  * room, else sow a fallow one, the farm's own land before borrowed land;
  * nearest first. Work takes time in proportion to the plot's width.
  */
-export function farmWorkplace(farm: FarmState, stock: Stock, work: FarmWork = DEFAULT_WORK, winter = false): Workplace {
+export function farmWorkplace(farm: FarmState, stock: Stock, work: FarmWork = DEFAULT_WORK, winter = false, plough = 1): Workplace {
   const capacity = BUILDINGS.farm.storage;
   return {
     door: HOME,
@@ -196,7 +196,8 @@ export function farmWorkplace(farm: FarmState, stock: Stock, work: FarmWork = DE
       if (!jobFits(p, job.action)) return null;
       p.tilled = true; // first work on a plot turns grass into a field
       const perCell = job.action === 'sow' ? work.sowPerCell : work.harvestPerCell;
-      return (p.width / CELL_W) * perCell;
+      // a plough horse makes it quicker
+      return ((p.width / CELL_W) * perCell) / plough;
     },
     finish(job): Load | null {
       const p = farm.plots[job.target];

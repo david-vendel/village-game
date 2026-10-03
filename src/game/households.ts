@@ -15,7 +15,8 @@
 // People without a home (a house pulled down, or new to the village) move into
 // the nearest house with room as soon as there is one.
 
-import { HOUSE_RESIDENTS, HOUSEHOLD, NEEDS } from './balance';
+import { CHAPEL_REACH, FARMSTEAD_EXTRA, HOUSE_RESIDENTS, HOUSEHOLD, NEEDS, TAX_PER_DAY, TOWNHOUSE_EXTRA, type Need } from './balance';
+import { upgradesDone } from './buildings';
 import { timeOfDay } from './daynight';
 import { release, type Person } from './people';
 import type { Resource } from './resources';
@@ -25,16 +26,25 @@ import type { Building, World } from './world';
 /** A house's family: how content it is (0..1), what it is still owed of each need, and its clocks (days) for growing and losing people. */
 export interface Household {
   content: number;
-  owed: Partial<Record<Resource, number>>;
+  /** By need (its goods joined with |). */
+  owed: Record<string, number>;
   growIn: number;
   leaveIn: number;
 }
 
-/** What a household needs, per person per day. */
-export const needsOf = (_b: Building) => NEEDS.cottage;
+/** What a household needs, per person per day, by its house's level. */
+export const householdNeeds = (b: Building): Need[] => [NEEDS.cottage, NEEDS.farmstead, NEEDS.townhouse][Math.min(2, upgradesDone(b))];
+/** A need's key in what a household is owed. */
+const keyOf = (n: Need) => n.goods.join('|');
 
 /** How many people a house holds: a merged one as many as all its parts. */
-export const roomIn = (b: Building) => HOUSE_RESIDENTS * (b.size ?? 1);
+export const roomIn = (b: Building) => (HOUSE_RESIDENTS + [0, FARMSTEAD_EXTRA, TOWNHOUSE_EXTRA][Math.min(2, upgradesDone(b))]) * (b.size ?? 1);
+
+/** Whether a townhouse has the chapel within reach (its burghers want it); other houses don't ask. */
+export function chapelNear(world: World, b: Building): boolean {
+  if (upgradesDone(b) < 2) return true;
+  return world.buildings.some((c) => c.type === 'chapel' && c.status === 'done' && streetDist(world, b.x, c.x) <= CHAPEL_REACH);
+}
 
 const houses = (world: World) => world.buildings.filter((b) => b.type === 'house' && b.status === 'done');
 /** Who lives in house b (not counting anyone already on their way out). */
@@ -47,10 +57,10 @@ export function householdOf(b: Building): Household {
   return (b.household ??= { content: 1, owed: {}, growIn: 0, leaveIn: 0 });
 }
 
-/** What a household lacks right now: needs it is owed a whole item of and has none of. */
+/** What a household lacks right now: needs it is owed a whole item of and has none of (the first of their goods). */
 export function lacking(b: Building): Resource[] {
   const h = householdOf(b);
-  return (Object.keys(needsOf(b)) as Resource[]).filter((r) => (h.owed[r] ?? 0) >= 1 && b.stock[r] < 1);
+  return householdNeeds(b).filter((n) => (h.owed[keyOf(n)] ?? 0) >= 1 && n.goods.every((r) => b.stock[r] < 1)).map((n) => n.goods[0]);
 }
 
 /** Give the homeless a home: the nearest house with room. */
@@ -95,18 +105,24 @@ export function updateHouseholds(world: World, dt: number, moveIn: (b: Building,
   for (const b of houses(world)) {
     const h = householdOf(b);
     const people = residentsOf(world, b);
-    const needs = needsOf(b);
+    const needs = householdNeeds(b);
     let met = 0;
-    for (const [r, perDay] of Object.entries(needs) as Array<[Resource, number]>) {
-      // owed builds up as they eat and drink, and is paid off the shelf an item at a time
-      h.owed[r] = Math.min(2, (h.owed[r] ?? 0) + people.length * perDay * days);
-      while ((h.owed[r] ?? 0) >= 1 && b.stock[r] >= 1) {
+    for (const n of needs) {
+      // owed builds up as they eat and drink, and is paid off the shelf an item at a time, of whichever good there is
+      const k = keyOf(n);
+      h.owed[k] = Math.min(2, (h.owed[k] ?? 0) + people.length * n.perDay * days);
+      for (let r = n.goods.find((g) => b.stock[g] >= 1); h.owed[k] >= 1 && r; r = n.goods.find((g) => b.stock[g] >= 1)) {
         b.stock[r] -= 1;
-        h.owed[r]! -= 1;
+        h.owed[k] -= 1;
       }
-      if ((h.owed[r] ?? 0) < 1) met++;
+      if (h.owed[k] < 1) met++;
     }
-    const share = people.length ? met / Object.keys(needs).length : 1;
+    // burghers want the chapel near too
+    const wants = needs.length + (upgradesDone(b) >= 2 ? 1 : 0);
+    if (upgradesDone(b) >= 2 && chapelNear(world, b)) met++;
+    const share = people.length ? met / wants : 1;
+    // content burghers pay their taxes
+    if (upgradesDone(b) >= 2 && h.content >= 0.5) world.treasury += people.length * TAX_PER_DAY * days;
     h.content += (share - h.content) * Math.min(1, days * HOUSEHOLD.settleRate);
 
     // content, with room: a newcomer before long

@@ -2,8 +2,8 @@
 // of every resource (the village's stockpile, or a building's own store);
 // `Amounts` lists just some of them (a building cost, a store's capacity).
 
-export type Resource = 'wood' | 'stone' | 'planks' | 'grain' | 'hay' | 'flour' | 'bread' | 'water' | 'milk' | 'wool' | 'eggs' | 'meat';
-export const RESOURCES: readonly Resource[] = ['wood', 'stone', 'planks', 'grain', 'hay', 'flour', 'bread', 'water', 'milk', 'wool', 'eggs', 'meat'];
+export type Resource = 'wood' | 'stone' | 'planks' | 'grain' | 'hay' | 'flour' | 'bread' | 'water' | 'milk' | 'wool' | 'eggs' | 'meat' | 'cheese' | 'smokedmeat' | 'cloth' | 'hides' | 'tallow' | 'leather' | 'candles' | 'harness' | 'horse' | 'ale' | 'pastries' | 'iron' | 'tools' | 'salt';
+export const RESOURCES: readonly Resource[] = ['wood', 'stone', 'planks', 'grain', 'hay', 'flour', 'bread', 'water', 'milk', 'wool', 'eggs', 'meat', 'cheese', 'smokedmeat', 'cloth', 'hides', 'tallow', 'leather', 'candles', 'harness', 'horse', 'ale', 'pastries', 'iron', 'tools', 'salt'];
 
 export type Stock = Record<Resource, number>;
 export type Amounts = Partial<Record<Resource, number>>;

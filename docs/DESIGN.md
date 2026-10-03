@@ -54,7 +54,7 @@ Houses don't need anything.
 
 First needs: **cottage**: bread, water.
 
-## 2. Keeping food: dairy, smokehouse, weaver
+## 2. Keeping food: dairy, smokehouse, weaver (built)
 
 | Workshop | From | Makes | Notes |
 | --- | --- | --- | --- |
@@ -65,7 +65,7 @@ First needs: **cottage**: bread, water.
 New house level: **farmstead** (freemen): + cheese or smoked meat, + clothing before each winter (or someone
 falls ill and stays in bed). Freemen can take skilled jobs (smith, weaver).
 
-## 3. What an animal leaves: hides and tallow
+## 3. What an animal leaves: hides and tallow (built)
 
 Butchering gives meat **and** a hide **and** tallow. This makes the end of an animal's life a
 choice: an old cow still gives milk, a young one butchered gives meat and leather now.
@@ -79,7 +79,7 @@ choice: an old cow still gives milk, a young one butchered gives meat and leathe
 Candles let a household and a workshop work on after dark, at the cost of candles; most wanted in
 winter.
 
-## 4. Horses at work
+## 4. Horses at work (built: carts.ts)
 
 - **Carts.** A serf with a horse and harness carries four items a trip instead of one. The horse
   comes from the horse farm, grown; it lives in the transport hub's stable and eats hay.
@@ -87,7 +87,7 @@ winter.
   horse and plough). Hay feeds it, so fields feed fields.
 - Pasture keeps its weight: horses need green land, and land is scarce (pillar 4).
 
-## 5. The castle
+## 5. The castle (built: castle.ts)
 
 The castle on the hill sends a request every few years: "20 cheese and 4 grown horses by
 day 12", later a yearly tithe. Meeting one earns a **charter**: it unlocks the next house level
@@ -98,12 +98,26 @@ deliver (serfs carry the goods there).
 Next house level: **townhouse** (burghers): + ale, candles, pastries (eggs and flour at the
 bakery), the chapel within reach. Burghers pay taxes in coin.
 
-## 6. The market and the merchant
+## 6. The market and the merchant (built: market.ts)
 
 A merchant comes on market days. He sells what the village can't make (iron for the
 blacksmith's tools, which speed up every worker; salt for the smokehouse; spices) and buys
 surplus (wool, cloth, cheese). Prices move with what you sell him. The blacksmith gets work:
 iron → tools.
+
+## As built: simplifications to revisit
+
+- Candles are a burgher need only; they don't yet let anyone work after dark.
+- Clothing is cloth used up through the year (a cloth a person a year), not a yearly change of
+  clothes with illness when missing.
+- The farm's plough horse eats nothing; stabled horses eat hay.
+- The castle's requests are a fixed list, then the last again, half as much again each time.
+  Standing only counts up and down; it changes nothing yet.
+- The merchant has fixed prices; spices are not sold. Coin is only counted (taxes, castle,
+  merchant); nothing but iron and salt costs coin yet.
+- Brewery and pastry cook are built (they were parked), because the townhouse needs ale and
+  pastries.
+- Families still don't fetch their own goods; serfs bring everything.
 
 ## Ideas parked for later
 

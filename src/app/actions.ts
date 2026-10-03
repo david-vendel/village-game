@@ -2,9 +2,10 @@
 // Each calls into the game and reports what happened as a short message.
 // Messages are plain text here; how they look is up to the renderer.
 
-import { BUILDING_TYPES, BUILDINGS } from '../game/buildings';
+import { BUILDING_TYPES, BUILDINGS, nameOf, nextUpgrade } from '../game/buildings';
 import { buildShortfall, upgradeShortfall } from '../game/economy';
 import { RESOURCES, type Amounts } from '../game/resources';
+import { upgradeLocked, whyLocked } from '../game/castle';
 import {
   buildingAt,
   closeMenu,
@@ -118,7 +119,13 @@ export function createActions(world: World, notify: Notify, _isTouch: () => bool
           notify(world.constructionEnabled ? `Builders will pull the ${name} down` : `The ${name} is pulled down; serfs will carry off what is left`);
           return;
         }
-        const upgrade = BUILDINGS[b.type].upgrade!;
+        const upgrade = nextUpgrade(b)!;
+        const locked = upgradeLocked(world, b);
+        if (locked) {
+          sound.ui('denied');
+          notify(`The ${upgrade.name} can't be built yet: ${locked.toLowerCase()}`);
+          return;
+        }
         // the menu stays open when the village can't pay
         const lack = upgradeShortfall(world, b);
         if (Object.keys(lack).length) {
@@ -136,6 +143,12 @@ export function createActions(world: World, notify: Notify, _isTouch: () => bool
       if (m?.kind !== 'build') return;
       // the menu stays open when the village can't pay, so another choice is one key away
       const type = BUILDING_TYPES[m.selection];
+      const locked = whyLocked(world, type);
+      if (locked) {
+        sound.ui('denied');
+        notify(`The ${BUILDINGS[type].name} can't be built yet: ${locked.toLowerCase()}`);
+        return;
+      }
       const why = whyNotBuild(world, type, m.x);
       if (why) {
         sound.ui('denied');
@@ -166,7 +179,8 @@ export function announceEvents(world: World, notify: Notify): void {
   for (const ev of world.events) {
     const b = getBuilding(world, ev.buildingId);
     if (ev.kind === 'completed' && b && world.constructionEnabled) notify(`The ${BUILDINGS[b.type].name} is complete!`);
-    if (ev.kind === 'upgraded' && b && world.constructionEnabled) notify(`The ${BUILDINGS[b.type].upgrade?.name} is complete!`);
+    if (ev.kind === 'upgraded' && b && world.constructionEnabled) notify(`The ${nameOf(b)} is complete!`);
+    if (ev.kind === 'charter') notify(`The castle is pleased: a charter (${world.castle.charters}) and coin for the village!`);
   }
   world.events.length = 0;
 }

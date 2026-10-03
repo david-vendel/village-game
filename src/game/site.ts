@@ -24,7 +24,7 @@
 // An upgrade (BuildingDef.upgrade) is built the same way, as a site on the
 // finished building: its builders work alongside the building's own workers.
 
-import { BUILDINGS } from './buildings';
+import { BUILDINGS, nextUpgrade } from './buildings';
 import { materialSource, nearestPile, storeSpot, takeOut } from './economy';
 import { pileItems, siteSlot, SPOT_PILE_DX, STAND_Y, type Spot } from './layout';
 import { employees } from './people';
@@ -66,7 +66,7 @@ export function upgrading(b: Building): boolean {
 /** What a site builds: the building itself, or (on a finished building) its upgrade. */
 export function siteWork(b: Building): { cost: Amounts; buildTime: number } {
   const def = BUILDINGS[b.type];
-  return b.status === 'done' && def.upgrade ? def.upgrade : def;
+  return b.status === 'done' ? (nextUpgrade(b) ?? def) : def;
 }
 
 /** The builders working at a site (a building being upgraded has its own workers too). */

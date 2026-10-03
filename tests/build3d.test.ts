@@ -24,7 +24,7 @@ const finished = (els: Element[], variant: 'default' | 'upgraded' = 'default') =
 
 describe('every 3D building', () => {
   // newer buildings are drawn in 2D until they get a model of their own (graphics work)
-  const NO_MODEL_YET: readonly BuildingType[] = ['intersection', 'road', 'sawmill', 'chickenfarm', 'cowfarm', 'sheepfarm', 'horsefarm'];
+  const NO_MODEL_YET: readonly BuildingType[] = ['intersection', 'road', 'sawmill', 'chickenfarm', 'cowfarm', 'sheepfarm', 'horsefarm', 'dairy', 'smokehouse', 'weaver', 'storehouse', 'tannery', 'chandler', 'saddler', 'stable', 'brewery', 'pastrycook', 'reeve'];
   it('covers every building type but the crossroads, the road and those still 2D only', () => {
     for (const t of Object.keys(BUILDINGS) as BuildingType[]) if (!NO_MODEL_YET.includes(t)) expect(TYPES, t).toContain(t);
   });
