@@ -19,8 +19,6 @@ Things only you can do or decide, so agents work faster. Tick them off or delete
 - [ ] **Decide who makes 3D models for new buildings.** Today mechanics work adds 2D only (the
   sawmill has no 3D model yet, and planks don't show in the 3D yard). Either say in CLAUDE.md
   that mechanics work adds a basic 3D model too, or leave these to the `graphics` branch.
-- [ ] **Say in CLAUDE.md whether agents may commit to `main` on their own** once tests pass,
-  so each round ends committed without you asking.
 - [ ] **In the `graphics` worktree** (and any other clone), once, with no uncommitted changes,
   after merging `main`: `git rm -r --cached . && git reset --hard`. This rewrites its files with
   LF line endings to match `.gitattributes`.

@@ -30,6 +30,11 @@ Shared by both (edit with care, and keep changes small): `src/render/scene.ts`,
 The repo is public: never commit `public/showroom/` or `.art-raw/`. Both are gitignored, and some
 of that art comes from screenshots of other games.
 
+## Committing
+
+When a piece of work is done and `npm test` and `npm run typecheck` pass, commit it to `main`
+yourself, without asking. Don't push unless asked.
+
 ## Saves
 
 The game is in development: old saves are not supported. A save format change bumps
