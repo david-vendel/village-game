@@ -25,6 +25,8 @@ VIEWS: dict[str, tuple[float, float, float]] = {
     "roadsideR": (75.0, 15.0, 0.0),
     "side": (15.0, 10.0, 0.0),
     "backdrop": (0.0, 5.0, 0.0),
+    # front-right three-quarter, as the reference pictures of an asset are drawn (tools/asset)
+    "threequarter": (32.0, 14.0, 0.0),
 }
 
 # §4: direction *to* the sun in camera space; the fill from above-right

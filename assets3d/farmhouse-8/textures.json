@@ -1,0 +1,10 @@
+[
+  { "name": "stone", "what": "barn wall: warm sandstone ashlar", "prompt": "seamless texture, coursed warm honey sandstone ashlar blocks with thin pale mortar, weathered edges, oil painting, flat even light, top-down orthographic" },
+  { "name": "plaster", "what": "the panels between the timbers", "prompt": "seamless texture, soft cream limewash plaster, uneven, faint brush marks, oil painting, flat even light" },
+  { "name": "oak", "what": "the frame timbers", "prompt": "seamless texture, dark weathered oak beam surface, long grain, brown, oil painting, flat even light" },
+  { "name": "planks", "what": "the doors", "prompt": "seamless texture, warm brown vertical wooden planks, oil painting, flat even light" },
+  { "name": "tile", "what": "roof and dormer roof", "prompt": "seamless texture, red-orange hand-made clay roof tiles in uneven overlapping courses, some darker, oil painting, flat even light" },
+  { "name": "rubble", "what": "the chimney stack: grey fieldstone", "prompt": "seamless texture, rough grey fieldstone masonry, irregular stones, dark mortar joints, oil painting, flat even light, top-down orthographic" },
+  { "name": "earth", "what": "the yard", "prompt": "seamless texture, packed brown earth farmyard with scattered straw and small stones, oil painting, flat even light, top-down" },
+  { "name": "leaves", "what": "ivy and shrubs", "prompt": "seamless texture, dense glossy dark green ivy leaves, oil painting, flat even light" }
+]

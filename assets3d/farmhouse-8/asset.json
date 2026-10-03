@@ -1,0 +1,11 @@
+{
+  "id": "farmhouse-8",
+  "title": "Farmhouse #8 (stone barn below, timber home above)",
+  "type": "farm",
+  "seed": 7,
+  "size": 1,
+  "look": "default",
+  "reference": ".art-raw/flux/farmhouse/flux1.png",
+  "generator": ["src/render/build3d/farm.ts", "src/render/build3d/kit", "src/render/build3d/materials.ts", "public/textures"],
+  "since": "2026-10-03"
+}
