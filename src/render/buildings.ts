@@ -4,8 +4,8 @@
 
 import { BUILDINGS, doorOf, type BuildingType } from '../game/buildings';
 import type { FarmState } from '../game/farm';
-import { BAKERY_OVEN_MOUTH_DX, BAKERY_SLOTS, BAKERY_WATER_SLOTS, BASKET, WELL_SLOTS, MILL_SLOTS, PILE_UNIT, SACK, SAWMILL_BENCH_DX, SAWMILL_SLOTS, pileItems, FEED_SLOTS, GOODS_SLOTS, HAY_SLOTS, LIVESTOCK_TROUGH_DX, STONECUTTER_SLOTS, TAVERN_SLOTS, warehouseSlot, WOODCUTTER_SLOTS, YARD_ITEMS, type Slot } from '../game/layout';
-import type { Amounts, Stock } from '../game/resources';
+import { BAKERY_OVEN_MOUTH_DX, BAKERY_SLOTS, BAKERY_WATER_SLOTS, BASKET, WELL_SLOTS, MILL_SLOTS, PILE_UNIT, SACK, SAWMILL_BENCH_DX, SAWMILL_SLOTS, houseSlot, pileItems, FEED_SLOTS, GOODS_SLOTS, HAY_SLOTS, LIVESTOCK_TROUGH_DX, STONECUTTER_SLOTS, TAVERN_SLOTS, warehouseSlot, WOODCUTTER_SLOTS, YARD_ITEMS, type Slot } from '../game/layout';
+import type { Amounts, Resource, Stock } from '../game/resources';
 import type { Worker } from '../game/worker';
 import { goodsOf, type Herd } from '../game/livestock';
 import { drawAnimal, drawGood } from './livestock';
@@ -41,6 +41,8 @@ export interface DrawArgs {
   doorOpen?: boolean;
   /** An animal farm's herd (game/livestock.ts). */
   herd?: Herd;
+  /** A house: what its family lacks now (game/households.ts), shown in a bubble over its door. */
+  wants?: Resource[];
   /** A horse farm: how many cells of pasture it has (game/pasture.ts). */
   pasture?: number;
   /** A well: how far through drawing a bucket someone at it is (0..1), or null if nobody is drawing. */
@@ -413,6 +415,31 @@ function drawHouse(ctx: Ctx, a: DrawArgs): void {
   if (size > 1 && hash(a.seed, 7) < 0.6) {
     barrel(ctx, x0 + w + 16, a.base + 4, 0.9);
   }
+  // the family's shelf by the door: bread one side, water the other (game/layout.ts houseSlot)
+  const doorMid = x0 + doorU + 10;
+  for (let i = 0; i < pileItems(a.stock?.bread ?? 0); i++) breadBasket(ctx, doorMid + houseSlot('bread', i).dx, a.base + 3, 0.6, 4);
+  for (let i = 0; i < pileItems(a.stock?.water ?? 0); i++) waterBucket(ctx, doorMid + houseSlot('water', i).dx, a.base + 3, 0.9);
+  // what the family lacks, in a bubble over the door
+  if (a.wants?.length) wantBubble(ctx, doorMid, a.base - (twoStorey ? 92 : 78), a.wants, a.time);
+}
+
+/** A thought bubble with what a household lacks in it, bobbing gently. */
+function wantBubble(ctx: Ctx, x: number, y: number, wants: Resource[], time: number): void {
+  const bob = Math.sin(time * 2) * 1.5;
+  const w = 8 + wants.length * 14;
+  ctx.save();
+  ctx.globalAlpha = 0.92;
+  ellipse(ctx, x, y + bob, w / 2 + 3, 10, '#fbf6ea');
+  circle(ctx, x - 4, y + 13 + bob, 3, '#fbf6ea');
+  circle(ctx, x - 7, y + 19 + bob, 1.8, '#fbf6ea');
+  ctx.globalAlpha = 1;
+  wants.forEach((r, i) => {
+    const ix = x - (wants.length - 1) * 7 + i * 14;
+    if (r === 'bread') breadBasket(ctx, ix, y + 5 + bob, 0.5, 4);
+    else if (r === 'water') waterBucket(ctx, ix, y + 5 + bob, 0.8);
+    else drawGood(ctx, r, ix, y + 5 + bob, 0.7);
+  });
+  ctx.restore();
 }
 
 function drawFarmField(ctx: Ctx, a: DrawArgs): void {

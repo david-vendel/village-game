@@ -165,7 +165,7 @@ export function updateCrops(farm: FarmState, dt: number): void {
  * room, else sow a fallow one, the farm's own land before borrowed land;
  * nearest first. Work takes time in proportion to the plot's width.
  */
-export function farmWorkplace(farm: FarmState, stock: Stock, work: FarmWork = DEFAULT_WORK): Workplace {
+export function farmWorkplace(farm: FarmState, stock: Stock, work: FarmWork = DEFAULT_WORK, winter = false): Workplace {
   const capacity = BUILDINGS.farm.storage;
   return {
     door: HOME,
@@ -187,7 +187,8 @@ export function farmWorkplace(farm: FarmState, stock: Stock, work: FarmWork = DE
       const incoming = (c: Crop) => taken.filter((j) => j.action === 'harvest' && farm.plots[j.target]?.crop === c).length;
       const ripe = pick('ripe', (p) => room(stock, capacity, p.crop) > incoming(p.crop));
       if (ripe >= 0) return at(ripe, 'harvest');
-      const fallow = pick('fallow');
+      // nobody sows in winter (ripe fields are still brought in)
+      const fallow = winter ? -1 : pick('fallow');
       return fallow >= 0 ? at(fallow, 'sow') : null;
     },
     begin(job) {

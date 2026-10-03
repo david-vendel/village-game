@@ -7,7 +7,7 @@
 
 import type { BuildingType } from './buildings';
 import type { AnimalKind } from './livestock';
-import type { Amounts } from './resources';
+import type { Amounts, Resource } from './resources';
 
 /** What a new building type costs until it is balanced. */
 export const NEW_BUILDING_COST: Amounts = { wood: 2, stone: 2 };
@@ -58,5 +58,28 @@ export const ANIMALS: Record<AnimalKind, { adult: number; productiveUntil: numbe
   horse: { adult: 4, productiveUntil: 20, lifespan: 30, feedsPerBirth: 4, max: 6, meat: 2 },
 };
 
+/** The seasons: every YEAR_DAYS days, the last WINTER_DAYS are winter (nothing grows, nobody sows). */
+export const YEAR_DAYS = 12;
+export const WINTER_DAYS = 3;
+
+/** People a small house holds (a merged one, as many as its parts). */
+export const HOUSE_RESIDENTS = 3;
+
+/** What a household needs, per person per game day, by its house's level. */
+export const NEEDS = {
+  cottage: { bread: 1 / 3, water: 1 / 2 },
+};
+
+/**
+ * How households live (households.ts): contentment follows how well needs are
+ * met at `settleRate` a day; content (at least `growAbove`) with room, a
+ * newcomer every `growDays`; discontent (below `leaveBelow`), one person
+ * leaves every `leaveDays`.
+ */
+export const HOUSEHOLD = { settleRate: 1.5, growAbove: 0.8, growDays: 1, leaveBelow: 0.35, leaveDays: 0.5 };
+
+/** Days fresh goods keep before they spoil (spoilage.ts); what is not here keeps. */
+export const SHELF_LIFE: Partial<Record<Resource, number>> = { milk: 1, eggs: 2, meat: 1, bread: 3 };
+
 /** What the starting village's storage yard holds. */
-export const START_STOCK: Amounts = { wood: 25, stone: 20, planks: 10 };
+export const START_STOCK: Amounts = { wood: 25, stone: 20, planks: 10, bread: 10 };

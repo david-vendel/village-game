@@ -30,7 +30,7 @@ import { cellKey, cellName, cellsOf, footprintOf } from './grid';
 import { lowestPlot, streetOf, type Street } from './streets';
 import { createWorld, goneStreet, layStreet, MERGES, PLOT_LAST, setStreetEnds, type Building, type Rider, type World } from './world';
 
-export const SAVE_VERSION = 28;
+export const SAVE_VERSION = 29;
 
 
 /** The persisted part of the world. */
@@ -293,6 +293,16 @@ function building(v: unknown, path: string): Building {
     out.road = { step: dir(r.step, `${path}.road.step`), from: int(r.from, `${path}.road.from`) };
   }
   if (b.farm !== undefined) out.farm = farm(b.farm, `${path}.farm`);
+  if (b.household !== undefined) {
+    const h = obj(b.household, `${path}.household`);
+    out.household = {
+      content: Math.min(1, Math.max(0, num(h.content, `${path}.household.content`))),
+      owed: amounts(h.owed, `${path}.household.owed`),
+      growIn: Math.max(0, num(h.growIn, `${path}.household.growIn`)),
+      leaveIn: Math.max(0, num(h.leaveIn, `${path}.household.leaveIn`)),
+    };
+  }
+  if (b.spoiling !== undefined) out.spoiling = amounts(b.spoiling, `${path}.spoiling`);
   if (b.herd !== undefined) {
     const h = obj(b.herd, `${path}.herd`);
     out.herd = {
@@ -359,6 +369,8 @@ function person(v: unknown, path: string): Person {
     job: p.job === null ? null : job(p.job, `${path}.job`),
     ...professionOf(p, path),
     stroll: stroll(p.stroll, `${path}.stroll`),
+    ...(p.home !== undefined ? { home: int(p.home, `${path}.home`) } : {}),
+    ...(p.leaving !== undefined && bool(p.leaving, `${path}.leaving`) ? { leaving: true as const } : {}),
   };
 }
 
@@ -466,4 +478,12 @@ function task(v: unknown, path: string): WorkerTask {
     case 'home':
       return { kind: 'home', activity: oneOf(t.activity, ['lunch', 'sleep'] as const, `${path}.activity`), left: num(t.left, `${path}.left`) };
   }
+}
+
+/** Some amount of some resources (what a household is owed, what is spoiling). */
+function amounts(v: unknown, path: string): Partial<Record<Resource, number>> {
+  const a = obj(v, path);
+  const out: Partial<Record<Resource, number>> = {};
+  for (const r of RESOURCES) if (a[r] !== undefined) out[r] = Math.max(0, num(a[r], `${path}.${r}`));
+  return out;
 }

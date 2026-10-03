@@ -15,6 +15,7 @@ import { BLOCK, CELL_W, QUARRIES, quarryLand, ROAD_GRID, ROAD_GRID_COL, ROAD_GRI
 import { treePoint } from '../game/nature';
 import { RESOURCES } from '../game/resources';
 import { pastureCells } from '../game/pasture';
+import { residentsOf, roomIn } from '../game/households';
 import { groundPoint, mapPoint, streetOf, streetRange, streetStart } from '../game/streets';
 import { MERGES, type Building, type World } from '../game/world';
 
@@ -190,6 +191,7 @@ export function listBuildings(world: World): string {
       const n = (s: string) => b.farm!.plots.filter((p) => (s === 'grass' ? !p.tilled : p.tilled && p.state === s)).length;
       parts.push(`fields=${b.farm.plots.length} (grass ${n('grass')}, fallow ${n('fallow')}, growing ${n('growing')}, ripe ${n('ripe')})`);
     }
+    if (b.household) parts.push(`home: ${residentsOf(world, b).length}/${roomIn(b)} content ${Math.round(b.household.content * 100)}%`);
     if (b.herd) parts.push(`herd: ${b.herd.animals.map((a) => `${a.sex[0]}${Math.floor(a.age)}`).join(' ') || 'none'}`);
     if (b.type === 'horsefarm' && b.status === 'done') parts.push(`pasture=${pastureCells(world, b).length}`);
     const staff = world.people.filter((p) => p.job?.buildingId === b.id).map((p) => p.job!.role);

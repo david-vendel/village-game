@@ -134,11 +134,13 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     type: 'house',
     door: { dx: HOUSE_DOOR_DX[1], y: STAND_Y },
     name: 'House',
-    purpose: 'Shelter for villagers. More homes, more hands.',
+    purpose: 'A home for three. Its family needs bread and water; content, it grows, wanting, people leave.',
     width: 75,
     buildTime: 10,
     cost: COSTS.house,
-    storage: {},
+    // what the family eats and drinks, on the shelf by the door (layout.ts houseSlot); households.ts
+    storage: { bread: 2, water: 2 },
+    needs: ['bread', 'water'],
     jobs: {},
   },
   farm: {

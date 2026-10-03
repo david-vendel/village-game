@@ -5,12 +5,12 @@ import { type Carry, drawFigure, type Figure, figureOf } from './figure';
 import { circle, type Ctx, ellipse, hash, line, poly } from './util';
 
 /** What the street art needs to know about someone strolling: how they look and move. */
-type Walker = Stroll & { kind: Look | 'chicken'; seed: number; figure: Figure | null };
+type Walker = Stroll & { kind: Look | 'chicken'; seed: number; figure: Figure | null; leaving?: true };
 
 /** A person or animal as a street walker. */
 export function walker(who: Person | Animal): Walker {
   return 'look' in who
-    ? { ...who.stroll, kind: who.look, seed: who.seed, figure: figureOf(who) }
+    ? { ...who.stroll, kind: who.look, seed: who.seed, figure: figureOf(who), leaving: who.leaving }
     : { ...who.stroll, kind: who.kind, seed: who.seed, figure: null };
 }
 
@@ -23,7 +23,8 @@ export function drawVillager(ctx: Ctx, v: Walker, x: number, base: number, time:
   ctx.globalAlpha = 0.22;
   ellipse(ctx, v.figure ? 0.8 : 0, 0, v.figure ? 7.5 : 9, 2.2, '#2c2416');
   ctx.globalAlpha = 1;
-  if (v.figure) drawFigure(ctx, v.figure, phase, walking, carryOf(v.figure));
+  // someone leaving the village carries all they have in a sack
+  if (v.figure) drawFigure(ctx, v.figure, phase, walking, v.leaving ? 'sack' : carryOf(v.figure));
   else drawChicken(ctx, phase, walking, time, v.seed);
   ctx.restore();
 }

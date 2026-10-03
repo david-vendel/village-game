@@ -6,8 +6,8 @@
 // own place (storeSlot), where it is picked up from and put down.
 
 import { START_STOCK } from './balance';
-import { BUILDINGS, type BuildingType, storageOf } from './buildings';
-import { isYardItem, FEED_SLOTS, GOODS_SLOTS, HAY_SLOTS, BAKERY_SLOTS, BAKERY_WATER_SLOTS, WELL_SLOTS, BASKET, MILL_SLOTS, SACK, SAWMILL_SLOTS, STONECUTTER_SLOTS, TAVERN_SLOTS, SHEAF_SLOTS, STAND_Y, PILE_UNIT, warehouseSlot, WOODCUTTER_SLOTS, type Slot, type Spot } from './layout';
+import { BUILDINGS, doorOf, type BuildingType, storageOf } from './buildings';
+import { houseSlot, isYardItem, FEED_SLOTS, GOODS_SLOTS, HAY_SLOTS, BAKERY_SLOTS, BAKERY_WATER_SLOTS, WELL_SLOTS, BASKET, MILL_SLOTS, SACK, SAWMILL_SLOTS, STONECUTTER_SLOTS, TAVERN_SLOTS, SHEAF_SLOTS, STAND_Y, PILE_UNIT, warehouseSlot, WOODCUTTER_SLOTS, type Slot, type Spot } from './layout';
 import { goodsOf } from './livestock';
 import { room, RESOURCES, shortfall, stockOf, type Amounts, type Load, type Resource, type Stock } from './resources';
 import { takeFromPile, type Pile } from './piles';
@@ -150,6 +150,10 @@ export function storeSlots(b: Building, r: Resource): { unit: number; perTrip: n
   const pick = (slots: readonly Slot[]) => (i: number) => slots[Math.max(0, Math.min(i, slots.length - 1))];
   // a yard keeps only what it has piles for (no water, hay or the animals' goods)
   if (b.type === 'warehouse') return isYardItem(r) ? { unit: PILE_UNIT, perTrip: 1, slot: (i) => warehouseSlot(r, i, b.size ?? 1) } : null;
+  if (b.type === 'house' && (r === 'bread' || r === 'water')) {
+    const door = doorOf('house', b.size ?? 1)!.dx;
+    return { unit: 1, perTrip: 1, slot: (i) => ({ dx: door + houseSlot(r, i).dx, lift: 0 }) };
+  }
   if (b.type === 'farm' && r === 'grain') return { unit: 1, perTrip: 1, slot: pick(SHEAF_SLOTS) };
   if (b.type === 'farm' && r === 'hay') return { unit: 1, perTrip: 1, slot: pick(HAY_SLOTS) };
   const stock = BUILDINGS[b.type].livestock;

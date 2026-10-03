@@ -37,7 +37,7 @@ farms (herds with sexes and ages in years; eggs, milk, wool, meat; horses on pas
 Not used yet: milk, wool, eggs, meat. The market, blacksmith, chapel and watchtower have no work.
 Houses don't need anything.
 
-## 1. Needs and spoilage (the foundation)
+## 1. Needs and spoilage (built: households.ts, spoilage.ts; winter in daynight.ts)
 
 - **Households.** Each house's family has needs by the house's level and eats from its own small
   store (a shelf by the door). A family member walks to the nearest place that has what they lack

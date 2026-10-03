@@ -69,20 +69,20 @@
     A=#1 house  B=#3 tavern  C=#4 well  D=#5 warehouse  E=#7 house  F=#8 farm  G=#9 chapel  H=#10 house  I=#77 house  J=#78 bakery  K=#79 tavern  L=#80 house  M=#81 well  N=#82 sawmill  O=#83 woodcutter  P=#84 stonecutter  Q=#85 blacksmith  R=#86 chapel  S=#87 mill  T=#88 watchtower  U=#89 market  V=#90 farm  W=#91 warehouse  X=#93 house  Y=#94 tavern  Z=#95 stonecutter
     = | road  + crossing  Y kept for a crossroads  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
 > list
-  #1  house×2  s0:37-42  done
+  #1  house×2  s0:37-42  done  home: 6/6 content 100%
   #3  tavern  s0:43-51  done
   #4  well  s0:52-54  done
-  #5  warehouse×2  s0:64-69  done  [wood=24 stone=20 planks=10]  staff: serf, serf
-  #7  house  s0:76-78  done
+  #5  warehouse×2  s0:64-69  done  [wood=24 stone=20 planks=10 bread=10]  staff: serf, serf, serf, serf, serf
+  #7  house  s0:76-78  done  home: 3/3 content 100%
   #8  farm  s0:94-99  done  fields=24 (grass 10, fallow 1, growing 13, ripe 0)  staff: farmer
   #9  chapel  s0:124-129  done
-  #10  house  s0:175-177  done
-  #77  house  s0:139-141  done
+  #10  house  s0:175-177  done  [water=2]  home: 3/3 content 100%
+  #77  house  s0:139-141  done  [water=2]  home: 3/3 content 100%
   #78  bakery  s0:142-147  done  [water=1]  staff: baker
   #79  tavern  s0:148-156  done
-  #80  house  s0:157-159  done
+  #80  house  s0:157-159  done  [water=2]  home: 3/3 content 100%
   #81  well  s0:160-162  done
-  #82  sawmill  s0:112-117  done  staff: sawyer
+  #82  sawmill  s0:112-117  done  [planks=2]  staff: sawyer
   #83  woodcutter  s0:193-198  done  staff: woodcutter
   #84  stonecutter  s0:199-204  done  staff: stonecutter
   #85  blacksmith  s0:205-210  done
@@ -91,7 +91,7 @@
   #88  watchtower  s0:226-228  done
   #89  market  s0:229-234  done
   #90  farm  s0:235-240  done  fields=24 (grass 18, fallow 0, growing 6, ripe 0)  staff: farmer
-  #91  warehouse  s0:241-243  done
-  #93  house  s0:166-168  done
+  #91  warehouse  s0:241-243  done  [planks=2]
+  #93  house  s0:166-168  done  [water=2]  home: 3/3 content 100%
   #94  tavern  s0:178-186  done
   #95  stonecutter  s0:247-252  done  staff: stonecutter

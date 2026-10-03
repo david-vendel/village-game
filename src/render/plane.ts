@@ -18,6 +18,7 @@ import { BASE_Y, CELL_W, EYE_DIST, FIELD_ROWS, QUARRIES, quarryLand, ROAD_FAR_Y,
 import { employees } from '../game/people';
 import { drawingAt } from '../game/transport';
 import { pastureCells } from '../game/pasture';
+import { lacking } from '../game/households';
 import { laidOut, onSite, upgrading } from '../game/site';
 import { backOf, crossings, groundPoint, mapPoint, SIDE_ROAD_HALF, streetOf, type Street, type Vec } from '../game/streets';
 import { getBuilding, type Building, type World } from '../game/world';
@@ -252,6 +253,7 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
       vpX: 0,
       drawing: b.type === 'well' ? drawingAt(world, b) : null,
       herd: b.herd,
+      wants: b.type === 'house' && b.status === 'done' ? lacking(b) : undefined,
       pasture: b.type === 'horsefarm' && b.status === 'done' ? pastureCells(world, b).length : undefined,
     };
     const { at, view } = lot(b, x);

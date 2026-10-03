@@ -14,6 +14,8 @@ export interface Pile {
   x: number;
   resource: Resource;
   amount: number;
+  /** On its way to spoiling, if fresh (spoilage.ts). */
+  spoiling?: number;
 }
 
 /** Depth (world y) piles lie at: just in front of the building line, at the edge of the road. */

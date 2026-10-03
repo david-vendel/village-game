@@ -129,6 +129,16 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   nothing to make and none of the input, they fetch it themselves from the nearest source,
   unless someone is already bringing it. A new production building needs only a recipe, store
   places (`storeSlots`) and its art.
+- `households.ts`: every villager but the monks has a home (`Person.home`, the nearest house with
+  room; arrivals stay in their own house only while it has room). A house's family eats and drinks
+  from the shelf by its door (`houseSlot` in `layout.ts`), which serfs keep stocked
+  (`BuildingDef.needs`); `NEEDS` in `balance.ts` is per person per day. A household's content
+  follows how well its needs are met (`Building.household`); content with room, a newcomer comes
+  out of the door; discontent, people leave one by one from the unhappiest household
+  (`Person.leaving`: they walk to the end of their street and are gone). `HOUSEHOLD` in
+  `balance.ts` holds the rates. A house lacking something shows it in a bubble over its door.
+- `spoilage.ts`: fresh goods (`SHELF_LIFE` in `balance.ts`: milk, eggs, meat, bread) spoil a whole
+  item at a time, about n / life a day, in any store or pile on the ground.
 - `livestock.ts`: the animal farms (chicken, cow, sheep, horse: `BuildingDef.livestock`). Each keeps a
   herd (`Building.herd`): every animal female or male, with an age in years (one game day is a year,
   `ageHerds`); a new farm starts with a grown pair. `ANIMALS` in `balance.ts` gives each kind's real
@@ -182,7 +192,9 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   the farm store has room for the sheaf, else sow, nearest first; each takes `sowPerCell` /
   `harvestPerCell` seconds (tuning sliders). A harvest yields a sheaf, stacked in its own place in the
   store (`SHEAF_SLOTS`), from where serfs carry them to a warehouse (`transport.ts`).
-- `daynight.ts`: time of day, from `world.dayClock`, which runs at the `timeSpeed` knob (a day is
+- `daynight.ts`: the seasons: every `YEAR_DAYS` (12) days the last `WINTER_DAYS` (3) are winter
+  (`season`, `isWinter`): crops don't grow and nobody sows, and snow lies and falls
+  (`render/winter.ts`). Time of day, from `world.dayClock`, which runs at the `timeSpeed` knob (a day is
   `DAY_LENGTH` = 300 s at 1×). The `nightHours` knob (0–12) shapes the sun's path: fewer hours
   lift it, like a summer far north; 0 is the midnight sun. `timeOfDay` gives villagers what they plan
   by: daylight (enough light to work: from half an hour after sunrise to half an hour before

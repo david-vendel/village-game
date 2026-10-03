@@ -48,6 +48,10 @@ export interface Person {
    */
   seeker?: true;
   stroll: Stroll;
+  /** The house they live in (households.ts); none for monks, or the homeless. */
+  home?: number;
+  /** Leaving the village: walking to the end of the street, then gone. */
+  leaving?: true;
 }
 
 export interface Animal {
@@ -122,11 +126,11 @@ function betweenErrands(p: Person): boolean {
  * building, then free seekers; for errands, free seekers only.
  */
 function candidates(world: World, role: Role): Person[][] {
-  const free = (p: Person) => !p.job;
+  const free = (p: Person) => !p.job && !p.leaving;
   if (role === 'serf') return [world.people.filter((p) => free(p) && p.seeker)];
   const pros = world.people.filter((p) => free(p) && p.profession === role);
   if (role === 'builder') return [pros, world.people.filter((p) => free(p) && p.seeker)];
-  return [pros, world.people.filter((p) => free(p) && p.seeker), world.people.filter((p) => p.seeker && betweenErrands(p))];
+  return [pros, world.people.filter((p) => free(p) && p.seeker), world.people.filter((p) => p.seeker && !p.leaving && betweenErrands(p))];
 }
 
 /**
@@ -211,11 +215,17 @@ function backToLane(world: World, s: Stroll, lane: number, dt: number): void {
 
 /** Unemployed people and animals wander the street they are on, stopping now and then. */
 export function updateStrolls(world: World, dt: number, rand: () => number): void {
-  const walkers: Array<{ s: Stroll; chicken: boolean; lane: number }> = [
-    ...world.people.filter((p) => !p.job).map((p) => ({ s: p.stroll, chicken: false, lane: laneY(p.id) })),
+  const walkers: Array<{ s: Stroll; chicken: boolean; lane: number; leaving?: true }> = [
+    ...world.people.filter((p) => !p.job).map((p) => ({ s: p.stroll, chicken: false, lane: laneY(p.id), leaving: p.leaving })),
     ...world.animals.map((a) => ({ s: a.stroll, chicken: true, lane: laneY(a.id) })),
   ];
-  for (const { s, chicken, lane } of walkers) {
+  for (const { s, chicken, lane, leaving } of walkers) {
+    // leaving the village: straight on to the end of the street, no stopping (households.ts)
+    if (leaving && s.y === lane) {
+      const { min: lo, max: hi } = streetRange(world, streetOf(s.x));
+      s.x = Math.max(lo, Math.min(hi, s.x + s.dir * s.speed * dt));
+      continue;
+    }
     if (s.idle > 0) {
       s.idle -= dt;
       if (s.idle <= 0 && rand() < 0.4 && s.y === lane) s.dir = (s.dir * -1) as 1 | -1;

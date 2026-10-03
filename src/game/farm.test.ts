@@ -5,13 +5,22 @@ import type { TimeOfDay } from './daynight';
 import { villageStock, WAREHOUSE_START } from './economy';
 import { createFarm, DEFAULT_WORK, farmWorkplace, GROW_TIME, updateCrops } from './farm';
 import { HOME, SHEAF_SLOTS } from './layout';
-import { employees } from './people';
+import { employees, release } from './people';
 import { stockOf } from './resources';
 import { createWorker, LUNCH_AT, MIDDAY, updateWorker } from './worker';
 import { dropOnGround } from './piles';
 import { createWorld, placeBuilding, plotOf, update, type World } from './world';
 
 const CAPACITY = BUILDINGS.farm.storage.grain!;
+
+/** The village without its houses (so no households asking for bread and water) or bread, and nobody on errands: a quiet place to watch one thing. */
+function quiet(w: World): World {
+  w.buildings = w.buildings.filter((b) => b.type !== 'house');
+  // and no bread for the tavern either
+  for (const b of w.buildings) b.stock.bread = 0;
+  for (const p of w.people) if (p.job?.role === 'serf') release(w, p);
+  return w;
+}
 
 /** A farm with one farmer, run on its own (no world), at a fixed time of day. */
 function rig() {
@@ -145,7 +154,8 @@ describe('farms in the world', () => {
     expect(staff).toHaveLength(1);
     expect(staff[0].job!.role).toBe('farmer');
     expect(staff[0].name).toBeTruthy();
-    expect(w.people.filter((p) => !p.job).length).toBe(w.people.length - 1);
+    // nobody else has a lasting job yet (serfs may be running errands for the households)
+    expect(w.people.filter((p) => p.job && p.job.role !== 'serf')).toHaveLength(1);
   });
 
   it('a farm hires a farmer once finished: a free farmer, else someone looking for work (builders never farm)', () => {
@@ -168,7 +178,7 @@ describe('farms in the world', () => {
   });
 
   it('serfs carry the sheaves from the farm store to the warehouse, then go back to strolling', () => {
-    const w = createWorld();
+    const w = quiet(createWorld());
     const farm = w.buildings.find((b) => b.type === 'farm')!;
     farm.stock.grain = 3;
     let pickedAt: number | null = null;
@@ -237,7 +247,7 @@ describe('water from the well', () => {
   const bakedAt = (w: World) => w.buildings.reduce((n, b) => n + (b.type === 'tavern' ? 0 : b.stock.bread), 0) + w.people.filter((p) => p.job?.worker.carrying?.resource === 'bread').length;
 
   it('a bakery with flour but no well bakes nothing', () => {
-    const w = createWorld();
+    const w = quiet(createWorld());
     w.buildings = w.buildings.filter((b) => b.type !== 'well');
     w.buildings.find((b) => b.type === 'warehouse')!.stock.flour = 5;
     placeBuilding(w, 2587.5, 'bakery', { instant: true, free: true });
@@ -266,7 +276,7 @@ describe('water from the well', () => {
   });
 
   it('with no serfs, the baker fetches the water from the well and draws it themselves', () => {
-    const w = createWorld();
+    const w = quiet(createWorld());
     // no storage yard: nobody hires serfs; the flour is at the bakery already
     w.buildings = w.buildings.filter((b) => b.type !== 'warehouse');
     const bakery = placeBuilding(w, 2587.5, 'bakery', { instant: true, free: true })!;

@@ -8,6 +8,7 @@
 // touches the horizon at midnight). It shapes the sun's path, so sunrise and
 // sunset move while noon and midnight stay put.
 
+import { WINTER_DAYS, YEAR_DAYS } from './balance';
 import type { World } from './world';
 
 /** Seconds of dayClock for one whole day and night (at time speed 1×). */
@@ -82,6 +83,13 @@ export function clock(world: World): { day: number; hours: number; minutes: numb
   const minutesOfDay = Math.floor(dayPhase(world) * 24 * 60);
   return { day: Math.floor(days) + 1, hours: Math.floor(minutesOfDay / 60), minutes: minutesOfDay % 60 };
 }
+
+/** Which day of the year it is (1..YEAR_DAYS), and whether it is winter (the last WINTER_DAYS of them). */
+export function season(world: World): { dayOfYear: number; winter: boolean } {
+  const dayOfYear = ((clock(world).day - 1) % YEAR_DAYS) + 1;
+  return { dayOfYear, winter: dayOfYear > YEAR_DAYS - WINTER_DAYS };
+}
+export const isWinter = (world: World) => season(world).winter;
 
 /** The chapel bell's swing rate (rad/s) and how many times it rings at noon. */
 const BELL_RATE = 1.3;

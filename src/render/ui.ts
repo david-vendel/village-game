@@ -7,7 +7,8 @@
 //   readable when zoomed out.
 
 import { BUILDINGS, BUILDING_TYPES, ROLES, type Role, storageOf } from '../game/buildings';
-import { clock } from '../game/daynight';
+import { clock, season } from '../game/daynight';
+import { WINTER_DAYS, YEAR_DAYS } from '../game/balance';
 import { buildShortfall, upgradeShortfall, villageStock } from '../game/economy';
 import { demolitionWork } from '../game/demolition';
 import { materialsAllow, siteWork, upgrading } from '../game/site';
@@ -17,6 +18,7 @@ import { employees, jobsOf } from '../game/people';
 import { RESOURCES, type Amounts } from '../game/resources';
 import { herdRoom, isAdult, type AnimalKind, type Beast } from '../game/livestock';
 import { pastureCells, PASTURE_CELLS_PER_HORSE } from '../game/pasture';
+import { householdOf, lacking, residentsOf, roomIn } from '../game/households';
 import { backOf, mapPoint, streetOf, streetRange } from '../game/streets';
 import { constructionStage, demolitionYield, getBuilding, streetFrom, whyNotBuild, whyNotDemolish, type Building, type BuildingOption, type ConstructionStage, type World } from '../game/world';
 import { BUILDING_ART } from './buildings';
@@ -230,7 +232,9 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
   const built = world.buildings.filter((b) => b.status === 'done').length;
   const c = clock(world);
   const hhmm = `${String(c.hours).padStart(2, '0')}:${String(c.minutes).padStart(2, '0')}`;
-  text(ctx, `Day ${c.day} · ${hhmm}   Buildings: ${built}`, 16, y + 2, 12, '#cbbfa4');
+  const s = season(world);
+  const when = s.winter ? `winter, day ${s.dayOfYear - (YEAR_DAYS - WINTER_DAYS)} of ${WINTER_DAYS}` : `winter in ${YEAR_DAYS - WINTER_DAYS + 1 - s.dayOfYear} days`;
+  text(ctx, `Day ${c.day} (${when}) · ${hhmm}   Buildings: ${built}`, 16, y + 2, 12, '#cbbfa4');
   const working = world.people.filter((p) => p.job).length;
   const stockLine = `Stored: ${amounts(villageStock(world))}   People ${world.people.length} (${working} at work)`;
   text(ctx, stockLine, 16, y + 18, fitSize(ctx, stockLine, 12, maxW), '#e8d9a8');
@@ -665,6 +669,11 @@ export function drawBuildingLabel(ctx: Ctx, world: World, b: Building, sx: numbe
   if (b.farm) {
     const n = (st: string) => b.farm!.plots.filter((p) => p.state === st).length;
     lines.push(`Fields: ${n('ripe')} ripe · ${n('growing')} growing · ${n('fallow')} to sow`);
+  }
+  if (b.type === 'house' && b.status === 'done') {
+    const h = householdOf(b);
+    const want = lacking(b);
+    lines.push(`Home of ${residentsOf(world, b).length} (room for ${roomIn(b)}) · content ${Math.round(h.content * 100)}%${want.length ? ` · wants ${want.join(' and ')}` : ''}`);
   }
   const kept = def.livestock;
   if (kept && b.herd) {

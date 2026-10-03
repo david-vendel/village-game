@@ -23,13 +23,17 @@ import { employees, laneY, nameFor, openings, release, staffBuildings, updateStr
 import { builderPositions, builders, createSite, siteWork, siteWorkplace, upgrading, type Site } from './site';
 import { demolitionWork, demolitionWorkplace, dropAll, materialsIn, tearDown, type Demolition } from './demolition';
 import { dropOnGround, type Pile } from './piles';
-import { RESOURCES, stockOf, type Stock } from './resources';
+import { RESOURCES, stockOf, type Resource, type Stock } from './resources';
 import { CROSS_PLOT, fromStreet, groundPoint, mainStreet, newStreet, plotPoint, lowestPlot, plotX, PLOT_FIRST, PLOT_LAST, PLOTS_PER_STREET, rideRange, STREET_END_RUN, streetOf, streetRange, streetsAt, streetStart, turnFacing, type Junction, type Street, type Vec } from './streets';
 import { findPath, terrainSpeed } from './paths';
 import { eatAtTaverns } from './tavern';
 import { serfPositions, transportHub, transportWorkplace } from './transport';
 import { createWorker, currentJob, offDuty, updateWorker, type Nav, type Worker, type Workplace } from './worker';
 import { workshopWorkplace } from './workshop';
+import { HOUSE_RESIDENTS } from './balance';
+import { residentsOf, roomIn, updateHouseholds, type Household } from './households';
+import { updateSpoilage } from './spoilage';
+import { isWinter } from './daynight';
 import { ageHerds, livestockWorkplace, type Herd } from './livestock';
 import { parcelsLaid, ROAD_PIECE, roadWorkplace } from './roadwork';
 
@@ -123,6 +127,10 @@ export interface Building {
   farm?: FarmState;
   /** An animal farm's animals (livestock.ts). */
   herd?: Herd;
+  /** A house's family: how content, what it is owed (households.ts). */
+  household?: Household;
+  /** Fresh goods in its store on their way to spoiling (spoilage.ts). */
+  spoiling?: Partial<Record<Resource, number>>;
   /** A newly finished house's people still to come out of its door, one by one: how many, and the seconds until the next (moveIn). */
   arriving?: { left: number; next: number };
 }
@@ -721,14 +729,14 @@ function complete(world: World, b: Building): void {
 }
 
 /** People who move into the village when a house is finished: out of work and looking (Person.seeker), so they run errands as serfs. */
-export const HOUSE_RESIDENTS = 3;
+export { HOUSE_RESIDENTS };
 
 /** Seconds between one new villager stepping out of a house's door and the next. */
 const ARRIVAL_GAP = 1.6;
 
 /** A house is finished (on its own or as part of the one it merged into): its people are on their way out of the door. */
-function moveIn(b: Building): void {
-  b.arriving = { left: (b.arriving?.left ?? 0) + HOUSE_RESIDENTS, next: b.arriving?.next ?? 0.5 };
+function moveIn(b: Building, n = HOUSE_RESIDENTS): void {
+  b.arriving = { left: (b.arriving?.left ?? 0) + n, next: b.arriving?.next ?? 0.5 };
 }
 
 /** Houses let their new people out of the door one at a time; each walks down to the street and strolls it. */
@@ -743,7 +751,9 @@ function arrive(world: World, dt: number): void {
     const x = b.x + doorOf('house', b.size)!.dx;
     const stroll = { x, y: BASE_Y + 1, dir: (rand(world) < 0.5 ? -1 : 1) as 1 | -1, speed: 26 + rand(world) * 18, idle: 0 };
     const name = nameFor('peasant', seed, new Set(world.people.map((p) => p.name)));
-    world.people.push({ id, name, look: 'peasant', seed, job: null, stroll, seeker: true });
+    // they live here, if there is room still (households.ts); else they find a home elsewhere
+    const home = residentsOf(world, b).length < roomIn(b) ? { home: b.id } : {};
+    world.people.push({ id, name, look: 'peasant', seed, job: null, stroll, seeker: true, ...home });
     a.left--;
     a.next = ARRIVAL_GAP;
     if (a.left <= 0) delete b.arriving;
@@ -1067,7 +1077,10 @@ export function update(world: World, dt: number, input: MoveInput): void {
   updateRider(world, dt, world.menu ? { left: false, right: false } : input);
   arrive(world, dt);
   staff(world);
-  for (const b of world.buildings) if (b.farm) updateCrops(b.farm, dt);
+  // nothing grows in winter
+  if (!isWinter(world)) for (const b of world.buildings) if (b.farm) updateCrops(b.farm, dt);
+  updateHouseholds(world, dt, moveIn);
+  updateSpoilage(world, dt);
   ageHerds(world, dt);
   updateForest(world, dt, () => rand(world));
   updateWorkers(world, dt);
@@ -1088,7 +1101,7 @@ export function workplaceOf(world: World, b: Building, role: Role): Workplace | 
   if (b.status === 'demolishing') return role === 'builder' ? demolitionWorkplace(world, b) : null;
   if (b.site && b.type === 'road') return role === 'builder' ? roadWorkplace(world, b, world.params.buildSpeed) : null;
   if (b.site && (b.status !== 'done' || role === 'builder')) return siteWorkplace(world, b, world.params.buildSpeed);
-  if (b.farm) return farmWorkplace(b.farm, b.stock, world.params);
+  if (b.farm) return farmWorkplace(b.farm, b.stock, world.params, isWinter(world));
   const recipe = BUILDINGS[b.type].makes;
   if (recipe && b.status === 'done') return workshopWorkplace(world, b, recipe);
   const stock = BUILDINGS[b.type].livestock;

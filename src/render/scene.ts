@@ -7,6 +7,8 @@ import { chapelBell } from '../game/daynight';
 import { employees } from '../game/people';
 import { drawingAt } from '../game/transport';
 import { pastureCells } from '../game/pasture';
+import { lacking } from '../game/households';
+import { snowfall, snowOnLand } from './winter';
 import { GROUND_PILE_Y } from '../game/piles';
 import type { Worker } from '../game/worker';
 import { laidOut, onSite, upgrading } from '../game/site';
@@ -107,6 +109,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     bell: b.type === 'chapel' ? bell : undefined,
     drawing: b.type === 'well' ? drawingAt(world, b) : null,
     herd: b.herd,
+    wants: b.type === 'house' && b.status === 'done' ? lacking(b) : undefined,
     pasture: b.type === 'horsefarm' && b.status === 'done' ? pastureCells(world, b).length : undefined,
     doorOpen: !!b.arriving,
   });
@@ -213,12 +216,14 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   for (const s of standing.sort((a, b) => a.y - b.y)) s.draw();
 
   drawForeground(ctx, v);
+  snowOnLand(ctx, world, viewW, sv.top, sv.bottom);
   // daylight: tint the land, then put the sky behind it
   tintLand(ctx, v, light);
   // lights (sprites' emissive layers) shine through the dark
   flushEmissive(ctx, light.night);
   gfx.drawLights();
   drawSkyBehind(ctx, v, light);
+  snowfall(ctx, world, viewW, sv.top, sv.bottom);
   drawGrade(ctx, viewW, sv.top, sv.bottom);
   if (sv.showGrid) drawLandGrid(ctx, world, camX, viewW, sv.hover ?? null);
 

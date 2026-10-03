@@ -334,6 +334,14 @@ export const FEED_SLOTS: readonly Slot[] = [
 ];
 export const GOODS_SLOTS: readonly Slot[] = [-18, -11, -4, 3, 10, 17, 24, 31].map((dx) => ({ dx, lift: 0 }));
 
+/**
+ * A house's store: a shelf beside its door, a basket of bread then a bucket of
+ * water per place, outwards from the door. dx from the door, by the house's size.
+ */
+export function houseSlot(r: 'bread' | 'water', i: number): Slot {
+  return { dx: (r === 'bread' ? 12 : -12) + (r === 'bread' ? 1 : -1) * i * 9, lift: 0 };
+}
+
 /** Baskets of loaves on the bench in front of the tavern, where its guests help themselves. */
 export const TAVERN_SLOTS: readonly Slot[] = [
   { dx: -62, lift: 10 },
