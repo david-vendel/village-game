@@ -8,9 +8,8 @@ Things only you can do or decide, so agents work faster. Tick them off or delete
 - [ ] **Run `/fewer-permission-prompts`** in Claude Code. It adds the commands agents use all the
   time (npm, vitest, `npm run sim`, `npm run shot`, small scripted edits) to an allow list, so you
   aren't asked to approve each one.
-- [ ] **Write `docs/DESIGN.md`**: the buildings you plan, the production chains (logs → planks,
-  grain → flour → bread, what comes next), rough costs and how fast a village should grow. With a
-  target list an agent can build several buildings in one round without asking.
+- [ ] **Read `docs/DESIGN.md`** and answer its open questions at the end (winter, leaving, coin,
+  the castle). Change anything you disagree with; agents build from it, step by step.
 - [ ] **Balance the game** in `src/game/balance.ts`: every building's cost, the farm's upgrade
   and the starting stock are there. New buildings come in at 2 wood, 2 stone. The plank costs
   an agent picked in the sawmill round are a first guess.
@@ -20,9 +19,6 @@ Things only you can do or decide, so agents work faster. Tick them off or delete
 - [ ] **In the `graphics` worktree** (and any other clone), once, with no uncommitted changes,
   after merging `main`: `git rm -r --cached . && git reset --hard`. This rewrites its files with
   LF line endings to match `.gitattributes`.
-- [ ] **Say what uses milk, wool, eggs and meat.** The animal farms make them, but nothing uses
-  them yet and storage yards don't keep them, so each farm's store fills up and then the keeper
-  stops feeding except to raise young. A dairy, a weaver, the tavern's kitchen?
 - [ ] **Check the animals' numbers** in `ANIMALS` (`src/game/balance.ts`): grown up / productive
   until / lifespan in years (a game day is a year), feeds per young one, herd caps, meat per animal.
   Also `PASTURE_CELLS_PER_HORSE` (8) in `src/game/pasture.ts`.
