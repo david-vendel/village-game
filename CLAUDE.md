@@ -1,6 +1,6 @@
 # Village Crown: notes for agents
 
-Read ARCHITECTURE.md for how the game is put together.
+Read ARCHITECTURE.md for how the game is put together. Things waiting on the human are in `Human TODO.md`: add to it when you need a decision or an action only they can take.
 
 ## Graphics and mechanics
 
