@@ -11,5 +11,6 @@
   { "commit": "d855b5b", "date": "2026-10-02", "title": "Faster at 4K", "note": "Hidden fills of the hills removed: about 41 to 70 fps at 3840×2160." },
   { "commit": "523c817", "date": "2026-10-02", "title": "Other streets' farms in 3D", "note": "Farms on other streets drawn in 3D at their true place, facing their own street." },
   { "commit": "de746b8", "date": "2026-10-02", "title": "Crops on other streets", "note": "Other streets' fields grow real crops; their 3D buildings sort by distance (a well behind a farm is hidden)." },
-  { "commit": "c400b88", "date": "2026-10-02", "title": "Near buildings sort right", "note": "A building between camera and road covers the rider correctly; near crops capped in size." }
+  { "commit": "c400b88", "date": "2026-10-02", "title": "Near buildings sort right", "note": "A building between camera and road covers the rider correctly; near crops capped in size." },
+  { "commit": "ef51747", "date": "2026-10-03", "title": "Every building in 3D", "note": "All buildings generated in 3D, built piece by piece; painted textures; smoke only from fires, lit windows and lanterns at night, stars and the Milky Way; numbered showroom of art tests (dev)." }
 ]
