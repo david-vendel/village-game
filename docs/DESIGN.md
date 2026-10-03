@@ -20,9 +20,9 @@ grants charters; the market's merchant trades what you can't make.
    The economy is something you see, not a number.
 2. **People, not points.** Goods exist to meet the needs of real villagers with homes. A chain
    that feeds no one is not finished.
-3. **Night is winter.** One game day is one year. In the dark half nothing grows, animals don't
+3. **Winter comes.** Three days in every twelve are winter. Then nothing grows, animals don't
    graze, and people live on what was stored. Fresh food spoils; kept food lasts. This is why
-   chains go on past their raw goods.
+   chains go on past their raw goods, and why the nine days before are spent laying in.
 4. **Land is the scarce thing.** Fields, pasture and building plots all want the same cells inside
    the road grid's squares. Choosing what goes where is the strategy.
 5. **Every step playable.** Each stage below works on its own and leaves the game better.
@@ -43,10 +43,11 @@ Houses don't need anything.
   store (a shelf by the door). A family member walks to the nearest place that has what they lack
   (a yard, a workshop's store, the market) and carries it home, like any errand.
 - **Needs met → happiness.** A household's happiness is how well its needs were met over the last
-  year. Happy: works at full speed, has children (new villagers). Unhappy: works slower. Long
-  unhappy: the family packs up and leaves down the road.
-- **Night is winter.** Through the night families live on their stores, so the day's work is
-  laying in food for the winter. The farm's fields lie fallow at night.
+  few days. Happy: works at full speed, has children (new villagers). Unhappy: works slower. Long
+  unhappy: people leave one by one, down the road out of the village, the unhappiest household's
+  first, until those left are content again; an empty house stands empty until new people come.
+- **Winter: days 10–12 of every 12.** The fields lie fallow under snow, animals stay in and eat
+  only stored feed, and families live on their stores. Days 1–9 are for laying in.
 - **Spoilage.** Fresh goods keep about a day (milk sours, eggs and meat go off); a spoiled item
   is thrown away where it lies. Kept goods (flour, bread for a day or two, cheese, smoked meat,
   cloth) last. Storage yards keep only goods that keep.
@@ -61,8 +62,8 @@ First needs: **cottage**: bread, water.
 | Smokehouse | meat (+ salt later) | smoked meat | keeps; sausages a later recipe |
 | Weaver | wool | cloth | cloth → clothing for families |
 
-New house level: **farmstead** (freemen): + cheese or smoked meat, + clothing once a year (before
-winter, or someone falls ill and stays in bed). Freemen can take skilled jobs (smith, weaver).
+New house level: **farmstead** (freemen): + cheese or smoked meat, + clothing before each winter (or someone
+falls ill and stays in bed). Freemen can take skilled jobs (smith, weaver).
 
 ## 3. What an animal leaves: hides and tallow
 
@@ -75,7 +76,8 @@ choice: an old cow still gives milk, a young one butchered gives meat and leathe
 | Chandler | tallow | candles |
 | Saddler | leather | harness, saddles |
 
-Candles let a household and a workshop work on after dark (in winter), at the cost of candles.
+Candles let a household and a workshop work on after dark, at the cost of candles; most wanted in
+winter.
 
 ## 4. Horses at work
 
@@ -106,14 +108,19 @@ iron → tools.
 ## Ideas parked for later
 
 - Brewery (grain → ale), for the tavern and the burghers.
-- Seasons within the day (spring morning, harvest evening) if night-as-winter feels too sharp.
+- Spring and harvest time between the winters (sowing early, a harvest festival).
 - The watchtower: wolves at the woods' edge go for the chickens and sheep at night.
 - Ageing people the same way as animals (children grow up, the old retire).
 - Weather years: a dry year, a hard winter.
 
+## Decided
+
+- Winter is 3 days in every 12 (days 10–12).
+- Unhappy households lose people one by one, not a whole house at once.
+
 ## Open questions for the human
 
-- Does night-as-winter feel right, or should winter be every few days?
-- How harsh should leaving be: one family at a time, or a whole house?
+- Animals age a year every game day, but the seasons go round every twelve days. Keep both as
+  they are, or make a year twelve days (ages would then go twelve times slower)?
 - Coin: only from taxes and trade, or also for building?
 - Should the castle's requests be authored (a campaign) or generated (endless)?
