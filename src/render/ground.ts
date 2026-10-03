@@ -12,7 +12,7 @@
 //
 // Everything drawn on the land must go through groundX so it lines up exactly.
 
-import { BASE_Y, EYE_DIST, HORIZON_Y } from '../game/layout';
+import { BASE_Y, EYE_DIST, HORIZON_Y, yAt as yAtGame } from '../game/layout';
 
 /** World y of the horizon, where lines on the ground meet: the far edge of the village's plane (game/layout.ts). */
 export { HORIZON_Y };
@@ -65,6 +65,29 @@ export function viewHorizon(): number {
 /** How far the drawn horizon is above the game's (HORIZON_Y): the backdrop and the sky move by it. */
 export function horizonShift(): number {
   return viewHorizon() - HORIZON_Y;
+}
+
+/**
+ * How far behind the middle of the road (map px) the backdrop stands: the hills, the castle and
+ * the sky meet the land there, about where the land grid fades out, not at the true horizon, so
+ * they come lower down the screen. The land beyond is behind the hills (plane.ts draws nothing
+ * further off).
+ */
+export const BACKDROP_BEHIND = 1250;
+let backdropBehind = BACKDROP_BEHIND;
+
+/** The panel's "horizon": how far off (map px behind the road) the backdrop stands; nearer brings it down the screen. */
+export function setBackdropBehind(d: number): void {
+  backdropBehind = Math.max(100, d);
+}
+
+export function backdropDistance(): number {
+  return backdropBehind;
+}
+
+/** How far down the screen the backdrop and the sky are drawn from HORIZON_Y (their own coordinates): to the ground backdropBehind off. */
+export function backdropShift(): number {
+  return viewY(yAtGame(backdropBehind)) - HORIZON_Y;
 }
 
 /** Distance on the ground from the game's camera of depth y (world y): what the game means by y. */

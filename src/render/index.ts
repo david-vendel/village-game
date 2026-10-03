@@ -9,7 +9,8 @@ import { drawTopView } from './topview';
 import { drawBuildMenu, drawHud, drawToasts, drawTurnFade, type Toast } from './ui';
 
 export { artMode, loadArt, type ArtMode } from './assets';
-export { GAME_EYE_HEIGHT, setCameraDistance, setCameraHeight, viewY } from './ground';
+export { BACKDROP_BEHIND, GAME_EYE_HEIGHT, setBackdropBehind, setCameraDistance, setCameraHeight, viewY } from './ground';
+export { setMountainLift } from './background';
 export { showArtPreview } from './preview';
 export { showGallery3d } from './gallery3d';
 export { setShowroom } from './showroom';

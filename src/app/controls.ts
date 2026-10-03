@@ -27,7 +27,7 @@ export interface Controls {
 }
 
 const GAME_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'Enter', 'Escape', 'Tab', 'w', 'a', 's', 'd']);
-const ZOOM_STEP = 1.2;
+const ZOOM_STEP = 1.1;
 
 type Role = 'left' | 'right' | 'pinch' | 'none';
 

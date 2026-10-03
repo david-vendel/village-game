@@ -24,7 +24,7 @@ import { drawBuilding } from './sprites';
 import { drawConstruction, drawDemolition, drawUpgrade } from './construction';
 import { cropRowAt, drawWorker, farmerScale } from './farm';
 import { figureOf } from './figure';
-import { GROUND_REF_Y, HORIZON_Y } from './ground';
+import { backdropDistance, GROUND_REF_Y, HORIZON_Y } from './ground';
 import { beingFelled, drawQuarry, drawTreeAt } from './nature';
 import { drawVillager, walker } from './people';
 import { cameraDistance, cameraHeight, viewHorizon } from './ground';
@@ -43,8 +43,8 @@ const nearZ = () => NEAR_DRAWN - (cameraDistance() - EYE_DIST);
 const CROP_MIN_SCALE = 0.12;
 /** …and no bigger than this (this street's front field tops out at about 1.55). */
 const CROP_MAX_SIZE = 1.6;
-/** Things this far off are too small to make out. */
-const FAR = 9000;
+/** Nothing further off than the backdrop's hills is drawn: it is behind them (ground.ts backdropDistance). */
+const farZ = () => ROAD_DIST + backdropDistance();
 /** Pictures further than this are behind the tree line of the street being looked at… */
 export const TREE_LINE_DIST = distAt(TREE_Y);
 /** …and further than this behind its buildings. */
@@ -108,7 +108,7 @@ function groundShape(ctx: Ctx, eye: Eye, pts: Vec[], fill: string): void {
   });
   ctx.beginPath();
   steps.forEach((p, i) => {
-    const q = project(eye, p.u, Math.min(p.z, FAR * 4));
+    const q = project(eye, p.u, Math.min(p.z, farZ()));
     if (i === 0) ctx.moveTo(q.x, q.y);
     else ctx.lineTo(q.x, q.y);
   });
@@ -183,7 +183,7 @@ export function elsewhere3d(world: World, eye: Eye): Elsewhere3d[] {
   for (const b of world.buildings) {
     if (streetOf(b.x) === eye.street || !in3d(b)) continue;
     const { u, z } = toEye(eye, ground(world, b.x, BASE_Y));
-    if (z < NEAR_DRAWN || z > FAR) continue;
+    if (z < NEAR_DRAWN || z > farZ()) continue;
     // its front faces its road: away from its lots
     const back = backOf(world.streets[streetOf(b.x)].dir);
     const fu = -(back.x * eye.dir.x + back.y * eye.dir.y);
@@ -198,7 +198,7 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
   const add = (p: Vec, width: number, draw: () => void) => {
     const { u, z } = toEye(eye, p);
     // standing things keep the game camera's cut-off: what stood behind it shouldn't loom up in front
-    if (z < NEAR_DRAWN || z > FAR) return;
+    if (z < NEAR_DRAWN || z > farZ()) return;
     const q = project(eye, u, z);
     const half = (width / 2 + 40) * q.s;
     if (q.x + half < 0 || q.x - half > eye.viewW) return;
@@ -266,7 +266,7 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
       for (let r = 0; r < rows; r++) {
         const y = far + ((near - far) * (r + 0.5)) / rows;
         const m = toEye(eye, ground(world, b.x + p.dx, y));
-        if (m.z < NEAR_DRAWN || m.z > FAR) continue;
+        if (m.z < NEAR_DRAWN || m.z > farZ()) continue;
         const q = project(eye, m.u, m.z);
         if (q.s < CROP_MIN_SCALE || q.x + p.width * q.s < 0 || q.x - p.width * q.s > eye.viewW) continue;
         out.push({

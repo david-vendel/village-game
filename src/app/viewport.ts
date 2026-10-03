@@ -15,7 +15,7 @@ import { VIEW_H } from '../game/layout';
 /** How far in the street view can zoom: past 1 it closes in on the street, the ground kept at the bottom of the screen. */
 export const ZOOM_MAX = 1.6;
 /** The street view's starting zoom on wide screens (Settings → zoom, URL `zoom=`): a little in from the whole scene. */
-export const DEFAULT_ZOOM = 1.3;
+export const DEFAULT_ZOOM = 1.4;
 /** Narrow (portrait) screens start zoomed out until this much street is visible. */
 const MIN_DEFAULT_VIEW_W = 460;
 /** UI is laid out for at least this many UI units across / down. */
