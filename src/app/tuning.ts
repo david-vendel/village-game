@@ -276,7 +276,7 @@ export function installTuning(world: World, sound: Sound, screen: Screen): Displ
   fpsToggle.append('frame rate', fpsBox);
   content.append(fpsToggle);
 
-  makeCollapsible(root, content, 'right', 'village-game:tuning-open', true, 'Settings');
+  makeCollapsible(root, content, 'right', 'village-game:tuning-open', false, 'Settings');
   document.body.appendChild(root);
   return display;
 }

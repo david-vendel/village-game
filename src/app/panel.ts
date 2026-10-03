@@ -2,7 +2,7 @@
 // the right). They are opened from the HUD's Menu (menu.ts); an open panel has
 // a small round button at its top to fold it away again (shaped like a Mac
 // window's full-screen button). Whether each is open is remembered in this
-// browser.
+// browser; they all start folded away, so they keep out of the picture until wanted.
 
 /** The round button: arrows out to the corners to expand, in to the middle to collapse. */
 const ARROWS = { expand: '4,4 8.3,4 4,8.3 M10,10 5.7,10 10,5.7', collapse: '6.6,6.6 2.9,6.6 6.6,2.9 M7.4,7.4 11.1,7.4 7.4,11.1' };

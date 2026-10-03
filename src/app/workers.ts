@@ -15,6 +15,10 @@ function occupation(p: Person): string {
 }
 
 const nameOf = (b: Building) => BUILDINGS[b.type].name.toLowerCase();
+/** An animal farm's animals, all together and one of them. */
+const HERD_NAME = { chicken: 'hens', cow: 'cows', sheep: 'sheep', horse: 'horses' } as const;
+const ONE_NAME = { chicken: 'bird', cow: 'beast', sheep: 'sheep', horse: 'horse' } as const;
+
 /** A workshop's work by its recipe's verb, and where it is done when that is outdoors. */
 const WORKING: Record<string, string> = { grind: 'grinding', bake: 'baking', saw: 'sawing' };
 const WORKED_AT: Record<string, string> = { bake: 'oven', saw: 'saw bench' };
@@ -62,6 +66,9 @@ function activity(world: World, p: Person): string {
       if (a === 'harvest') return 'harvesting a field';
       if (a === 'chop') return 'felling a tree';
       if (a === 'cut') return 'cutting stone at the quarry';
+      const kept = BUILDINGS[b.type].livestock;
+      if (kept && a === 'feed') return t.carried ? `feeding the ${HERD_NAME[kept.animal]} at the trough` : `taking ${kept.feed} off the store`;
+      if (kept && a === 'butcher') return `butchering an old ${ONE_NAME[kept.animal]} for meat`;
       const recipe = BUILDINGS[b.type].makes;
       if (recipe && a === recipe.verb) {
         const doing = `${WORKING[recipe.verb] ?? recipe.verb} ${recipe.from} into ${recipe.to}`;
@@ -128,7 +135,7 @@ export function installWorkersPanel(world: World): void {
     'border-radius:8px;padding:8px 12px 10px;user-select:none;pointer-events:none';
   const table = document.createElement('table');
   table.style.cssText = 'border-collapse:collapse';
-  makeCollapsible(root, table, 'left', 'village-game:workers-open', true, 'Workers');
+  makeCollapsible(root, table, 'left', 'village-game:workers-open', false, 'Workers');
   document.body.appendChild(root);
 
   const render = () => {

@@ -13,6 +13,7 @@
 //   --size <w>x<h>     window size (default 1400x800)
 //   --keys <k:ms,...>  keys to hold down in turn after loading, e.g. d:1500 rides right 1.5 s
 //   --port <n>         dev server port (default 5179)
+//   --panels <list>    side panels to open, e.g. workers,settings,versions (all start closed)
 // Page errors and console warnings are printed, so a blank shot says why.
 
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -30,6 +31,7 @@ const wait = Number(opt('wait', '6000'));
 const [w, h] = opt('size', '1400x800').split('x').map(Number);
 const keys = opt('keys', '');
 const port = Number(opt('port', '5179'));
+const panels = opt('panels', '').split(',').filter(Boolean);
 const page = args[0] ?? '';
 const url = /^https?:/.test(page) ? page : `http://localhost:${port}/${page.replace(/^\//, '')}`;
 
@@ -107,6 +109,10 @@ const send = (method: string, params: Record<string, unknown> = {}) =>
 
 await send('Runtime.enable');
 await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false });
+// the side panels asked for start open (app/panel.ts keeps whether each is open in localStorage)
+const PANEL_KEY: Record<string, string> = { workers: 'workers-open', settings: 'tuning-open', versions: 'versions-open' };
+const opened = panels.map((p) => `localStorage.setItem('village-game:${PANEL_KEY[p] ?? p}', '1');`).join('');
+if (opened) await send('Page.addScriptToEvaluateOnNewDocument', { source: `try { ${opened} } catch {}` });
 await send('Page.navigate', { url });
 await sleep(Math.min(wait, 3000));
 
