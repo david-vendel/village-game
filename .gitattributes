@@ -1,0 +1,12 @@
+# Text files are LF everywhere, in the repo and in every working copy (also on Windows),
+# so editors, tools and agents never fight over line endings.
+* text=auto eol=lf
+
+# Binary: never touched.
+*.png binary
+*.webp binary
+*.jpg binary
+*.jpeg binary
+*.avif binary
+*.glb binary
+*.blend binary
