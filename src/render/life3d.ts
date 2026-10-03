@@ -46,14 +46,39 @@ export function ageOf(world: World, b: Building): number {
   return Math.min(1, old + days / 40 + 0.08 * hash(b.id, 32));
 }
 
-/** How far a building has got: building it, building on its upgrade, or pulling it down. */
-function progressOf(b: Building): Progress | undefined {
-  if (b.demolition) {
-    const s = constructionStage(b.progress);
-    return s.stage === 'done' ? undefined : { stage: s.stage, t: s.t };
+/**
+ * How far a building is shown built: its progress, followed smoothly. The game moves it on in a
+ * jump each time a builder finishes a spell of work (site.ts BUILD_CHUNK, a sixth of a farm at
+ * once); shown, the stones and timbers go up one by one while the builders work (within about a
+ * second of the game's progress).
+ */
+const shown = new Map<number, { p: number; time: number }>();
+/** Seconds the shown progress takes to make up most of a jump. */
+const FOLLOW = 0.9;
+
+function shownProgress(world: World, b: Building): number {
+  const s = shown.get(b.id);
+  // new, or a jump no one could have built (a loaded game, construction switched off): as it is
+  if (!s || Math.abs(b.progress - s.p) > 0.5) {
+    shown.set(b.id, { p: b.progress, time: world.time });
+    return b.progress;
   }
-  if (b.status === 'done') return undefined;
-  const s = constructionStage(b.progress);
+  const dt = Math.max(0, Math.min(0.5, world.time - s.time));
+  s.time = world.time;
+  const gap = b.progress - s.p;
+  // an even pace for the last bit too, rather than creeping up on it
+  const step = Math.max(Math.abs(gap) * Math.min(1, dt / FOLLOW), 0.03 * dt);
+  s.p = Math.abs(gap) <= step ? b.progress : s.p + Math.sign(gap) * step;
+  return s.p;
+}
+
+/** How far a building has got: building it, building on its upgrade, or pulling it down. */
+function progressOf(world: World, b: Building): Progress | undefined {
+  if (b.status === 'done' && !b.demolition) {
+    shown.delete(b.id);
+    return undefined;
+  }
+  const s = constructionStage(shownProgress(world, b));
   return s.stage === 'done' ? undefined : { stage: s.stage, t: s.t };
 }
 
@@ -71,7 +96,7 @@ function doorOpen(world: World, b: Building): number {
 /** Everything the 3D renderer needs to show a building now. */
 export function building3d(world: World, b: Building, at?: Building3d['at']): Building3d & { hearth: Hearth } {
   const h = hearthOf(world, b);
-  const build = progressOf(b);
+  const build = progressOf(world, b);
   return {
     id: b.id,
     type: b.type,
