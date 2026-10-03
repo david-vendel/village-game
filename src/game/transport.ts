@@ -27,7 +27,7 @@ import { BUILDINGS, storageOf } from './buildings';
 import { putAway, storeSpot, tripLoad, warehouses } from './economy';
 import { STAND_Y, type Spot } from './layout';
 import { employees } from './people';
-import { dropOnGround, groundLoad, pileById, pileSpot, takeFromPile, type Pile } from './piles';
+import { dropOnGround, GROUND_LOAD, pileById, pileSpot, takeFromPile, type Pile } from './piles';
 import { RESOURCES, room, type Load, type Resource } from './resources';
 import { streetDist } from './streets';
 import { currentJob, delivering, type JobTicket, type Workplace } from './worker';
@@ -64,7 +64,7 @@ const sourceOf = (world: World, job: JobTicket): Source | undefined => (errandRe
 /** How much of r there is at a source. */
 const amountAt = (s: Source, r: Resource) => (isPile(s) ? (s.resource === r ? s.amount : 0) : s.stock[r]);
 /** How much of r one person carries from a source at a time. */
-const loadAt = (s: Source, r: Resource) => (isPile(s) ? groundLoad(r) : tripLoad(s, r));
+const loadAt = (s: Source, r: Resource) => (isPile(s) ? GROUND_LOAD : tripLoad(s, r));
 /** Where someone stands to pick up r at a source, relative to fromX. */
 const pickSpot = (world: World, s: Source, r: Resource, fromX: number) => (isPile(s) ? pileSpot(s, fromX) : storeSpot(world, s, r, fromX, true));
 

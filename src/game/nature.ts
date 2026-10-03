@@ -21,7 +21,7 @@
 
 import { storageOf } from './buildings';
 import { putAway, storeSpot } from './economy';
-import { behindRoad, CELL_W, CHOP_SPOT, QUARRIES, QUARRY_SPOTS, QUARRY_W, QUARRY_Y, STAND_Y, STONECUTTER_DOOR, unitOf, WOODCUTTER_DOOR, yAt } from './layout';
+import { behindRoad, CELL_W, CHOP_SPOT, QUARRIES, QUARRY_SPOTS, QUARRY_W, QUARRY_Y, STAND_Y, STONECUTTER_DOOR, PILE_UNIT, WOODCUTTER_DOOR, yAt } from './layout';
 import { room, type Load } from './resources';
 import { cellKey, landUse, type LandUse } from './grid';
 import { groundPoint, streetDist, streetOf, streetPoint, streetRange, type Vec } from './streets';
@@ -223,7 +223,7 @@ export function gatherWorkplace(world: World, b: Building & { type: GatherHut })
     door,
     nextJob(w, taken) {
       // loads on their way count against the room in the store
-      if (room(b.stock, capacity, resource) <= taken.length * unitOf(resource) + 1e-9) return null;
+      if (room(b.stock, capacity, resource) <= taken.length * PILE_UNIT + 1e-9) return null;
       const here = x + w.dx;
       let job: JobTicket | null = null;
       if (action === 'chop') {
@@ -256,7 +256,7 @@ export function gatherWorkplace(world: World, b: Building & { type: GatherHut })
         t.state = 'stump';
         t.age = 0;
       }
-      return { resource, amount: unitOf(resource) };
+      return { resource, amount: PILE_UNIT };
     },
     dropSpot(_job, load) {
       return storeSpot(world, b, load.resource, x, false, load.amount);

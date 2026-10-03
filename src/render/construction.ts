@@ -193,7 +193,7 @@ function laidDown(ctx: Ctx, x: number, base: number, amounts: Amounts, seed: num
     rect(ctx, x - 7, cy - 4, 14, 4, '#7b5634');
     circle(ctx, x + 7, cy - 2, 2.2, '#c9a06a');
   }
-  const stones = Math.min(4, pileItems(amounts.stone ?? 0, 'stone'));
+  const stones = Math.min(4, pileItems(amounts.stone ?? 0));
   for (let i = 0; i < stones; i++) ellipse(ctx, x + 12 + (i % 2) * 7, base + 1 - Math.floor(i / 2) * 5, 4, 3, hash(seed, 40 + i) < 0.5 ? '#a89c88' : '#948877');
 }
 
@@ -207,7 +207,7 @@ function materials(ctx: Ctx, x: number, width: number, base: number, onSite: Amo
     circle(ctx, cx, cy - 4, 4, '#c9a06a');
     circle(ctx, cx, cy - 4, 1.5, '#8a6440');
   }
-  const stones = Math.min(SITE_SHOWN.stone, pileItems(onSite.stone ?? 0, 'stone'));
+  const stones = Math.min(SITE_SHOWN.stone, pileItems(onSite.stone ?? 0));
   for (let i = 0; i < stones; i++) {
     const s = siteSlot(width, 'stone', i);
     ellipse(ctx, x + s.dx, base - s.lift, 5, 3.5, hash(seed, i) < 0.5 ? '#a89c88' : '#948877');

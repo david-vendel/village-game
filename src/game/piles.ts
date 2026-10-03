@@ -4,7 +4,7 @@
 // time, to wherever that resource is wanted or else to a warehouse
 // (transport.ts), and a pile is gone once the last of it has been picked up.
 
-import { STAND_Y, unitOf, type Spot } from './layout';
+import { STAND_Y, PILE_UNIT, type Spot } from './layout';
 import type { Load, Resource } from './resources';
 import type { World } from './world';
 
@@ -18,8 +18,8 @@ export interface Pile {
 
 /** Depth (world y) piles lie at: just in front of the building line, at the edge of the road. */
 export const GROUND_PILE_Y = STAND_Y + 8;
-/** How much of r one person carries off a pile at a time: an item (layout.ts unitOf). */
-export const groundLoad = (r: string) => unitOf(r);
+/** How much one person carries off a pile at a time: an item. */
+export const GROUND_LOAD = PILE_UNIT;
 /** Piles of different things put down together lie this far apart (px). */
 export const PILE_GAP = 26;
 /** A load put down this close to a pile of the same thing goes onto it. */

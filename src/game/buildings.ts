@@ -5,7 +5,7 @@
 // its own module (farm.ts).
 // To add a building: add an entry here and an entry in BUILDING_ART.
 
-import { BAKERY_DOOR, BAKERY_OVEN, CHAPEL_DOOR, HOME, HOUSE_DOOR_DX, MILL_DOOR, SMITHY_DOOR, STAND_Y, STONECUTTER_DOOR, TAVERN_DOOR, unitOf, WOODCUTTER_DOOR, YARD_ITEMS, type Spot } from './layout';
+import { BAKERY_DOOR, BAKERY_OVEN, CHAPEL_DOOR, HOME, HOUSE_DOOR_DX, MILL_DOOR, SMITHY_DOOR, STAND_Y, STONECUTTER_DOOR, TAVERN_DOOR, PILE_UNIT, WOODCUTTER_DOOR, YARD_ITEMS, type Spot } from './layout';
 import type { Amounts, Resource } from './resources';
 
 export type BuildingType =
@@ -109,7 +109,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     buildTime: 14,
     cost: { wood: 6, stone: 4 },
     // everything lies out in the open, in its place in a pile (layout.ts warehouseSlot)
-    storage: Object.fromEntries(Object.entries(YARD_ITEMS).map(([r, n]) => [r, n * unitOf(r)])),
+    storage: Object.fromEntries(Object.entries(YARD_ITEMS).map(([r, n]) => [r, n * PILE_UNIT])),
     jobs: {},
   },
   house: {
@@ -148,11 +148,11 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     buildTime: 16,
     cost: { wood: 6, stone: 6 },
     // a sack of grain waiting per slot, a sack of flour per slot (layout.ts MILL_SLOTS)
-    storage: { grain: 30, flour: 30 },
+    storage: { grain: 3, flour: 3 },
     jobs: { miller: 1 },
     ships: ['flour'],
     needs: ['grain'],
-    makes: { from: 'grain', to: 'flour', batch: 10, per: 1, seconds: 6, verb: 'grind', door: MILL_DOOR },
+    makes: { from: 'grain', to: 'flour', batch: 1, per: 1, seconds: 4, verb: 'grind', door: MILL_DOOR },
   },
   bakery: {
     type: 'bakery',
@@ -163,11 +163,11 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     buildTime: 12,
     cost: { wood: 4, stone: 5 },
     // a sack of flour waiting per slot, a basket of loaves per slot (layout.ts BAKERY_SLOTS)
-    storage: { flour: 30, bread: 40 },
+    storage: { flour: 3, bread: 4 },
     jobs: { baker: 1 },
     ships: ['bread'],
     needs: ['flour'],
-    makes: { from: 'flour', to: 'bread', batch: 10, per: 2, seconds: 8, verb: 'bake', door: BAKERY_DOOR, at: BAKERY_OVEN },
+    makes: { from: 'flour', to: 'bread', batch: 1, per: 2, seconds: 6, verb: 'bake', door: BAKERY_DOOR, at: BAKERY_OVEN },
   },
   blacksmith: {
     type: 'blacksmith',
@@ -211,7 +211,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     buildTime: 13,
     cost: { wood: 8, stone: 4 },
     // baskets of loaves on the bench outside (layout.ts TAVERN_SLOTS); guests eat them (tavern.ts)
-    storage: { bread: 20 },
+    storage: { bread: 2 },
     jobs: {},
     needs: ['bread'],
   },
