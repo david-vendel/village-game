@@ -195,6 +195,9 @@ function laidDown(ctx: Ctx, x: number, base: number, amounts: Amounts, seed: num
   }
   const stones = Math.min(4, pileItems(amounts.stone ?? 0));
   for (let i = 0; i < stones; i++) ellipse(ctx, x + 12 + (i % 2) * 7, base + 1 - Math.floor(i / 2) * 5, 4, 3, hash(seed, 40 + i) < 0.5 ? '#a89c88' : '#948877');
+  // boards laid flat on top of the logs
+  const boards = Math.min(4, pileItems(amounts.planks ?? 0));
+  for (let i = 0; i < boards; i++) plank(ctx, x - 9, base + 2 - logs * 4.5 - (i + 1) * 2.5, 18);
 }
 
 function materials(ctx: Ctx, x: number, width: number, base: number, onSite: Amounts, seed: number): void {
@@ -212,4 +215,15 @@ function materials(ctx: Ctx, x: number, width: number, base: number, onSite: Amo
     const s = siteSlot(width, 'stone', i);
     ellipse(ctx, x + s.dx, base - s.lift, 5, 3.5, hash(seed, i) < 0.5 ? '#a89c88' : '#948877');
   }
+  const boards = Math.min(SITE_SHOWN.planks, pileItems(onSite.planks ?? 0));
+  for (let i = 0; i < boards; i++) {
+    const s = siteSlot(width, 'planks', i);
+    plank(ctx, x + s.dx - 12, base - s.lift - 3, 24);
+  }
+}
+
+/** A sawn board lying flat, its left end at x, its top at y. */
+function plank(ctx: Ctx, x: number, y: number, w: number): void {
+  rect(ctx, x, y, w, 2.5, '#d2ab74');
+  rect(ctx, x, y + 1.7, w, 0.8, '#a07a4c');
 }

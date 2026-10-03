@@ -15,6 +15,9 @@ function occupation(p: Person): string {
 }
 
 const nameOf = (b: Building) => BUILDINGS[b.type].name.toLowerCase();
+/** A workshop's work by its recipe's verb, and where it is done when that is outdoors. */
+const WORKING: Record<string, string> = { grind: 'grinding', bake: 'baking', saw: 'sawing' };
+const WORKED_AT: Record<string, string> = { bake: 'oven', saw: 'saw bench' };
 const resource = (action: string, verb: string) => (action.startsWith(`${verb}-`) ? action.slice(verb.length + 1) : null);
 
 /** What stands where someone is: the building whose lot holds world x, else the open street. */
@@ -61,9 +64,9 @@ function activity(world: World, p: Person): string {
       if (a === 'cut') return 'cutting stone at the quarry';
       const recipe = BUILDINGS[b.type].makes;
       if (recipe && a === recipe.verb) {
-        const doing = `${recipe.verb === 'grind' ? 'grinding' : 'baking'} ${recipe.from} into ${recipe.to}`;
-        if (t.carried) return t.indoors ? `${doing} inside` : `${doing} at the oven`;
-        return `taking a sack of ${recipe.from} off the store`;
+        const doing = `${WORKING[recipe.verb] ?? recipe.verb} ${recipe.from} into ${recipe.to}`;
+        if (t.carried) return t.indoors ? `${doing} inside` : `${doing} at the ${WORKED_AT[recipe.verb] ?? 'oven'}`;
+        return `taking ${recipe.from === 'wood' ? 'a log' : `a sack of ${recipe.from}`} off the store`;
       }
       if (a === 'build') return `building ${place}`;
       if (resource(a, 'ship') || resource(a, 'supply')) return `picking up ${resource(a, 'ship') ?? resource(a, 'supply')} at ${named(t.job.target)}`;
@@ -79,7 +82,7 @@ function activity(world: World, p: Person): string {
         if (a === 'chop') return `carrying a log back to ${place}`;
         if (a === 'cut') return `carrying a block of stone back to ${place}`;
         const recipe = BUILDINGS[b.type].makes;
-        if (recipe && a === recipe.verb) return w.carrying?.resource === recipe.from ? `carrying ${load} ${recipe.at ? 'to the oven' : `in to ${place}`}` : `putting ${load} out in its place`;
+        if (recipe && a === recipe.verb) return w.carrying?.resource === recipe.from ? `carrying ${load} ${recipe.at ? `to the ${WORKED_AT[recipe.verb] ?? 'oven'}` : `in to ${place}`}` : `putting ${load} out in its place`;
         if (resource(a, 'ship') || resource(a, 'supply')) return `carrying ${load} from ${named(t.job!.target)} to ${named(t.job!.to)}`;
         if (resource(a, 'take')) return `carrying ${load} from the pile to its place at ${place}`;
         if (resource(a, 'fetch')) return `carrying ${load} to its place at ${place}`;

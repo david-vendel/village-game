@@ -208,7 +208,7 @@ export function createSound(initialVolume = 0.6): Sound {
       if (r === 'grain' || r === 'flour' || r === 'bread') {
         noise({ x, dur: 0.12, gain: 0.2 * k, filter: 'bandpass', freq: 1800, attack: 0.02 });
         tone({ x, dur: 0.14, gain: 0.15 * k, freq: 90, to: 55 });
-      } else if (r === 'wood') {
+      } else if (r === 'wood' || r === 'planks') {
         tone({ x, dur: 0.12, gain: 0.3 * k, freq: rnd(170, 200), to: 110 });
         tone({ x, dur: 0.1, gain: 0.2 * k, freq: rnd(230, 260), to: 150, delay: 0.07 });
         noise({ x, dur: 0.05, gain: 0.15 * k, filter: 'bandpass', freq: 900, q: 3 });

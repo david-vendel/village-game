@@ -27,7 +27,7 @@
 // the buildings stand, lie to its left (`backOf`), and a new street runs off
 // into what lay behind the old one.
 
-import { behindRoad, CELL_W, ROAD_HALF, FIRST_PLOT_X, PLOT_SPACING, QUARRIES, quarryLand, STREET_BAND_HALF, STREET_LENGTH } from './layout';
+import { behindRoad, CELL_W, ROAD_HALF, FIRST_PLOT_X, PLOT_SPACING, STREET_BAND_HALF, STREET_LENGTH } from './layout';
 import type { World } from './world';
 
 /** Distance in x between the starts of neighbouring streets (more than a street's length). */
@@ -119,14 +119,6 @@ export function groundPoint(world: World, x: number, y: number): Vec {
   const b = backOf(s.dir);
   const d = behindRoad(y);
   return { x: p.x + b.x * d, y: p.y + b.y * d };
-}
-
-/** Whether map point p is on a quarry's land, or within `margin` of it. */
-export function onQuarryLand(p: Vec, margin = 0): boolean {
-  return QUARRIES.some((q) => {
-    const r = quarryLand(q);
-    return p.x > r.x0 - margin && p.x < r.x1 + margin && p.y > r.y0 - margin && p.y < r.y1 + margin;
-  });
 }
 
 /** Map point d map px behind the middle of the road at world x (in front for negative d). */

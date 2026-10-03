@@ -35,7 +35,7 @@ const STAGE_LABEL: Record<ConstructionStage, string> = {
 };
 
 /** On-screen names of the jobs. */
-const ROLE_NAME: Record<Role, string> = { farmer: 'Farmer', builder: 'Builders', miller: 'Miller', baker: 'Baker', woodcutter: 'Woodcutter', stonecutter: 'Stonecutter', serf: 'Serfs' };
+const ROLE_NAME: Record<Role, string> = { farmer: 'Farmer', builder: 'Builders', miller: 'Miller', baker: 'Baker', woodcutter: 'Woodcutter', sawyer: 'Sawyer', stonecutter: 'Stonecutter', serf: 'Serfs' };
 
 /** "50 wood · 20 stone" (only the resources present). */
 function amounts(a: Amounts): string {
@@ -617,15 +617,6 @@ function around(ctx: Ctx, x: number, y: number, k: number, draw: () => void): vo
   ctx.translate(-x, -y);
   draw();
   ctx.restore();
-}
-
-/** Warm glow on the ground at the empty plot the rider stands at (drawn behind the rider). */
-export function drawPlotGlow(ctx: Ctx, sx: number, base: number): void {
-  const g = ctx.createRadialGradient(sx, base, 5, sx, base, 110);
-  g.addColorStop(0, 'rgba(255,220,140,0.35)');
-  g.addColorStop(1, 'rgba(255,220,140,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(sx - 110, base - 20, 220, 30);
 }
 
 /** Floating marker over the empty plot the rider stands at. */

@@ -34,7 +34,6 @@ import { parcelsLaid, ROAD_PIECE, roadWorkplace } from './roadwork';
 
 /** Length of each street (streets.ts). */
 export const WORLD_WIDTH = STREET_LENGTH;
-export const PLOT_WIDTH = 200;
 export { FIRST_PLOT_X, PLOT_SPACING };
 /** How close (px) the rider's x must be to a crossroads to turn there. */
 export const INTERACT_RANGE = 40;

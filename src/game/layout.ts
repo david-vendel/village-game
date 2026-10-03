@@ -142,7 +142,7 @@ export const STAND_Y = BASE_Y + 3;
 
 /**
  * How much of a resource one item in a pile stands for: one. A wood is a log,
- * a stone a block, a grain a sheaf or a sack, a flour a sack, a bread a
+ * a stone a block, a planks a board, a grain a sheaf or a sack, a flour a sack, a bread a
  * basket of loaves: what one person carries at a time.
  */
 export const PILE_UNIT = 1;
@@ -181,17 +181,18 @@ function pyramid(i: number, rows: readonly number[]): { row: number; col: number
  * where it can be seen, so this is also its capacity: YARD_ITEMS × PILE_UNIT
  * (buildings.ts).
  */
-export const YARD_ITEMS = { wood: 15, stone: 15, grain: 5, flour: 5, bread: 5 } as const;
+export const YARD_ITEMS = { wood: 15, stone: 15, planks: 10, grain: 5, flour: 5, bread: 5 } as const;
 /** How many items of each the yard's piles are laid out for: a medium yard's. */
-const YARD_LAID = { wood: 30, stone: 30, grain: 10, flour: 10, bread: 10 } as const;
+const YARD_LAID = { wood: 30, stone: 30, planks: 20, grain: 10, flour: 10, bread: 10 } as const;
 
 /**
  * The storage yard's piles: a stone heap on the left, a log pile on the right,
+ * boards standing on end against the fence behind both (the first half behind the stones),
  * and between them an open-fronted shed with sacks of grain (left) and flour
  * (right) stacked on the ground and baskets of bread on two shelves at the
  * back. Item i (0 = bottom of the stack).
  */
-export function warehouseSlot(r: 'wood' | 'stone' | 'grain' | 'flour' | 'bread', i: number, size = 2): Slot {
+export function warehouseSlot(r: keyof typeof YARD_ITEMS, i: number, size = 2): Slot {
   // laid out for a medium yard; a small one is squeezed into half the width, a large one spread over half again
   const s = warehouseSlotMedium(r, i);
   return { dx: (s.dx * size * YARD_FIT) / 2, lift: s.lift };
@@ -200,7 +201,7 @@ export function warehouseSlot(r: 'wood' | 'stone' | 'grain' | 'flour' | 'bread',
 /** The yard's piles drawn in from its ends, so every log and block lies on the yard's own cells. */
 const YARD_FIT = 0.84;
 
-function warehouseSlotMedium(r: 'wood' | 'stone' | 'grain' | 'flour' | 'bread', i: number): Slot {
+function warehouseSlotMedium(r: keyof typeof YARD_ITEMS, i: number): Slot {
   const n = Math.max(0, Math.min(i, YARD_LAID[r] - 1));
   if (r === 'wood') {
     const { row, col } = pyramid(n, [7, 6, 5, 4, 3, 3, 2]);
@@ -210,17 +211,22 @@ function warehouseSlotMedium(r: 'wood' | 'stone' | 'grain' | 'flour' | 'bread', 
     const { row, col } = pyramid(n, [7, 6, 5, 4, 3, 2, 2, 1]);
     return { dx: -80 + col * 7 + row * 3.5, lift: 2.5 + row * 5 };
   }
+  if (r === 'planks') {
+    const half = YARD_LAID.planks / 2;
+    return { dx: (n < half ? -78 : 44) + (n % half) * 4.6, lift: 0 };
+  }
   if (r === 'bread') return { dx: -20 + (n % 5) * 10, lift: n < 5 ? 50 : 62 };
   const { row, col } = pyramid(n, [4, 3, 2, 1]);
   return { dx: (r === 'grain' ? -27 : 5) + col * 8 + row * 4, lift: row * 9 };
 }
 
 /** Most items a construction site's pile shows, per resource. */
-export const SITE_SHOWN = { wood: 8, stone: 12 } as const;
+export const SITE_SHOWN = { wood: 8, stone: 12, planks: 10 } as const;
 
-/** A construction site's pile, just past the right end of a building `width` wide: logs, then stones. */
-export function siteSlot(width: number, r: 'wood' | 'stone', i: number): Slot {
+/** A construction site's pile, just past the right end of a building `width` wide: logs, then stones, then a stack of boards. */
+export function siteSlot(width: number, r: keyof typeof SITE_SHOWN, i: number): Slot {
   const x = width / 2 + 14;
+  if (r === 'planks') return { dx: x + 80, lift: Math.max(0, Math.min(i, SITE_SHOWN.planks - 1)) * 3 - 3 };
   if (r === 'wood') {
     const { row, col } = pyramid(Math.max(0, Math.min(i, SITE_SHOWN.wood - 1)), [4, 3, 1]);
     return { dx: x + col * 9 + row * 4 + 11, lift: row * 8 - 4 };
@@ -347,6 +353,30 @@ export const WOODCUTTER_SLOTS: readonly Slot[] = [
   { dx: 36, lift: 0 },
   { dx: 56, lift: 0 },
 ];
+
+/**
+ * The sawmill: an open-sided saw shed with its door on the left, logs waiting
+ * outside left of it, the saw bench out on the right (the sawyer saws each log
+ * into two boards there, standing at its left end) and the sawn boards stacked
+ * flat between the door and the bench (bottom first).
+ */
+export const SAWMILL_DOOR: Spot = { dx: -26, y: STAND_Y };
+/** The middle of the saw bench, where the log lies while it is sawn. */
+export const SAWMILL_BENCH_DX = 50;
+export const SAWMILL_SAW: Spot = { dx: SAWMILL_BENCH_DX - 20, y: STAND_Y };
+export const SAWMILL_SLOTS: Record<'wood' | 'planks', readonly Slot[]> = {
+  wood: [
+    { dx: -62, lift: 0 },
+    { dx: -48, lift: 0 },
+    { dx: -55, lift: 5 },
+  ],
+  planks: [
+    { dx: 6, lift: 0 },
+    { dx: 6, lift: 3 },
+    { dx: 6, lift: 6 },
+    { dx: 6, lift: 9 },
+  ],
+};
 
 /** The stonecutter's hut door, and its store: dressed blocks set down on the right. */
 export const STONECUTTER_DOOR: Spot = { dx: -14, y: STAND_Y };

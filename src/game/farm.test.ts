@@ -193,6 +193,36 @@ describe('farms in the world', () => {
     expect(miller.profession).toBe('miller');
     expect(villageStock(w).flour).toBeGreaterThan(0);
   });
+
+  it('a finished sawmill saws each log into two planks, which go to the warehouse', () => {
+    const w = createWorld();
+    // logs count as one, boards as half: sawing keeps the sum, wherever things lie or are carried
+    const timber = () => {
+      let n = 0;
+      for (const b of w.buildings) n += b.stock.wood + b.stock.planks / 2;
+      for (const p of w.piles) n += p.resource === 'wood' ? p.amount : p.resource === 'planks' ? p.amount / 2 : 0;
+      for (const p of w.people) {
+        const c = p.job?.worker.carrying;
+        if (c?.resource === 'wood') n += c.amount;
+        if (c?.resource === 'planks') n += c.amount / 2;
+      }
+      return n;
+    };
+    const before = timber();
+    const planks = villageStock(w).planks;
+    const saw = placeBuilding(w, 2587.5, 'sawmill', { instant: true, free: true })!;
+    let carriedBoards = false;
+    for (let t = 0; t < 300 && villageStock(w).planks < planks + 4; t += 1 / 30) {
+      update(w, 1 / 30, { left: false, right: false });
+      carriedBoards ||= w.people.some((p) => p.job?.role === 'serf' && p.job.worker.carrying?.resource === 'planks');
+    }
+    const [sawyer] = employees(w, saw);
+    expect(sawyer.profession).toBe('sawyer');
+    expect(villageStock(w).planks).toBeGreaterThanOrEqual(planks + 4);
+    expect(villageStock(w).wood).toBeLessThan(WAREHOUSE_START.wood);
+    expect(carriedBoards).toBe(true);
+    expect(timber()).toBeCloseTo(before, 6);
+  });
 });
 
 describe('construction by builders', () => {

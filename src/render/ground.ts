@@ -62,11 +62,6 @@ export function viewHorizon(): number {
   return GROUND_REF_Y - eyeHeight;
 }
 
-/** How far the drawn horizon is above the game's (HORIZON_Y): the backdrop and the sky move by it. */
-export function horizonShift(): number {
-  return viewHorizon() - HORIZON_Y;
-}
-
 /**
  * How far behind the middle of the road (map px) the backdrop stands: the hills, the castle and
  * the sky meet the land there, about where the land grid fades out, not at the true horizon, so

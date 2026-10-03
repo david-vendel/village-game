@@ -8,6 +8,7 @@ build bakery next
 build tavern next
 build house next
 build well next
+build sawmill at s0:112
 build woodcutter at s0:193
 build stonecutter next
 build blacksmith next

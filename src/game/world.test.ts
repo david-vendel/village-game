@@ -78,7 +78,7 @@ describe('placement', () => {
 describe('build menu', () => {
   it('builds at an empty plot, and offers what can be done to a building', () => {
     const w = emptyWorld();
-    placeBuilding(w, 2912.5, 'warehouse', { instant: true, free: true })!.stock = stockOf({ wood: 30, stone: 30 });
+    placeBuilding(w, 2912.5, 'warehouse', { instant: true, free: true })!.stock = stockOf({ wood: 30, stone: 30, planks: 10 });
     w.rider.x = plotOf(w, 0, 8).x - 25; // a cell 3n + 1, where a building starts
     expect(openMenu(w)).toBe(true);
     moveMenu(w, 2);

@@ -1,5 +1,5 @@
 // What lies on the ground by the road (game/piles.ts): a heap of whatever it
-// is (logs, stone blocks, sheaves, sacks of flour, baskets of bread), an item
+// is (logs, stone blocks, boards, sheaves, sacks of flour, baskets of bread), an item
 // for every item of it (layout.ts PILE_UNIT), stacked in a low pyramid.
 
 import { pileItems } from '../game/layout';
@@ -37,6 +37,12 @@ export function drawGroundPile(ctx: Ctx, pile: Pile, x: number, base: number): v
     } else if (pile.resource === 'stone') {
       const s = slot(i, 8, 5);
       ellipse(ctx, x + s.dx, base - 2.5 - s.lift, 4.6, 3.2, seed < 0.5 ? '#a89c88' : '#948877');
+    } else if (pile.resource === 'planks') {
+      const s = slot(i, 4, 2.6);
+      const bx = x + s.dx - 12;
+      const by = base - 3 - s.lift;
+      rect(ctx, bx, by, 24, 2.6, seed < 0.5 ? '#d2ab74' : '#c49c64');
+      rect(ctx, bx, by + 1.8, 24, 0.8, '#a07a4c');
     } else if (pile.resource === 'grain') {
       const s = slot(i, 8, 7);
       ctx.save();

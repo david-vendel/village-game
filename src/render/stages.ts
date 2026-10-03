@@ -6,16 +6,16 @@
 //
 // Its own page, apart from the game: it changes no game file (CLAUDE.md, graphics work).
 
-import { BUILDING_TYPES, BUILDINGS, type BuildingType } from './game/buildings';
-import { STAGE_BOUNDS } from './game/world';
-import { loadArt } from './render/assets';
-import { BUILDING_ART } from './render/buildings';
-import { modelTypes } from './render/build3d/index';
-import { plotOf } from './render/build3d/plot';
-import { drawConstruction } from './render/construction';
-import { setCameraDistance, setCameraHeight, viewHorizon } from './render/ground';
-import { drawBuilding } from './render/sprites';
-import { type Building3d, draw3d, set3d, type View3d } from './render/world3d';
+import { BUILDING_TYPES, BUILDINGS, type BuildingType } from '../game/buildings';
+import { STAGE_BOUNDS } from '../game/world';
+import { loadArt } from './assets';
+import { BUILDING_ART } from './buildings';
+import { modelTypes } from './build3d/index';
+import { plotOf } from './build3d/plot';
+import { drawConstruction } from './construction';
+import { setCameraDistance, setCameraHeight, viewHorizon } from './ground';
+import { drawBuilding } from './sprites';
+import { type Building3d, draw3d, set3d, type View3d } from './world3d';
 
 const STAGES = [...STAGE_BOUNDS.map(([s]) => s), 'done', 'large'] as const;
 type Stage = (typeof STAGES)[number];

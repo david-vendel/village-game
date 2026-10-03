@@ -28,7 +28,7 @@
 > ride s0:85
   rider: s0:85 facing +
 > menu
-  build menu: warehouse, house, farm, mill, bakery, blacksmith, market, chapel, tavern, watchtower, well, woodcutter, stonecutter; chosen: warehouse
+  build menu: warehouse, house, farm, mill, bakery, blacksmith, market, chapel, tavern, watchtower, well, woodcutter, sawmill, stonecutter; chosen: warehouse
 > ride s0:83
   rider: s0:83 facing +
 > menu

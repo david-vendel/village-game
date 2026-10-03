@@ -31,6 +31,7 @@ export const GLYPH: Record<BuildingType, string> = {
   watchtower: 'O',
   well: 'U',
   woodcutter: 'X',
+  sawmill: 'P',
   stonecutter: 'Q',
   intersection: 'I',
   road: 'R',

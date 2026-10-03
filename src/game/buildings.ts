@@ -5,7 +5,7 @@
 // its own module (farm.ts).
 // To add a building: add an entry here and an entry in BUILDING_ART.
 
-import { BAKERY_DOOR, BAKERY_OVEN, CHAPEL_DOOR, HOME, HOUSE_DOOR_DX, MILL_DOOR, SMITHY_DOOR, STAND_Y, STONECUTTER_DOOR, TAVERN_DOOR, PILE_UNIT, WOODCUTTER_DOOR, YARD_ITEMS, type Spot } from './layout';
+import { BAKERY_DOOR, BAKERY_OVEN, CHAPEL_DOOR, HOME, HOUSE_DOOR_DX, MILL_DOOR, SAWMILL_DOOR, SAWMILL_SAW, SMITHY_DOOR, STAND_Y, STONECUTTER_DOOR, TAVERN_DOOR, PILE_UNIT, WOODCUTTER_DOOR, YARD_ITEMS, type Spot } from './layout';
 import type { Amounts, Resource } from './resources';
 
 export type BuildingType =
@@ -21,6 +21,7 @@ export type BuildingType =
   | 'watchtower'
   | 'well'
   | 'woodcutter'
+  | 'sawmill'
   | 'stonecutter'
   | 'intersection'
   | 'road';
@@ -32,8 +33,8 @@ export type BuildingType =
  * work takes it for as long as there is carrying to do. Serf comes last:
  * hiring fills the other jobs first.
  */
-export type Role = 'farmer' | 'builder' | 'miller' | 'baker' | 'woodcutter' | 'stonecutter' | 'serf';
-export const ROLES: readonly Role[] = ['farmer', 'builder', 'miller', 'baker', 'woodcutter', 'stonecutter', 'serf'];
+export type Role = 'farmer' | 'builder' | 'miller' | 'baker' | 'woodcutter' | 'sawyer' | 'stonecutter' | 'serf';
+export const ROLES: readonly Role[] = ['farmer', 'builder', 'miller', 'baker', 'woodcutter', 'sawyer', 'stonecutter', 'serf'];
 
 /**
  * What a workshop makes (workshop.ts): its worker takes `batch` of `from` out
@@ -104,7 +105,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     type: 'warehouse',
     door: null, // an open storage yard
     name: 'Storage yard',
-    purpose: "Open yard with the village's wood, stone, grain, flour and bread in piles. Builders fetch from here.",
+    purpose: "Open yard with the village's wood, stone, planks, grain, flour and bread in piles. Builders fetch from here.",
     width: 75,
     buildTime: 14,
     cost: { wood: 6, stone: 4 },
@@ -119,7 +120,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: 'Shelter for villagers. More homes, more hands.',
     width: 75,
     buildTime: 10,
-    cost: { wood: 4, stone: 1 },
+    cost: { wood: 2, planks: 2, stone: 1 },
     storage: {},
     jobs: {},
   },
@@ -132,12 +133,12 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     width: 150,
     depth: 3,
     buildTime: 12,
-    cost: { wood: 5, stone: 2 },
+    cost: { wood: 3, planks: 2, stone: 2 },
     storage: { grain: 5 },
     jobs: { farmer: 1 },
     ships: ['grain'],
     // a second room built on: two farmers live and work here
-    upgrade: { name: 'Large farm', cost: { wood: 4, stone: 2 }, buildTime: 8, jobs: { farmer: 2 } },
+    upgrade: { name: 'Large farm', cost: { wood: 2, planks: 2, stone: 2 }, buildTime: 8, jobs: { farmer: 2 } },
   },
   mill: {
     type: 'mill',
@@ -146,7 +147,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: 'Grinds grain from the farms into flour.',
     width: 150,
     buildTime: 16,
-    cost: { wood: 6, stone: 6 },
+    cost: { wood: 3, planks: 4, stone: 6 },
     // a sack of grain waiting per slot, a sack of flour per slot (layout.ts MILL_SLOTS)
     storage: { grain: 3, flour: 3 },
     jobs: { miller: 1 },
@@ -161,7 +162,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: 'Bakes flour from the mill into bread for the tavern.',
     width: 150,
     buildTime: 12,
-    cost: { wood: 4, stone: 5 },
+    cost: { wood: 2, planks: 2, stone: 5 },
     // a sack of flour waiting per slot, a basket of loaves per slot (layout.ts BAKERY_SLOTS)
     storage: { flour: 3, bread: 4 },
     jobs: { baker: 1 },
@@ -176,7 +177,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: 'Forges tools and arms at the glowing anvil.',
     width: 150,
     buildTime: 14,
-    cost: { wood: 4, stone: 8 },
+    cost: { wood: 2, planks: 2, stone: 8 },
     storage: {},
     jobs: {},
   },
@@ -187,7 +188,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: 'Stalls where merchants trade goods and coin.',
     width: 150,
     buildTime: 9,
-    cost: { wood: 6, stone: 2 },
+    cost: { wood: 2, planks: 4, stone: 2 },
     storage: {},
     jobs: {},
   },
@@ -198,7 +199,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: 'Bells, prayer and a steeple seen for miles.',
     width: 150,
     buildTime: 18,
-    cost: { wood: 4, stone: 15 },
+    cost: { wood: 2, planks: 2, stone: 15 },
     storage: {},
     jobs: {},
   },
@@ -209,7 +210,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: 'Ale, songs, rumours and bread for weary travellers.',
     width: 225,
     buildTime: 13,
-    cost: { wood: 8, stone: 4 },
+    cost: { wood: 4, planks: 4, stone: 4 },
     // baskets of loaves on the bench outside (layout.ts TAVERN_SLOTS); guests eat them (tavern.ts)
     storage: { bread: 2 },
     jobs: {},
@@ -222,7 +223,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: 'Guards keep watch over the road and the woods.',
     width: 75,
     buildTime: 12,
-    cost: { wood: 6, stone: 6 },
+    cost: { wood: 4, planks: 2, stone: 6 },
     storage: {},
     jobs: {},
   },
@@ -251,6 +252,22 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     storage: { wood: 3 },
     jobs: { woodcutter: 1 },
     ships: ['wood'],
+  },
+  sawmill: {
+    type: 'sawmill',
+    door: SAWMILL_DOOR,
+    name: 'Sawmill',
+    purpose: 'Saws logs from the woodcutters into planks, two from each log.',
+    width: 150,
+    buildTime: 11,
+    // built of logs, so the village can build one before it has planks to spare
+    cost: { wood: 5, stone: 2 },
+    // logs waiting left of the door, boards stacked by the saw bench (layout.ts SAWMILL_SLOTS)
+    storage: { wood: 3, planks: 4 },
+    jobs: { sawyer: 1 },
+    ships: ['planks'],
+    needs: ['wood'],
+    makes: { from: 'wood', to: 'planks', batch: 1, per: 2, seconds: 5, verb: 'saw', door: SAWMILL_DOOR, at: SAWMILL_SAW },
   },
   stonecutter: {
     type: 'stonecutter',

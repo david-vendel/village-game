@@ -4,7 +4,7 @@
 
 import { doorOf, type BuildingType } from '../game/buildings';
 import type { FarmState } from '../game/farm';
-import { BAKERY_OVEN_MOUTH_DX, BAKERY_SLOTS, BASKET, MILL_SLOTS, PILE_UNIT, SACK, pileItems, STONECUTTER_SLOTS, TAVERN_SLOTS, warehouseSlot, WOODCUTTER_SLOTS, YARD_ITEMS, type Slot } from '../game/layout';
+import { BAKERY_OVEN_MOUTH_DX, BAKERY_SLOTS, BASKET, MILL_SLOTS, PILE_UNIT, SACK, SAWMILL_BENCH_DX, SAWMILL_SLOTS, pileItems, STONECUTTER_SLOTS, TAVERN_SLOTS, warehouseSlot, WOODCUTTER_SLOTS, YARD_ITEMS, type Slot } from '../game/layout';
 import type { Amounts, Stock } from '../game/resources';
 import type { Worker } from '../game/worker';
 import { breadBasket, doorProgress, drawBackFences, drawBackField, drawFrontField, drawStore, stook } from './farm';
@@ -509,6 +509,14 @@ function drawWarehouse(ctx: Ctx, a: DrawArgs): void {
   ctx.globalAlpha = 1;
   for (let px = a.x - 84 * k; px <= a.x + 84 * k + 0.1; px += (168 * k) / Math.max(2, Math.round(12 * k))) rect(ctx, px - 1.5, a.base - 26, 3, 26, '#6b4f33');
   for (const y of [a.base - 22, a.base - 14, a.base - 7]) line(ctx, a.x - 86 * k, y, a.x + 86 * k, y, '#8a6a44', 2);
+
+  // boards standing on end against the fence, behind the stone heap and the log pile
+  for (let i = 0; i < items('planks'); i++) {
+    const s = slot('planks', i);
+    const bx = a.x + s.dx;
+    rect(ctx, bx - 1.6, a.base - 34, 3.2, 34, shade('#d2ab74', -hash(a.seed, 80 + i) * 0.15));
+    rect(ctx, bx + 1, a.base - 34, 0.8, 34, '#a07a4c');
+  }
 
   // the open-fronted shed for what must stay dry
   const xl = a.x - 32 * Math.max(0.75, k);
@@ -1100,6 +1108,83 @@ function drawWoodcutter(ctx: Ctx, a: DrawArgs): void {
   if (asleep) drawSnore(ctx, x0 + 52, a.base - 58, a.time);
 }
 
+/** A sawn board lying flat, its left end at x, its top at y. */
+function board(ctx: Ctx, x: number, y: number, w: number, seed: number): void {
+  rect(ctx, x, y, w, 3, shade('#d2ab74', -hash(seed, 1) * 0.12));
+  rect(ctx, x, y + 2, w, 1, '#a07a4c');
+  rect(ctx, x + w - 1, y, 1, 3, '#e6c896'); // the fresh-cut end
+}
+
+function drawSawmill(ctx: Ctx, a: DrawArgs): void {
+  // a board-walled saw shed under a shingle roof, logs waiting by its wall, and
+  // out on the right the saw bench: two trestles the sawyer lays each log across
+  // and rips it lengthways into two boards
+  const w = 84;
+  const d = 32;
+  const x0 = a.x - 72;
+  const h = 40;
+  block(ctx, x0, a.base, w, h, d, '#9a7a4e');
+  // upright boards, the shed's walls
+  ctx.globalAlpha = 0.45;
+  for (let x = x0 + 6; x < x0 + w; x += 7) line(ctx, x, a.base - h, x, a.base, '#5e452e', 1);
+  ctx.globalAlpha = 1;
+  // the open bay on the right: a frame saw hanging in the dark, boards leaning inside
+  const bx0 = x0 + 58;
+  rect(ctx, bx0, a.base - 30, 22, 30, '#2a1e14');
+  for (let i = 0; i < 3; i++) rect(ctx, bx0 + 3 + i * 4, a.base - 26 + i, 2.5, 26 - i, '#8a6a44');
+  line(ctx, bx0 + 14, a.base - 27, bx0 + 20, a.base - 27, '#6b4a2c', 1.5);
+  line(ctx, bx0 + 14, a.base - 27, bx0 + 14, a.base - 15, '#6b4a2c', 1.5);
+  line(ctx, bx0 + 20, a.base - 27, bx0 + 20, a.base - 15, '#6b4a2c', 1.5);
+  line(ctx, bx0 + 17, a.base - 27, bx0 + 17, a.base - 15, '#b8b8b8', 1);
+  const { doorOpen, asleep } = atHome(a);
+  hutDoor(ctx, a, 'sawmill', doorOpen, '#5a3d24');
+  window_(ctx, x0 + 10, a.base - 30, 12, 11, hash(a.seed, 5) < 0.7, a.time, a.seed);
+  gableRoof(ctx, x0, a.base - h, w, d, 30, '#7a5a3a', '#9a7a4e', 'tile', a.seed);
+
+  // the saw bench: sawdust beneath it, two trestles, and the log being sawn
+  const sx = a.x + SAWMILL_BENCH_DX;
+  ctx.globalAlpha = 0.8;
+  ellipse(ctx, sx, a.base + 1, 24, 3, '#e2c79a');
+  ctx.globalAlpha = 1;
+  for (const tx of [sx - 12, sx + 12]) {
+    line(ctx, tx - 5, a.base, tx + 3, a.base - 15, '#6b4a2c', 2);
+    line(ctx, tx + 5, a.base, tx - 3, a.base - 15, '#6b4a2c', 2);
+  }
+  const saw = (a.crew ?? []).map((c) => c.worker.task).find((t) => t.kind === 'job' && t.carried && !t.indoors);
+  if (saw?.kind === 'job') {
+    // ripped from the left end on: the kerf runs along the log, the sawn part already two boards
+    const p = clamp01(saw.t / Math.max(saw.duration, 1e-6));
+    const lx = sx - 17;
+    const len = 34;
+    rect(ctx, lx, a.base - 22, len, 7, '#7b5634');
+    circle(ctx, lx + len, a.base - 18.5, 3.5, '#c9a06a');
+    rect(ctx, lx, a.base - 22, len * p, 7, '#d2ab74');
+    line(ctx, lx, a.base - 18.5, lx + len * p, a.base - 18.5, '#5e452e', 1);
+    // sawdust falling from the cut
+    for (let i = 0; i < 4; i++) {
+      const t = (a.time * 1.7 + i / 4) % 1;
+      rect(ctx, lx + len * p - 1 + hash(a.seed, i) * 3, a.base - 15 + t * 14, 1.2, 1.2, '#e8d0a4');
+    }
+  }
+
+  // the store: logs waiting by the wall, sawn boards stacked flat
+  const logs = Math.min(SAWMILL_SLOTS.wood.length, pileItems(a.stock?.wood ?? 0));
+  for (let i = 0; i < logs; i++) {
+    const s = SAWMILL_SLOTS.wood[i];
+    const cx = a.x + s.dx;
+    const cy = a.base - s.lift;
+    rect(ctx, cx - 9, cy - 5, 18, 5, '#7b5634');
+    circle(ctx, cx + 9, cy - 2.5, 2.6, '#c9a06a');
+    circle(ctx, cx + 9, cy - 2.5, 1, '#8a6440');
+  }
+  const boards = Math.min(SAWMILL_SLOTS.planks.length, pileItems(a.stock?.planks ?? 0));
+  for (let i = 0; i < boards; i++) {
+    const s = SAWMILL_SLOTS.planks[i];
+    board(ctx, a.x + s.dx - 12, a.base - s.lift - 3, 24, a.seed + i);
+  }
+  if (asleep) drawSnore(ctx, x0 + 16, a.base - 58, a.time);
+}
+
 function drawStonecutter(ctx: Ctx, a: DrawArgs): void {
   // a squat stone hut with a slate roof, a mason's bench out front
   const w = 64;
@@ -1249,6 +1334,7 @@ export const BUILDING_ART: Record<BuildingType, BuildingArt> = {
   watchtower: { height: 260, draw: drawWatchtower },
   well: { height: 90, draw: drawWell },
   woodcutter: { height: 100, draw: drawWoodcutter },
+  sawmill: { height: 100, draw: drawSawmill },
   stonecutter: { height: 100, draw: drawStonecutter },
   intersection: { height: 56, draw: drawCrossroads },
   // a stretch of road being laid: its picture is for the build menu; in the street the road itself is drawn with the ground, as the street's end moves on (roads.ts)

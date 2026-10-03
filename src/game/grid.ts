@@ -111,9 +111,6 @@ export function footprintOf(b: Building): Footprint | null {
   return (b.road?.step ?? 1) > 0 ? { ...f, i0: f.i0 + cut } : { ...f, i1: f.i1 - cut };
 }
 
-/** Whether world x is on a cell 3n + 1 along its street: where a building can start. */
-export const atBlockStart = (x: number) => (((alongCell(x) - 1) % BLOCK) + BLOCK) % BLOCK === 0;
-
 /** World x of the cell 3n + 1 starting the block of three cells world x is in. */
 export function blockStartX(x: number): number {
   const i0 = BLOCK * Math.floor((alongCell(x) - 1) / BLOCK) + 1;

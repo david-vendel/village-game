@@ -6,7 +6,7 @@
 // at the knee and elbow, and shoes stand flat on the ground. What someone
 // wears comes from their occupation: straw hat for the farmer, leather cap
 // and apron for the builder, flour-white smock for the miller, white cap and apron for the baker, a green
-// hood for the woodcutter, a grey cap and leather apron for the stonecutter, a patched hood for the serf,
+// hood for the woodcutter, a brown cap and a sawdusty apron for the sawyer, a grey cap and leather apron for the stonecutter, a patched hood for the serf,
 // a robe for the monk.
 
 import type { Role } from '../game/buildings';
@@ -105,6 +105,9 @@ export function outfitOf(f: Figure): Outfit {
   } else if (f.role === 'woodcutter') {
     o.top = pick(['#4f6a3a', '#5a6e3e', '#6a5a3a'], f.seed, 18);
     Object.assign(o, { rolled: true, legs: '#4a3e2e', shoes: '#2e2218', belt: '#3a2a1c', hat: 'hood', hatColor: pick(['#3f5a2e', '#4a5a34'], f.seed, 19) });
+  } else if (f.role === 'sawyer') {
+    o.top = pick(['#7a5a3a', '#6e5a40', '#80643e'], f.seed, 18);
+    Object.assign(o, { rolled: true, legs: '#4e4234', shoes: '#2e2218', apron: '#8a6a44', hat: 'cap', hatColor: '#5e4a34', dusty: true });
   } else if (f.role === 'stonecutter') {
     o.top = pick(['#8a8680', '#7a766e', '#948c80'], f.seed, 18);
     Object.assign(o, { rolled: true, legs: '#5a554c', shoes: '#3a342c', apron: '#6a4a2e', hat: 'cap', hatColor: '#6e6a62' });

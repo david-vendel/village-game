@@ -89,13 +89,14 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
 
 ### `src/game`: logic
 - `buildings.ts`: building registry: name, purpose, footprint width, build time, **cost** (wood,
-  stone), **storage** (what its own store holds, and how much) and **jobs** (roles and how many).
+  planks, stone: rough work, the woodcutter's and stonecutter's huts, the sawmill, yards, roads and
+  crossroads, takes logs only; finished buildings take planks too), **storage** (what its own store holds, and how much) and **jobs** (roles and how many).
   Behaviour of one kind of building lives in its own module (a farm's fields in `farm.ts`).
 - `world.ts`: world state and `update()`: plots, buildings (each with its own `stock` store),
   people and animals, the village `stock`pile, rider physics, build menu, construction progress
   and stages, the construction toggle, events. `workplaceOf` says what work a building gives its
   workers. Tested by `world.test.ts`.
-- `resources.ts`: resources (wood, stone, grain, flour, bread), `Stock` (an amount of each) and `Amounts` (some
+- `resources.ts`: resources (wood (logs), stone, planks, grain, flour, bread), `Stock` (an amount of each) and `Amounts` (some
   of them, e.g. a cost), with affordability and payment helpers.
 - `economy.ts`: the village's materials are what its warehouses hold (the `warehouse` building is
   shown as an open storage yard: all it holds lies in its piles, `YARD_ITEMS` in `layout.ts`, which
@@ -113,8 +114,8 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   transport hub (the oldest warehouse) while there are errands (up to `SERFS_MAX`, daylight only)
   and let go where they stand when there are none.
 - `workshop.ts`: any building with a `makes` recipe (`buildings.ts`: from, to, batch, per, seconds,
-  verb, door) as a workplace: the mill (grain → flour) and the bakery (flour → twice as much
-  bread). The worker takes a sack off the store and carries it to where it is worked: the recipe's
+  verb, door) as a workplace: the mill (grain → flour), the bakery (flour → twice as much
+  bread) and the sawmill (a log → two planks, sawn at the saw bench outside). The worker takes a sack off the store and carries it to where it is worked: the recipe's
   `at` spot outdoors (the baker at the oven, with a peel) or else in through the door (the miller,
   seen at the upstairs window), then puts what was made in its place in the store. With
   nothing to make and none of the input, they fetch it themselves from the nearest source,
@@ -234,7 +235,7 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
 - `save.ts`: save games, tested by `save.test.ts`. `saveWorld` snapshots the simulation state
   (time, buildings with their stores and farms, people with their jobs and working day, animals,
   the stockpile, rider, RNG, id counter) as versioned JSON-safe data; `loadWorld` validates
-  untrusted data field by field, runs `MIGRATIONS` from older versions, and rebuilds the world
+  untrusted data field by field (a save from another version is refused, not migrated), and rebuilds the world
   under the current rules (plots and field layout are derived, not stored; a job at a building
   that doesn't offer it is dropped). It refuses corrupt or newer saves with a reason instead of
   throwing. Not saved: the open menu, pending events, and tuning knobs (the URL owns those).
@@ -326,7 +327,7 @@ renderer draws, so a layout that is right in text is right on screen.
   production builds keep only approved assets), decodes images lazily at the tier the current
   transform needs, draws an image's layers at its anchor, and queues emissive layers, which the
   scene adds after the night tint. `manifest.ts`: the manifest's types and pure lookups, shared
-  with the asset tools. `preview.ts`: the `?art=preview` contact sheet (each sprite beside the
+  with the asset tools. `stages.ts`: the `stages.html` dev page (every building stage by stage, as 2D art and as its 3D model). `preview.ts`: the `?art=preview` contact sheet (each sprite beside the
   procedural art it replaces; `&night=1`, `&zoom=0.45`).
 - `construction.ts`: generic staged construction for any building: stakes → foundation →
   timber frame → walls → roof. The finished art is revealed bottom-up behind scaffolding, or,

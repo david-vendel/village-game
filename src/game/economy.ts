@@ -1,12 +1,12 @@
 // The village economy. The village's materials are whatever its warehouses
-// hold: builders fetch wood and stone from them for construction sites
+// hold: builders fetch wood, stone and planks from them for construction sites
 // (site.ts), or straight from a woodcutter's or stonecutter's hut when that is
 // nearer (materialSource), and serfs carry goods between the warehouses and the buildings
 // that make or use them (transport.ts). Every store keeps each item in its
 // own place (storeSlot), where it is picked up from and put down.
 
 import { BUILDINGS, type BuildingType, storageOf } from './buildings';
-import { BAKERY_SLOTS, BASKET, MILL_SLOTS, SACK, STONECUTTER_SLOTS, TAVERN_SLOTS, SHEAF_SLOTS, STAND_Y, PILE_UNIT, warehouseSlot, WOODCUTTER_SLOTS, type Slot, type Spot } from './layout';
+import { BAKERY_SLOTS, BASKET, MILL_SLOTS, SACK, SAWMILL_SLOTS, STONECUTTER_SLOTS, TAVERN_SLOTS, SHEAF_SLOTS, STAND_Y, PILE_UNIT, warehouseSlot, WOODCUTTER_SLOTS, type Slot, type Spot } from './layout';
 import { room, RESOURCES, shortfall, stockOf, type Amounts, type Load, type Resource, type Stock } from './resources';
 import { takeFromPile, type Pile } from './piles';
 import { owed } from './site';
@@ -15,7 +15,7 @@ import { delivering } from './worker';
 import type { Building, World } from './world';
 
 /** What the starting village's warehouse holds. */
-export const WAREHOUSE_START: Stock = stockOf({ wood: 25, stone: 20 });
+export const WAREHOUSE_START: Stock = stockOf({ wood: 25, stone: 20, planks: 10 });
 
 const xOf = (_world: World, b: Building) => b.x;
 /** How far building b is from world x, along the streets. */
@@ -152,6 +152,7 @@ export function storeSlots(b: Building, r: Resource): { unit: number; perTrip: n
   if (b.type === 'bakery' && r === 'flour') return { unit: SACK, perTrip: 1, slot: pick(BAKERY_SLOTS.flour) };
   if (b.type === 'bakery' && r === 'bread') return { unit: BASKET, perTrip: 1, slot: pick(BAKERY_SLOTS.bread) };
   if (b.type === 'tavern' && r === 'bread') return { unit: BASKET, perTrip: 1, slot: pick(TAVERN_SLOTS) };
+  if (b.type === 'sawmill' && (r === 'wood' || r === 'planks')) return { unit: 1, perTrip: 1, slot: pick(SAWMILL_SLOTS[r]) };
   if (b.type === 'woodcutter' && r === 'wood') return { unit: 1, perTrip: 1, slot: pick(WOODCUTTER_SLOTS) };
   if (b.type === 'stonecutter' && r === 'stone') return { unit: 1, perTrip: 1, slot: pick(STONECUTTER_SLOTS) };
   return null;

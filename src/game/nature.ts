@@ -21,7 +21,7 @@
 
 import { storageOf } from './buildings';
 import { putAway, storeSpot } from './economy';
-import { behindRoad, CELL_W, CHOP_SPOT, QUARRIES, QUARRY_SPOTS, QUARRY_W, QUARRY_Y, STAND_Y, STONECUTTER_DOOR, PILE_UNIT, WOODCUTTER_DOOR, yAt } from './layout';
+import { behindRoad, CELL_W, CHOP_SPOT, QUARRIES, QUARRY_SPOTS, QUARRY_Y, STAND_Y, STONECUTTER_DOOR, PILE_UNIT, WOODCUTTER_DOOR, yAt } from './layout';
 import { room, type Load } from './resources';
 import { cellKey, landUse, type LandUse } from './grid';
 import { groundPoint, streetDist, streetOf, streetPoint, streetRange, type Vec } from './streets';
@@ -53,11 +53,6 @@ export const WOOD_REACH = 900;
 /** Seconds to fell a tree, and to cut a block of stone. */
 export const CHOP_TIME = 10;
 export const CUT_TIME = 12;
-
-/** Whether world x is inside a quarry's stretch of the main street's tree line (old saves' woods). */
-function inQuarry(x: number): boolean {
-  return QUARRIES.some((q) => Math.abs(x - q.x) < QUARRY_W / 2 + 20);
-}
 
 /** Grown fraction 0..1 (a stump counts as grown: it is what is left of one). */
 export function treeGrowth(t: Tree): number {
@@ -141,19 +136,6 @@ export function plantWoods(world: World, street: number, rand: () => number): vo
       sprout(world, cx + Math.cos(a) * r, cd + Math.sin(a) * r, true, rand);
     }
   }
-}
-
-/** The woods at the start of old saves: an uneven line of trees along the main street's tree line (save.ts migrations). */
-export function createForest(width: number, rand: () => number, nextId: () => number, x0 = 0): Array<Omit<Tree, 'y'>> {
-  const trees: Array<Omit<Tree, 'y'>> = [];
-  for (let x = x0 + 60; x < x0 + width - 60; x += 70) {
-    if (rand() < 0.3) continue;
-    const tx = x + rand() * 40;
-    if (inQuarry(tx) || trees.some((t) => Math.abs(t.x - tx) < TREE_GAP)) continue;
-    const young = rand() < 0.2;
-    trees.push({ id: nextId(), x: tx, state: young ? 'growing' : 'grown', age: young ? rand() * TREE_GROW : 0 });
-  }
-  return trees;
 }
 
 /**

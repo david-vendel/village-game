@@ -218,9 +218,9 @@ export function doorProgress(f: Worker): number {
 }
 
 /**
- * A villager at work — the farmer, a builder, the miller, the baker or a serf, dressed
- * for their trade — walking, sowing, scything, hammering, loading up, or
- * carrying a load.
+ * A villager at work — the farmer, a builder, the miller, the baker, the sawyer or a
+ * serf, dressed for their trade — walking, sowing, scything, hammering, sawing,
+ * loading up, or carrying a load.
  */
 export function drawWorker(ctx: Ctx, f: Worker, fig: Figure, x: number, y: number, time: number): void {
   const inDoor = doorProgress(f);
@@ -341,6 +341,18 @@ export function drawWorker(ctx: Ctx, f: Worker, fig: Figure, x: number, y: numbe
     drawArm(ctx, o, sx, sy, ...grip(9));
     ctx.restore();
     drawProgressPips(ctx, job.t / job.duration);
+  } else if (job && atOven && action === 'saw') {
+    // ripping a log on the saw bench: the far hand holds it steady, the saw
+    // goes back and forth along the cut
+    const stroke = Math.sin(time * 9);
+    const hand: [number, number] = [5 + stroke * 3.5, -6];
+    body([13, -2.5]);
+    line(ctx, hand[0], hand[1], hand[0] + 15, hand[1] + 4, '#b8b8b8', 2.2);
+    for (let k = 1; k < 7; k++) line(ctx, hand[0] + k * 2.2, hand[1] + 1.4 + k * 0.58, hand[0] + k * 2.2 + 0.6, hand[1] + 2.4 + k * 0.58, '#8a8a8a', 0.6);
+    rect(ctx, hand[0] - 2.5, hand[1] - 1.5, 3.5, 3, '#6b4a2c'); // the handle
+    drawArm(ctx, o, sx, sy, ...hand);
+    ctx.restore();
+    drawProgressPips(ctx, job.t / job.duration);
   } else if (job && atOven) {
     // working the oven with a long peel: sliding the loaves in, turning them,
     // and drawing them out baked
@@ -362,7 +374,7 @@ export function drawWorker(ctx: Ctx, f: Worker, fig: Figure, x: number, y: numbe
     ctx.restore();
   } else {
     const load = f.carrying?.resource;
-    const onShoulder = load === 'flour' || load === 'grain' || load === 'wood';
+    const onShoulder = load === 'flour' || load === 'grain' || load === 'wood' || load === 'planks';
     if (load === 'bread') {
       // a basket of loaves held in both arms
       body([6, -7.5]);
@@ -407,6 +419,16 @@ export function drawWorker(ctx: Ctx, f: Worker, fig: Figure, x: number, y: numbe
       for (const dy of [-15, -11]) {
         rect(ctx, -12, dy, 24, 4, '#8b6440');
         circle(ctx, 12, dy + 2, 2, '#c9a577');
+      }
+      ctx.restore();
+      drawArm(ctx, o, sx, sy, 3.5, -12);
+    } else if (load === 'planks') {
+      // boards over the shoulder, longer than the logs and thin
+      ctx.save();
+      ctx.rotate(-0.2);
+      for (const dy of [-15, -12.5]) {
+        rect(ctx, -16, dy, 32, 2.5, '#d2ab74');
+        rect(ctx, -16, dy + 1.7, 32, 0.8, '#a07a4c');
       }
       ctx.restore();
       drawArm(ctx, o, sx, sy, 3.5, -12);

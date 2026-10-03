@@ -80,8 +80,8 @@ export function createSite(type: Building['type'], ready: Amounts = {}): Site {
 }
 
 const FRONT: Spot = { dx: 0, y: STAND_Y };
-type Material = 'wood' | 'stone';
-const MATERIALS: readonly Material[] = ['wood', 'stone'];
+type Material = 'wood' | 'stone' | 'planks';
+const MATERIALS: readonly Material[] = ['wood', 'stone', 'planks'];
 const fetchAction = (r: Resource) => `fetch-${r}`;
 /** Fetching off a pile on the ground (target: the pile's id). */
 const gatherAction = (r: Resource) => `gather-${r}`;
