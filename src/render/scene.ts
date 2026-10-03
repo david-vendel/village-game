@@ -5,6 +5,7 @@
 
 import { chapelBell } from '../game/daynight';
 import { employees } from '../game/people';
+import { drawingAt } from '../game/transport';
 import { GROUND_PILE_Y } from '../game/piles';
 import type { Worker } from '../game/worker';
 import { laidOut, onSite, upgrading } from '../game/site';
@@ -103,6 +104,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     laid: laidOut(b),
     vpX: viewW / 2,
     bell: b.type === 'chapel' ? bell : undefined,
+    drawing: b.type === 'well' ? drawingAt(world, b) : null,
     doorOpen: !!b.arriving,
   });
   // people at work, with their workplace's position

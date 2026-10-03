@@ -4,10 +4,10 @@
 
 import { doorOf, type BuildingType } from '../game/buildings';
 import type { FarmState } from '../game/farm';
-import { BAKERY_OVEN_MOUTH_DX, BAKERY_SLOTS, BASKET, MILL_SLOTS, PILE_UNIT, SACK, SAWMILL_BENCH_DX, SAWMILL_SLOTS, pileItems, STONECUTTER_SLOTS, TAVERN_SLOTS, warehouseSlot, WOODCUTTER_SLOTS, YARD_ITEMS, type Slot } from '../game/layout';
+import { BAKERY_OVEN_MOUTH_DX, BAKERY_SLOTS, BAKERY_WATER_SLOTS, BASKET, WELL_SLOTS, MILL_SLOTS, PILE_UNIT, SACK, SAWMILL_BENCH_DX, SAWMILL_SLOTS, pileItems, STONECUTTER_SLOTS, TAVERN_SLOTS, warehouseSlot, WOODCUTTER_SLOTS, YARD_ITEMS, type Slot } from '../game/layout';
 import type { Amounts, Stock } from '../game/resources';
 import type { Worker } from '../game/worker';
-import { breadBasket, doorProgress, drawBackFences, drawBackField, drawFrontField, drawStore, stook } from './farm';
+import { breadBasket, waterBucket, doorProgress, drawBackFences, drawBackField, drawFrontField, drawStore, stook } from './farm';
 import { drawArm, drawHead, drawLegs, drawTorso, type Figure, HEAD, outfitOf, SHOULDER } from './figure';
 import { circle, clamp01, type Ctx, ellipse, hash, line, mix, poly, rect, shade, smoke } from './util';
 
@@ -37,6 +37,8 @@ export interface DrawArgs {
   laid?: Array<{ dx: number; amounts: Amounts }>;
   /** Its door stands open (a new house's people coming out of it). */
   doorOpen?: boolean;
+  /** A well: how far through drawing a bucket someone at it is (0..1), or null if nobody is drawing. */
+  drawing?: number | null;
   /** The chapel bell's swing angle (daynight.ts chapelBell); at rest without it. */
   bell?: number;
   /** Ground-perspective vanishing point x (see ground.ts); defaults to `x`. */
@@ -659,6 +661,9 @@ function drawBakery(ctx: Ctx, a: DrawArgs): void {
     ellipse(ctx, a.x + s.dx + 2, a.base - 5 - s.lift, 4, 5, '#cbbfa4');
   }
   breadStore(ctx, a, BAKERY_SLOTS.bread);
+  // buckets of water for the dough
+  const water = Math.min(BAKERY_WATER_SLOTS.length, pileItems(a.stock?.water ?? 0));
+  for (let i = 0; i < water; i++) waterBucket(ctx, a.x + BAKERY_WATER_SLOTS[i].dx, a.base - BAKERY_WATER_SLOTS[i].lift, 1);
 }
 
 function drawMill(ctx: Ctx, a: DrawArgs): void {
@@ -1044,15 +1049,22 @@ function drawWell(ctx: Ctx, a: DrawArgs): void {
   rect(ctx, cx - r + 2, top - 52, 5, 52, '#5a4030');
   rect(ctx, cx + r - 7, top - 52, 5, 52, '#4a3526');
   rect(ctx, cx - r + 2, top - 38, r * 2 - 4, 4, '#6b4c30');
-  const crank = a.time * 1.2;
+  // the windlass turns only while someone draws: the bucket goes down into the
+  // shaft and comes back up full
+  const p = a.drawing ?? null;
+  const crank = p === null ? 0.6 : p * Math.PI * 4;
   line(ctx, cx + r - 2, top - 36, cx + r + 4 + Math.cos(crank) * 5, top - 36 + Math.sin(crank) * 5, '#3c2c1e', 2);
-  const rope = 14 + Math.sin(a.time * 0.6) * 6;
-  line(ctx, cx, top - 34, cx, top - 34 + rope, '#bfa77a', 1);
-  rect(ctx, cx - 4, top - 34 + rope, 8, 7, '#7b5634');
+  const rope = 8 + (p === null ? 0 : Math.sin(p * Math.PI) * 44);
+  line(ctx, cx, top - 34, cx, top - 34 + Math.min(rope, 34), '#bfa77a', 1);
+  if (rope < 30) {
+    rect(ctx, cx - 4, top - 34 + rope, 8, 7, '#7b5634');
+    if (p !== null && p > 0.5) rect(ctx, cx - 3, top - 34 + rope, 6, 1.5, '#5d86a8');
+  }
   poly(ctx, [cx - r - 8, top - 50, cx + r + 8, top - 50, cx + 10, top - 72, cx - 10, top - 72], '#9a5a3a');
   poly(ctx, [cx + r + 8, top - 50, cx + r + 16, top - 56, cx + 16, top - 76, cx + 10, top - 72], '#6e3f28');
-  // bucket on the ground
-  poly(ctx, [cx + r + 6, a.base, cx + r + 18, a.base, cx + r + 20, a.base - 11, cx + r + 4, a.base - 11], '#7b5634');
+  // buckets drawn and waiting, two on each side
+  const buckets = Math.min(WELL_SLOTS.length, pileItems(a.stock?.water ?? 0));
+  for (let i = 0; i < buckets; i++) waterBucket(ctx, cx + WELL_SLOTS[i].dx, a.base + 2 - WELL_SLOTS[i].lift, 1);
 }
 
 /** Whether someone is stepping through the door now (it stands open), and whether anyone is asleep inside. */

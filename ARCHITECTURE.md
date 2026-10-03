@@ -92,14 +92,14 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
 - `buildings.ts`: building registry: name, purpose, footprint width, build time, **cost** (from
   `balance.ts`), **storage** (what its own store holds, and how much) and **jobs** (roles and how many).
   Behaviour of one kind of building lives in its own module (a farm's fields in `farm.ts`).
-- `balance.ts`: game balance in one place: every building's cost (`COSTS`) and upgrade cost, and
-  what a new village starts with. A new building type costs `NEW_BUILDING_COST` (2 wood, 2 stone)
+- `balance.ts`: game balance in one place: every building's cost (`COSTS`) and upgrade cost,
+  what a new village starts with, and how long drawing a bucket of water takes. A new building type costs `NEW_BUILDING_COST` (2 wood, 2 stone)
   until it is balanced.
 - `world.ts`: world state and `update()`: plots, buildings (each with its own `stock` store),
   people and animals, the village `stock`pile, rider physics, build menu, construction progress
   and stages, the construction toggle, events. `workplaceOf` says what work a building gives its
   workers. Tested by `world.test.ts`.
-- `resources.ts`: resources (wood (logs), stone, planks, grain, flour, bread), `Stock` (an amount of each) and `Amounts` (some
+- `resources.ts`: resources (wood (logs), stone, planks, grain, flour, bread, water), `Stock` (an amount of each) and `Amounts` (some
   of them, e.g. a cost), with affordability and payment helpers.
 - `economy.ts`: the village's materials are what its warehouses hold (the `warehouse` building is
   shown as an open storage yard: all it holds lies in its piles, `YARD_ITEMS` in `layout.ts`, which
@@ -113,12 +113,17 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   otherwise to the nearest warehouse with room; what it `needs` comes from the nearest place that has it, a
   building that makes it (a farm's store, the mill's flour) or a warehouse, and at equal distance
   straight from the maker. Everyone on an errand is counted, so no two people go for the same
-  load. `errandWork` is how anyone runs one. Serfs are the people looking for work, hired by the
+  load. `errandWork` is how anyone runs one. Water is drawn by hand at a well (`BuildingDef.drawn`,
+  `WELL_DRAW_SECONDS` in `balance.ts`): whoever comes for it (a serf, or the baker fetching their
+  own) and finds no bucket waiting draws one (`draw-water`); a serf with no errand fills a well
+  within `WELL_REACH`, two buckets each side (`WELL_SLOTS`). The well's windlass turns only while
+  someone draws (`drawingAt`). Serfs are the people looking for work, hired by the
   transport hub (the oldest warehouse) while there are errands (up to `SERFS_MAX`, daylight only)
   and let go where they stand when there are none.
 - `workshop.ts`: any building with a `makes` recipe (`buildings.ts`: from, to, batch, per, seconds,
-  verb, door) as a workplace: the mill (grain → flour), the bakery (flour → twice as much
-  bread) and the sawmill (a log → two planks, sawn at the saw bench outside). The worker takes a sack off the store and carries it to where it is worked: the recipe's
+  verb, door, and `also`, a second input) as a workplace: the mill (grain → flour), the bakery
+  (flour and a bucket of water → twice as much bread) and the sawmill (a log → two planks, sawn
+  at the saw bench outside). The worker takes a sack off the store and carries it to where it is worked: the recipe's
   `at` spot outdoors (the baker at the oven, with a peel) or else in through the door (the miller,
   seen at the upstairs window), then puts what was made in its place in the store. With
   nothing to make and none of the input, they fetch it themselves from the nearest source,

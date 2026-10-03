@@ -73,17 +73,17 @@
   #1  house×2  s0:37-42  done
   #3  tavern  s0:43-51  done
   #4  well  s0:52-54  done
-  #5  warehouse×2  s0:64-69  done  [wood=20 stone=20 planks=14]  staff: serf, serf, serf, serf, serf
+  #5  warehouse×2  s0:64-69  done  [wood=19 stone=20 planks=14]  staff: serf, serf, serf, serf, serf
   #7  house  s0:76-78  done
   #8  farm  s0:94-99  done  fields=24 (grass 0, fallow 0, growing 19, ripe 5)  staff: farmer
   #9  chapel  s0:124-129  done
   #10  house  s0:175-177  done
   #77  house  s0:139-141  done
-  #78  bakery  s0:142-147  done  staff: baker
+  #78  bakery  s0:142-147  done  [water=2]  staff: baker
   #79  tavern  s0:148-156  done
   #80  house  s0:157-159  done
   #81  well  s0:160-162  done
-  #82  sawmill  s0:112-117  done  [wood=1 planks=2]  staff: sawyer
+  #82  sawmill  s0:112-117  done  [wood=2 planks=2]  staff: sawyer
   #83  woodcutter  s0:193-198  done  [wood=2]  staff: woodcutter
   #84  stonecutter  s0:199-204  done  staff: stonecutter
   #85  blacksmith  s0:205-210  done

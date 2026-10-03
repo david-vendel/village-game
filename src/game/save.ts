@@ -30,7 +30,7 @@ import { cellKey, cellName, cellsOf, footprintOf } from './grid';
 import { lowestPlot, streetOf, type Street } from './streets';
 import { createWorld, goneStreet, layStreet, MERGES, PLOT_LAST, setStreetEnds, type Building, type Rider, type World } from './world';
 
-export const SAVE_VERSION = 26;
+export const SAVE_VERSION = 27;
 
 
 /** The persisted part of the world. */
@@ -309,7 +309,7 @@ function site(v: unknown, path: string, type: BuildingType): Site {
     const extra = laid.pop()!;
     for (const r of RESOURCES) laid[laid.length - 1][r] += extra[r];
   }
-  while (laid.length < spots) laid.push(stock({ wood: 0, stone: 0, planks: 0, grain: 0, flour: 0, bread: 0 }, path));
+  while (laid.length < spots) laid.push(stock({ wood: 0, stone: 0, planks: 0, grain: 0, flour: 0, bread: 0, water: 0 }, path));
   return { delivered: stock(s.delivered, `${path}.delivered`), pile: stock(s.pile, `${path}.pile`), laid };
 }
 

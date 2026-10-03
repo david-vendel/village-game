@@ -36,5 +36,8 @@ export const UPGRADE_COSTS: Partial<Record<BuildingType, Amounts>> = {
   farm: { wood: 2, planks: 2, stone: 2 },
 };
 
+/** Seconds of work to draw a bucket of water at a well (transport.ts). */
+export const WELL_DRAW_SECONDS = 2;
+
 /** What the starting village's storage yard holds. */
 export const START_STOCK: Amounts = { wood: 25, stone: 20, planks: 10 };

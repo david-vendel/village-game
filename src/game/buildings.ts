@@ -6,7 +6,7 @@
 // To add a building: add an entry here, its cost in balance.ts (NEW_BUILDING_COST)
 // and an entry in BUILDING_ART.
 
-import { BAKERY_DOOR, BAKERY_OVEN, CHAPEL_DOOR, HOME, HOUSE_DOOR_DX, MILL_DOOR, SAWMILL_DOOR, SAWMILL_SAW, SMITHY_DOOR, STAND_Y, STONECUTTER_DOOR, TAVERN_DOOR, PILE_UNIT, WOODCUTTER_DOOR, YARD_ITEMS, type Spot } from './layout';
+import { BAKERY_DOOR, BAKERY_OVEN, CHAPEL_DOOR, HOME, HOUSE_DOOR_DX, MILL_DOOR, SAWMILL_DOOR, SAWMILL_SAW, SMITHY_DOOR, STAND_Y, STONECUTTER_DOOR, TAVERN_DOOR, PILE_UNIT, WELL_DRAW, WOODCUTTER_DOOR, YARD_ITEMS, type Spot } from './layout';
 import { COSTS, UPGRADE_COSTS } from './balance';
 import type { Amounts, Resource } from './resources';
 
@@ -55,6 +55,8 @@ export interface Recipe {
   door: Spot;
   /** Where the work is done outdoors; without it, inside. */
   at?: Spot;
+  /** A second thing each batch uses up, `amount` of it per one of `from` (the bakery's water). */
+  also?: { resource: Resource; amount: number };
 }
 
 /**
@@ -99,6 +101,12 @@ export interface BuildingDef {
   needs?: Resource[];
   /** A workshop: what its worker makes of what it needs (workshop.ts). */
   makes?: Recipe;
+  /**
+   * Drawn here by hand, without end (the well's water): whoever comes for it
+   * and finds none waiting draws it at `at`, for WELL_DRAW_SECONDS (balance.ts),
+   * and serfs with nothing to do nearby fill the store (transport.ts).
+   */
+  drawn?: { resource: Resource; at: Spot };
   upgrade?: Upgrade;
 }
 
@@ -161,16 +169,17 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     type: 'bakery',
     door: BAKERY_DOOR,
     name: 'Bakery',
-    purpose: 'Bakes flour from the mill into bread for the tavern.',
+    purpose: 'Bakes flour from the mill and water from the well into bread for the tavern.',
     width: 150,
     buildTime: 12,
     cost: COSTS.bakery,
     // a sack of flour waiting per slot, a basket of loaves per slot (layout.ts BAKERY_SLOTS)
-    storage: { flour: 3, bread: 4 },
+    // and buckets of water left of the flour (layout.ts BAKERY_WATER_SLOTS)
+    storage: { flour: 3, bread: 4, water: 2 },
     jobs: { baker: 1 },
     ships: ['bread'],
-    needs: ['flour'],
-    makes: { from: 'flour', to: 'bread', batch: 1, per: 2, seconds: 6, verb: 'bake', door: BAKERY_DOOR, at: BAKERY_OVEN },
+    needs: ['flour', 'water'],
+    makes: { from: 'flour', to: 'bread', batch: 1, per: 2, seconds: 6, verb: 'bake', door: BAKERY_DOOR, at: BAKERY_OVEN, also: { resource: 'water', amount: 1 } },
   },
   blacksmith: {
     type: 'blacksmith',
@@ -233,12 +242,15 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     type: 'well',
     door: null, // no door
     name: 'Well',
-    purpose: 'Fresh water for the whole street.',
+    purpose: 'Fresh water for the street, drawn by hand: the bakery needs it for bread.',
     width: 75,
     buildTime: 6,
     cost: COSTS.well,
-    storage: {},
+    // buckets drawn and waiting, two each side (layout.ts WELL_SLOTS)
+    storage: { water: 4 },
     jobs: {},
+    ships: ['water'],
+    drawn: { resource: 'water', at: WELL_DRAW },
   },
   woodcutter: {
     type: 'woodcutter',

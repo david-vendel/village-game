@@ -43,7 +43,7 @@ const ROOF: Record<BuildingType, string> = {
   road: '#a8875b',
 };
 
-const RESOURCE_COLOUR: Record<Load['resource'], string> = { wood: '#7b5634', stone: '#a89c88', planks: '#c9a06a', grain: '#d8b850', flour: '#f1ece0', bread: '#c58a46' };
+const RESOURCE_COLOUR: Record<Load['resource'], string> = { wood: '#7b5634', stone: '#a89c88', planks: '#c9a06a', grain: '#d8b850', flour: '#f1ece0', bread: '#c58a46', water: '#5d86a8' };
 
 export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zoom: number, showGrid: boolean, hover: { x: number; y: number } | null = null): void {
   const time = world.time;

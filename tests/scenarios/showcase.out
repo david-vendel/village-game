@@ -78,7 +78,7 @@
   #9  chapel  s0:124-129  done
   #10  house  s0:175-177  done
   #77  house  s0:139-141  done
-  #78  bakery  s0:142-147  done  staff: baker
+  #78  bakery  s0:142-147  done  [water=1]  staff: baker
   #79  tavern  s0:148-156  done
   #80  house  s0:157-159  done
   #81  well  s0:160-162  done

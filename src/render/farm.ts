@@ -341,6 +341,14 @@ export function drawWorker(ctx: Ctx, f: Worker, fig: Figure, x: number, y: numbe
     drawArm(ctx, o, sx, sy, ...grip(9));
     ctx.restore();
     drawProgressPips(ctx, job.t / job.duration);
+  } else if (job && action?.startsWith('draw-')) {
+    // winding the windlass: both hands on the crank, going round
+    const a = time * 4;
+    const hand: [number, number] = [8 + Math.cos(a) * 3, -9 + Math.sin(a) * 3];
+    body([hand[0] - 1, hand[1] + 1]);
+    drawArm(ctx, o, sx, sy, ...hand);
+    ctx.restore();
+    drawProgressPips(ctx, job.t / job.duration);
   } else if (job && atOven && action === 'saw') {
     // ripping a log on the saw bench: the far hand holds it steady, the saw
     // goes back and forth along the cut
@@ -374,7 +382,7 @@ export function drawWorker(ctx: Ctx, f: Worker, fig: Figure, x: number, y: numbe
     ctx.restore();
   } else {
     const load = f.carrying?.resource;
-    const onShoulder = load === 'flour' || load === 'grain' || load === 'wood' || load === 'planks';
+    const onShoulder = load === 'flour' || load === 'grain' || load === 'wood' || load === 'planks' || load === 'water';
     if (load === 'bread') {
       // a basket of loaves held in both arms
       body([6, -7.5]);
@@ -383,6 +391,15 @@ export function drawWorker(ctx: Ctx, f: Worker, fig: Figure, x: number, y: numbe
       breadBasket(ctx, 0, 0, 0.9, Math.ceil(((f.carrying?.amount ?? 0) / BASKET) * 5));
       ctx.restore();
       drawArm(ctx, o, sx, sy, 7, -7);
+    } else if (load === 'water') {
+      // a bucket of water carried in one hand, the arm straight down with its weight
+      body(swingHand(sx - 1.2, sy, swing * 0.5 + 0.05));
+      drawArm(ctx, o, sx, sy, 4, 1);
+      ctx.save();
+      ctx.translate(4, 1);
+      ctx.rotate(-swing * 0.15);
+      waterBucket(ctx, 0, 9, 0.9);
+      ctx.restore();
     } else if (load === 'stone') {
       // a block of stone held in both arms
       body([6, -7.5]);
@@ -452,6 +469,20 @@ function drawProgressPips(ctx: Ctx, t: number): void {
 }
 
 /** A wicker basket of loaves standing on the ground at x (fewer loaves when part-full, of 5). */
+/** A wooden bucket of water standing on the ground at (x, base), scale s. */
+export function waterBucket(ctx: Ctx, x: number, base: number, s = 1): void {
+  const w = 4 * s;
+  const h = 8 * s;
+  poly(ctx, [x - w, base - h, x + w, base - h, x + w * 0.8, base, x - w * 0.8, base], '#7b5634');
+  rect(ctx, x - w * 0.95, base - h * 0.7, w * 1.9, 1.2 * s, '#4a3a2a'); // the iron hoop
+  ellipse(ctx, x, base - h, w, 1.4 * s, '#5d86a8'); // the water
+  ctx.strokeStyle = '#4a3a2a';
+  ctx.lineWidth = 0.8 * s;
+  ctx.beginPath();
+  ctx.arc(x, base - h, w, Math.PI, 0); // the handle
+  ctx.stroke();
+}
+
 export function breadBasket(ctx: Ctx, x: number, base: number, s = 1, loaves = 5): void {
   const w = 12 * s;
   const h = 6 * s;

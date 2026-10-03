@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { WELL_DRAW_SECONDS } from './balance';
 import { BUILDINGS } from './buildings';
 import type { TimeOfDay } from './daynight';
 import { villageStock, WAREHOUSE_START } from './economy';
@@ -7,7 +8,8 @@ import { HOME, SHEAF_SLOTS } from './layout';
 import { employees } from './people';
 import { stockOf } from './resources';
 import { createWorker, LUNCH_AT, MIDDAY, updateWorker } from './worker';
-import { createWorld, placeBuilding, plotOf, update } from './world';
+import { dropOnGround } from './piles';
+import { createWorld, placeBuilding, plotOf, update, type World } from './world';
 
 const CAPACITY = BUILDINGS.farm.storage.grain!;
 
@@ -222,6 +224,74 @@ describe('farms in the world', () => {
     expect(villageStock(w).wood).toBeLessThan(WAREHOUSE_START.wood);
     expect(carriedBoards).toBe(true);
     expect(timber()).toBeCloseTo(before, 6);
+  });
+});
+
+describe('water from the well', () => {
+  const tick = (w: World, seconds: number, each?: () => void) => {
+    for (let t = 0; t < seconds; t += 1 / 30) {
+      update(w, 1 / 30, { left: false, right: false });
+      each?.();
+    }
+  };
+  const bakedAt = (w: World) => w.buildings.reduce((n, b) => n + (b.type === 'tavern' ? 0 : b.stock.bread), 0) + w.people.filter((p) => p.job?.worker.carrying?.resource === 'bread').length;
+
+  it('a bakery with flour but no well bakes nothing', () => {
+    const w = createWorld();
+    w.buildings = w.buildings.filter((b) => b.type !== 'well');
+    w.buildings.find((b) => b.type === 'warehouse')!.stock.flour = 5;
+    placeBuilding(w, 2587.5, 'bakery', { instant: true, free: true });
+    tick(w, 120);
+    expect(bakedAt(w)).toBe(0);
+    expect(villageStock(w).flour).toBeGreaterThan(0);
+  });
+
+  it('water is drawn by hand at the well, and the bakery bakes with it', () => {
+    const w = createWorld();
+    w.buildings.find((b) => b.type === 'warehouse')!.stock.flour = 5;
+    const bakery = placeBuilding(w, 2587.5, 'bakery', { instant: true, free: true })!;
+    const draws = new Set<number>();
+    let baked = false;
+    tick(w, 300, () => {
+      baked ||= bakery.stock.bread > 0;
+      for (const p of w.people) {
+        const t = p.job?.worker.task;
+        if (t?.kind === 'job' && t.job.action === 'draw-water') draws.add(t.duration);
+      }
+    });
+    expect([...draws]).toEqual([WELL_DRAW_SECONDS]);
+    expect(baked).toBe(true);
+    // all the flour baked, a bucket of water with each sack
+    expect(villageStock(w).flour + bakery.stock.flour).toBe(0);
+  });
+
+  it('with no serfs, the baker fetches the water from the well and draws it themselves', () => {
+    const w = createWorld();
+    // no storage yard: nobody hires serfs; the flour is at the bakery already
+    w.buildings = w.buildings.filter((b) => b.type !== 'warehouse');
+    const bakery = placeBuilding(w, 2587.5, 'bakery', { instant: true, free: true })!;
+    bakery.stock.flour = 3;
+    let bakerDrew = false;
+    let baked = false;
+    tick(w, 200, () => {
+      baked ||= bakery.stock.bread > 0;
+      for (const p of w.people) {
+        const t = p.job?.worker.task;
+        if (p.job?.role === 'baker' && t?.kind === 'job' && t.job.action === 'draw-water') bakerDrew = true;
+      }
+      expect(w.people.some((p) => p.job?.role === 'serf')).toBe(false);
+    });
+    expect(bakerDrew).toBe(true);
+    expect(baked).toBe(true);
+  });
+
+  it('a serf with nothing to do fills a well close by, two buckets each side', () => {
+    const w = createWorld();
+    const well = placeBuilding(w, 1787.5, 'well', { instant: true, free: true })!;
+    // an errand by the yard, so a serf is hired and is free there afterwards
+    dropOnGround(w, 1760, { resource: 'wood', amount: 1 });
+    tick(w, 120);
+    expect(well.stock.water).toBe(BUILDINGS.well.storage.water);
   });
 });
 

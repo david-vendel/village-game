@@ -15,6 +15,10 @@
 //
 // - collect: what lies on the ground by the road (piles.ts) is picked up, a
 //   load at a time, and taken where it is needed, else to a warehouse.
+// - draw: what is drawn by hand without end (BuildingDef.drawn: a well's
+//   water). Whoever comes for water and finds no bucket waiting draws one
+//   (WELL_DRAW_SECONDS) and takes it; a serf with no errand to run fills the
+//   store of a well close by (WELL_REACH), bucket by bucket.
 //
 // Serfs are the village's out-of-work people (Person.seeker), hired by the
 // transport hub (the oldest warehouse) for as long as there are errands:
@@ -23,6 +27,7 @@
 // anything is hired away for a lasting job (the mill's miller) before any
 // more errands (people.ts). Like builders, serfs work day and night.
 
+import { WELL_DRAW_SECONDS } from './balance';
 import { BUILDINGS, storageOf } from './buildings';
 import { putAway, storeSpot, tripLoad, warehouses } from './economy';
 import { STAND_Y, type Spot } from './layout';
@@ -37,6 +42,8 @@ import type { Building, World } from './world';
 export const SERFS_MAX = 5;
 /** Seconds to lift a load off a store. */
 const PICK_UP_TIME = 0.25;
+/** How far (px along the streets) a serf with nothing to do goes to fill a well. */
+export const WELL_REACH = 300;
 
 /** Where an errand picks its load up: a building's store, or a pile on the ground. */
 type Source = Building | Pile;
@@ -51,10 +58,14 @@ export interface Errand {
 const shipAction = (r: Resource) => `ship-${r}`;
 export const supplyAction = (r: Resource) => `supply-${r}`;
 const collectAction = (r: Resource) => `collect-${r}`;
+export const drawAction = (r: Resource) => `draw-${r}`;
 /** The resource an errand moves, if the action is an errand. */
 export function errandResource(action: string): Resource | null {
-  return RESOURCES.find((r) => action === shipAction(r) || action === supplyAction(r) || action === collectAction(r)) ?? null;
+  return RESOURCES.find((r) => action === shipAction(r) || action === supplyAction(r) || action === collectAction(r) || action === drawAction(r)) ?? null;
 }
+const isDraw = (action: string) => action.startsWith('draw-');
+/** Whether r can be drawn at b by hand (a finished well's water). */
+const drawnAt = (b: Building, r: Resource) => b.status === 'done' && BUILDINGS[b.type].drawn?.resource === r;
 
 const isPile = (s: Source): s is Pile => 'resource' in s;
 const xOf = (_world: World, s: Source) => (isPile(s) ? s.x : s.x);
@@ -67,6 +78,13 @@ const amountAt = (s: Source, r: Resource) => (isPile(s) ? (s.resource === r ? s.
 const loadAt = (s: Source, r: Resource) => (isPile(s) ? GROUND_LOAD : tripLoad(s, r));
 /** Where someone stands to pick up r at a source, relative to fromX. */
 const pickSpot = (world: World, s: Source, r: Resource, fromX: number) => (isPile(s) ? pileSpot(s, fromX) : storeSpot(world, s, r, fromX, true));
+/** Where someone stands to draw at b, relative to fromX. */
+const drawSpot = (b: Building, fromX: number): Spot => {
+  const at = BUILDINGS[b.type].drawn!.at;
+  return { dx: b.x + at.dx - fromX, y: at.y };
+};
+/** Where an errand's load is picked up (or drawn), relative to fromX. */
+export const errandSpot = (world: World, e: Errand, fromX: number): Spot => (isDraw(e.job.action) && !isPile(e.from) ? drawSpot(e.from, fromX) : pickSpot(world, e.from, e.r, fromX));
 
 /** The warehouse that employs the village's serfs: the oldest finished one. */
 export function transportHub(world: World): Building | null {
@@ -97,18 +115,18 @@ function underway(world: World): Underway[] {
 }
 
 const sum = (list: Underway[]) => list.reduce((n, u) => n + u.amount, 0);
-/** What of r in b's store is still free once those on their way have picked theirs up. */
+/** What of r in b's store is still free once those on their way have picked theirs up (drawing takes none of it). */
 const unclaimed = (runs: Underway[], b: Source, r: Resource) =>
-  amountAt(b, r) - sum(runs.filter((u) => !u.carrying && u.job.target === b.id && errandResource(u.job.action) === r));
+  amountAt(b, r) - sum(runs.filter((u) => !u.carrying && u.job.target === b.id && errandResource(u.job.action) === r && !isDraw(u.job.action)));
 /** Room left in b's store for r once what is on its way (shipped or supplied) has arrived. */
 const roomLeft = (runs: Underway[], b: Building, r: Resource) =>
   room(b.stock, storageOf(b), r) - sum(runs.filter((u) => u.job.to === b.id && errandResource(u.job.action) === r));
 
-/** The nearest place to x with some of r free to take: a building that makes it or a warehouse; at equal distance the maker. */
+/** The nearest place to x with some of r free to take, or to draw: a building that makes it or a warehouse; at equal distance the maker. */
 function nearestSource(world: World, runs: Underway[], r: Resource, x: number, not: Building): Building | null {
   // (what lies on the ground is collected by serfs, not fetched from)
   const places = world.buildings.filter(
-    (b) => b !== not && b.status === 'done' && (b.type === 'warehouse' || BUILDINGS[b.type].ships?.includes(r)) && unclaimed(runs, b, r) > 1e-9,
+    (b) => b !== not && b.status === 'done' && (b.type === 'warehouse' || BUILDINGS[b.type].ships?.includes(r)) && (unclaimed(runs, b, r) > 1e-9 || drawnAt(b, r)),
   );
   const d = (b: Building) => streetDist(world, x, xOf(world, b));
   return places.sort((a, b) => d(a) - d(b) || Number(a.type === 'warehouse') - Number(b.type === 'warehouse'))[0] ?? null;
@@ -118,7 +136,31 @@ function nearestSource(world: World, runs: Underway[], r: Resource, x: number, n
 function supplyErrand(world: World, runs: Underway[], b: Building, r: Resource): (Errand & { from: Building }) | null {
   if (roomLeft(runs, b, r) <= 1e-9) return null;
   const from = nearestSource(world, runs, r, xOf(world, b), b);
-  return from ? { job: { action: supplyAction(r), target: from.id, to: b.id }, from, r } : null;
+  if (!from) return null;
+  // no bucket waiting at the well: draw one
+  const action = drawnAt(from, r) && unclaimed(runs, from, r) <= 1e-9 ? drawAction(r) : supplyAction(r);
+  return { job: { action, target: from.id, to: b.id }, from, r };
+}
+
+/** A well within WELL_REACH of x with room in its store, for a serf with nothing else to do to fill. */
+function wellToFill(world: World, x: number): Errand | null {
+  const runs = underway(world);
+  const near = world.buildings
+    .filter((b) => b.status === 'done' && BUILDINGS[b.type].drawn && streetDist(world, x, b.x) <= WELL_REACH)
+    .filter((b) => roomLeft(runs, b, BUILDINGS[b.type].drawn!.resource) > 1e-9)
+    .sort((a, b) => streetDist(world, x, a.x) - streetDist(world, x, b.x))[0];
+  if (!near) return null;
+  const r = BUILDINGS[near.type].drawn!.resource;
+  return { job: { action: drawAction(r), target: near.id, to: near.id }, from: near, r };
+}
+
+/** How far through drawing a bucket someone at well b is (0..1), or null if nobody is drawing there. */
+export function drawingAt(world: World, b: Building): number | null {
+  for (const p of world.people) {
+    const t = p.job?.worker.task;
+    if (t?.kind === 'job' && t.job.target === b.id && isDraw(t.job.action)) return Math.min(1, t.t / Math.max(t.duration, 1e-6));
+  }
+  return null;
 }
 
 /** An errand to fetch something b needs, for b's own worker. */
@@ -198,17 +240,21 @@ export function errandWork(world: World, x: number): Pick<Workplace, 'jobSpot' |
     jobSpot(job): Spot | null {
       const r = errandResource(job.action);
       const from = sourceOf(world, job);
+      if (r && from && isDraw(job.action) && !isPile(from)) return drawSpot(from, x);
       return r && from && amountAt(from, r) > 0 ? pickSpot(world, from, r, x) : null;
     },
     begin(job) {
       const r = errandResource(job.action);
       const from = sourceOf(world, job);
+      if (r && from && isDraw(job.action)) return WELL_DRAW_SECONDS;
       return r && from && amountAt(from, r) > 1e-9 ? PICK_UP_TIME : null;
     },
     finish(job): Load | null {
       const r = errandResource(job.action);
       const from = sourceOf(world, job);
       if (!r || !from) return null;
+      // drawn: a bucket from the well itself, its store untouched
+      if (isDraw(job.action)) return { resource: r, amount: loadAt(from, r) };
       const to = done(world, job.to);
       // a supply takes only what the store it goes to has room for
       const fits = job.action === supplyAction(r) && to ? room(to.stock, storageOf(to), r) : Infinity;
@@ -242,8 +288,9 @@ export function transportWorkplace(world: World, hub: Building): Workplace {
     temporary: true,
     door: { dx: 0, y: STAND_Y },
     nextJob(w) {
-      const next = errands(world, x + w.dx)[0];
-      return next ? { job: next.job, ...pickSpot(world, next.from, next.r, x) } : null;
+      // an errand if there is one; with none, fill a well close by
+      const next = errands(world, x + w.dx)[0] ?? wellToFill(world, x + w.dx);
+      return next ? { job: next.job, ...errandSpot(world, next, x) } : null;
     },
     ...errandWork(world, x),
   };

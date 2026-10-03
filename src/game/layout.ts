@@ -290,6 +290,25 @@ export const BAKERY_SLOTS: Record<'flour' | 'bread', readonly Slot[]> = {
   ],
 };
 
+/** Buckets of water the baker has fetched, waiting left of the flour. */
+export const BAKERY_WATER_SLOTS: readonly Slot[] = [
+  { dx: -64, lift: 0 },
+  { dx: -55, lift: 0 },
+];
+
+/**
+ * The well: buckets of water drawn and waiting, two on each side of its drum
+ * (bottom first: left pair, then right pair), and where someone stands to draw
+ * one, at the windlass's crank on the right.
+ */
+export const WELL_SLOTS: readonly Slot[] = [
+  { dx: -23, lift: 0 },
+  { dx: -14, lift: 0 },
+  { dx: 14, lift: 0 },
+  { dx: 23, lift: 0 },
+];
+export const WELL_DRAW: Spot = { dx: 36, y: STAND_Y };
+
 /** Baskets of loaves on the bench in front of the tavern, where its guests help themselves. */
 export const TAVERN_SLOTS: readonly Slot[] = [
   { dx: -62, lift: 10 },

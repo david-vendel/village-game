@@ -15,7 +15,7 @@
 import { type Recipe, storageOf } from './buildings';
 import { putAway, storeSpot } from './economy';
 import { room, type Load } from './resources';
-import { errandResource, errandWork, fetchFor } from './transport';
+import { errandResource, errandSpot, errandWork, fetchFor } from './transport';
 import type { JobTicket, Workplace } from './worker';
 import type { Building, World } from './world';
 
@@ -25,19 +25,25 @@ const PICK_UP_TIME = 0.4;
 export function workshopWorkplace(world: World, b: Building, recipe: Recipe): Workplace {
   const x = b.x;
   const capacity = storageOf(b);
-  const { from, to, batch, per, seconds, verb, door, at } = recipe;
+  const { from, to, batch, per, seconds, verb, door, at, also } = recipe;
   const errand = errandWork(world, x);
   const isErrand = (job: JobTicket) => errandResource(job.action) !== null;
   /** How much of `from` the next batch takes: as much as is there, up to a batch, that what it makes has room for. */
-  const nextBatch = () => Math.min(batch, b.stock[from], Math.floor(room(b.stock, capacity, to) / per + 1e-9));
+  const nextBatch = () =>
+    Math.min(batch, b.stock[from], also ? b.stock[also.resource] / also.amount : Infinity, Math.floor(room(b.stock, capacity, to) / per + 1e-9));
+  /** What a batch is made of: `amount` of each per one of `from`. */
+  const inputs = [{ resource: from, amount: 1 }, ...(also ? [also] : [])];
   return {
     door,
     nextJob() {
       if (nextBatch() > 1e-9) return { job: { action: verb, target: 0 }, ...storeSpot(world, b, from, x, true) };
-      // nothing to work on: go and get some, if nobody is bringing it already
-      if (b.stock[from] > 1e-9) return null;
-      const fetch = fetchFor(world, b, from);
-      return fetch ? { job: fetch.job, ...storeSpot(world, fetch.from, from, x, true) } : null;
+      // nothing to work on: go and get what is missing, if nobody is bringing it already
+      for (const i of inputs) {
+        if (b.stock[i.resource] >= i.amount - 1e-9) continue;
+        const fetch = fetchFor(world, b, i.resource);
+        if (fetch) return { job: fetch.job, ...errandSpot(world, fetch, x) };
+      }
+      return null;
     },
     jobSpot(job) {
       return isErrand(job) ? errand.jobSpot!(job) : b.stock[from] > 1e-9 ? storeSpot(world, b, from, x, true) : null;
@@ -54,6 +60,8 @@ export function workshopWorkplace(world: World, b: Building, recipe: Recipe): Wo
       const n = nextBatch();
       if (n <= 1e-9) return null;
       b.stock[from] -= n;
+      // what goes in with it (the bakery's water, poured into the dough) is used up as the batch is taken
+      if (also) b.stock[also.resource] -= n * also.amount;
       return { resource: from, amount: n };
     },
     workOn(job, load) {

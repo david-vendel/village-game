@@ -7,7 +7,7 @@
 
 import { START_STOCK } from './balance';
 import { BUILDINGS, type BuildingType, storageOf } from './buildings';
-import { BAKERY_SLOTS, BASKET, MILL_SLOTS, SACK, SAWMILL_SLOTS, STONECUTTER_SLOTS, TAVERN_SLOTS, SHEAF_SLOTS, STAND_Y, PILE_UNIT, warehouseSlot, WOODCUTTER_SLOTS, type Slot, type Spot } from './layout';
+import { BAKERY_SLOTS, BAKERY_WATER_SLOTS, WELL_SLOTS, BASKET, MILL_SLOTS, SACK, SAWMILL_SLOTS, STONECUTTER_SLOTS, TAVERN_SLOTS, SHEAF_SLOTS, STAND_Y, PILE_UNIT, warehouseSlot, WOODCUTTER_SLOTS, type Slot, type Spot } from './layout';
 import { room, RESOURCES, shortfall, stockOf, type Amounts, type Load, type Resource, type Stock } from './resources';
 import { takeFromPile, type Pile } from './piles';
 import { owed } from './site';
@@ -147,11 +147,14 @@ export function putAway(world: World, load: Load, x: number): number {
  */
 export function storeSlots(b: Building, r: Resource): { unit: number; perTrip: number; slot: (i: number) => Slot } | null {
   const pick = (slots: readonly Slot[]) => (i: number) => slots[Math.max(0, Math.min(i, slots.length - 1))];
-  if (b.type === 'warehouse') return { unit: PILE_UNIT, perTrip: 1, slot: (i) => warehouseSlot(r, i, b.size ?? 1) };
+  // a yard keeps no water
+  if (b.type === 'warehouse') return r === 'water' ? null : { unit: PILE_UNIT, perTrip: 1, slot: (i) => warehouseSlot(r, i, b.size ?? 1) };
   if (b.type === 'farm' && r === 'grain') return { unit: 1, perTrip: 1, slot: pick(SHEAF_SLOTS) };
   if (b.type === 'mill' && (r === 'grain' || r === 'flour')) return { unit: SACK, perTrip: 1, slot: pick(MILL_SLOTS[r]) };
   if (b.type === 'bakery' && r === 'flour') return { unit: SACK, perTrip: 1, slot: pick(BAKERY_SLOTS.flour) };
   if (b.type === 'bakery' && r === 'bread') return { unit: BASKET, perTrip: 1, slot: pick(BAKERY_SLOTS.bread) };
+  if (b.type === 'bakery' && r === 'water') return { unit: 1, perTrip: 1, slot: pick(BAKERY_WATER_SLOTS) };
+  if (b.type === 'well' && r === 'water') return { unit: 1, perTrip: 1, slot: pick(WELL_SLOTS) };
   if (b.type === 'tavern' && r === 'bread') return { unit: BASKET, perTrip: 1, slot: pick(TAVERN_SLOTS) };
   if (b.type === 'sawmill' && (r === 'wood' || r === 'planks')) return { unit: 1, perTrip: 1, slot: pick(SAWMILL_SLOTS[r]) };
   if (b.type === 'woodcutter' && r === 'wood') return { unit: 1, perTrip: 1, slot: pick(WOODCUTTER_SLOTS) };

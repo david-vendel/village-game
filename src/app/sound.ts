@@ -19,6 +19,7 @@ import type { BuildingType } from '../game/buildings';
 import type { Resource } from '../game/resources';
 import { chapelBell } from '../game/daynight';
 import { employees } from '../game/people';
+import { drawingAt } from '../game/transport';
 import { RIDER_MAX_SPEED, getBuilding, type World } from '../game/world';
 import { galloping, strideAt } from '../render';
 
@@ -205,7 +206,9 @@ export function createSound(initialVolume = 0.6): Sound {
     },
     /** A load put down (or, softer, picked up): a sheaf, logs or a block of stone. */
     setDown(x: number, r: Resource, k = 1) {
-      if (r === 'grain' || r === 'flour' || r === 'bread') {
+      if (r === 'water') {
+        noise({ x, dur: 0.18, gain: 0.12 * k, filter: 'bandpass', freq: 700, q: 2, attack: 0.03 });
+      } else if (r === 'grain' || r === 'flour' || r === 'bread') {
         noise({ x, dur: 0.12, gain: 0.2 * k, filter: 'bandpass', freq: 1800, attack: 0.02 });
         tone({ x, dur: 0.14, gain: 0.15 * k, freq: 90, to: 55 });
       } else if (r === 'wood' || r === 'planks') {
@@ -237,6 +240,8 @@ export function createSound(initialVolume = 0.6): Sound {
   let prevTime: number | null = null;
   /** Strokes the noon bell had rung last frame. */
   let lastBellStrokes = 0;
+  /** How far through drawing a bucket someone at each well was last frame. */
+  const wellDrawn = new Map<number, number | null>();
   /** What each person carried at the previous frame. */
   const carried = new Map<number, Resource | null>();
 
@@ -316,8 +321,14 @@ export function createSound(initialVolume = 0.6): Sound {
         if (b.status !== 'done' || !near) continue;
         // buildings whose art shows the work (render/buildings.ts)
         const seed = b.id * 97; // the art's per-building seed (render/scene.ts)
+        if (b.type === 'well') {
+          // the bucket reaches the water halfway through drawing it (render/buildings.ts drawWell)
+          const p = drawingAt(world, b);
+          const was = wellDrawn.get(b.id) ?? null;
+          wellDrawn.set(b.id, p);
+          if (p !== null && was !== null && was < 0.5 && p >= 0.5) sfx.splash(x);
+        }
         if (b.type === 'blacksmith' && beat(world, 5, PI)) sfx.anvil(x + 34); // sparks fly as the hammer lands
-        else if (b.type === 'well' && beat(world, 0.6, 2 * PI, PI / 2)) sfx.splash(x); // the bucket at the bottom
         else if (b.type === 'mill' && beat(world, 0.9, PI / 2, 0, seed)) sfx.creak(x); // each quarter turn of the sails
         else if (b.type === 'chapel' && bellStruck) sfx.bell(x); // rung at noon, at each end of its swing (daynight.ts chapelBell)
         const amb = AMBIENT[b.type];
