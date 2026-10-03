@@ -13,6 +13,8 @@
 //   build farm here                    at the rider, through the build menu, as the player does
 //   demolish at s0:40 | demolish section at s0:40 | upgrade at s0:40
 //   ride s1:30 | ride #12 | ride +6    put the rider somewhere (+/- cells along the street)
+//   ride end | ride start              to the far (or near) end of the rider's street
+//   lay road 8 [start]                 ride to the street's end and build a road piece there, 8 times (built before the next)
 //   turn up|down                       turn at the crossroads the rider is at
 //   run 30s | run 2d | run until built [max 3d]
 //   map [ids] [trees] [B30:-C60]       the land from above; ids: which building is which
@@ -35,7 +37,7 @@ import { buildShortfall, warehouses } from '../game/economy';
 import { footprintOf } from '../game/grid';
 import { CELL_W } from '../game/layout';
 import { RESOURCES } from '../game/resources';
-import { streetOf, streetStart } from '../game/streets';
+import { streetOf, streetRange, streetStart } from '../game/streets';
 import {
   buildingAt,
   confirmMenu,
@@ -272,9 +274,26 @@ export function runScenario(script: string, opts: ScenarioOptions = {}): Scenari
         case 'ride': {
           const rel = /^([+-]\d+)$/.exec(w[1] ?? '');
           world.rider.vx = 0;
-          world.rider.x = rel ? world.rider.x + +rel[1] * CELL_W : xOf(w[1]);
+          const range = streetRange(world, streetOf(world.rider.x));
+          if (w[1] === 'end' || w[1] === 'start') world.rider.x = w[1] === 'end' ? range.max : range.min;
+          else world.rider.x = rel ? world.rider.x + +rel[1] * CELL_W : xOf(w[1]);
           if (rel) world.rider.facing = +rel[1] >= 0 ? 1 : -1;
           say(summary(world).split('\n')[3]);
+          break;
+        }
+        case 'lay': {
+          const n = +w[2];
+          if (w[1] !== 'road' || !(n > 0)) fail('lay road <count> [start]');
+          const s = streetOf(world.rider.x);
+          for (let i = 0; i < n; i++) {
+            const range = streetRange(world, s);
+            world.rider.x = w[3] === 'start' ? range.min : range.max;
+            buildHere('road');
+            if (!runFor(seconds('3d'), () => !world.buildings.some((b) => b.type === 'road'), label)) fail('the road piece was not laid');
+          }
+          const range = streetRange(world, s);
+          world.rider.x = w[3] === 'start' ? range.min : range.max;
+          say(`s${s} now runs cells ${Math.round((range.min - streetStart(s)) / CELL_W)}..${Math.round((range.max - streetStart(s)) / CELL_W) - 1}`);
           break;
         }
         case 'turn': {

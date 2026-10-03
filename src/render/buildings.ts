@@ -1210,4 +1210,6 @@ export const BUILDING_ART: Record<BuildingType, BuildingArt> = {
   woodcutter: { height: 100, draw: drawWoodcutter },
   stonecutter: { height: 100, draw: drawStonecutter },
   intersection: { height: 56, draw: drawCrossroads },
+  // a stretch of road being laid: the road itself is drawn with the ground, as the street's end moves on (scene.ts)
+  road: { height: 12, draw: () => {} },
 };

@@ -1,6 +1,6 @@
-# Crossroads go every 27 cells, so the streets make a grid of squares. The
-# third street runs into the main street, where its plot is free, and closes
-# a loop with a crossroads.
+# Crossroads go every 27 cells, so the streets make a grid of squares. A road
+# laid on towards another road never runs onto it, nor ends at a crossroads:
+# it stops with a cell of grass between.
 > new empty
 > free on
 > construction off
@@ -12,45 +12,52 @@
   rider: s0:56 facing +
 > turn up
   rider: s1:131 facing +
+> expect cannot build road at s1:131 end of a road
+  ok: can't build road at s1:131: Roads go only at the end of a road
+> lay road 8
+  s1 now runs cells 121..165
 > expect cannot build crossroads at s1:151 every 27 cells
   ok: can't build intersection at s1:151: Crossroads go only every 27 cells
-> ride +27
+> ride s1:158
   rider: s1:158 facing +
 > build crossroads here
-  #61 intersection at s1:157-159, done
+  #15 intersection at s1:157-159, done
 > ride #last
   rider: s1:158 facing +
 > turn up
   rider: s2:131 facing +
-> ride +27
-  rider: s2:158 facing +
-> build crossroads here
-  #97 intersection at s2:157-159, done
-> expect streets 4
-  ok: 4 streets
-# three built, one made where the third street met the main street
-> expect count crossroads 4
-  ok: 4 intersection
+> lay road 12
+  s2 now runs cells 121..177
+> build crossroads at s0:28
+  #28 intersection at s0:28-30, done
+> ride #last
+  rider: s0:29 facing +
+> turn up
+  rider: s3:131 facing +
+> lay road 4
+  s3 now runs cells 121..153
+# the next block would come within a cell of the road along row AB
+> expect cannot build road at s3:153 another road is in the way
+  ok: can't build road at s3:153: Another road is in the way
 > streets
   s0  runs east (lots on its north side), cells 10..252
-  s1  runs north (lots on its west side), cells 10..252, from crossroads #1
-  s2  runs west (lots on its south side), cells 10..252, from crossroads #61
-  s3  runs south (lots on its east side), cells 10..252, from crossroads #97
+  s1  runs north (lots on its west side), cells 121..165, from crossroads #1
+  s2  runs west (lots on its south side), cells 121..177, from crossroads #15
+  s3  runs north (lots on its west side), cells 121..153, from crossroads #28
     crossroads #1: s0:56 = s1:131 (cell A56)
-    crossroads #61: s1:158 = s2:131 (cell AB56)
-    crossroads #97: s2:158 = s3:131 (cell AB29)
-    crossroads #98: s0:29 = s3:158 (cell A29)
+    crossroads #15: s1:158 = s2:131 (cell AB56)
+    crossroads #28: s0:29 = s3:131 (cell A29)
 > map AE22:-C64
               30        40        50        60
       |  |  |  |  |  |  |  |  |  |  |  |  |  |  |
-   AE ......|||........................|||.......
-   AD ......|||........................|||.......
-   AC ======+++========================+++=======
-   AB ======+@+========================+++=======
-   AA ======+++========================+++=======
-    Z ......|||........................|||.......
-    Y ......|||........................|||.......
-    X ......|||........................|||.......
+   AE .................................|||.......
+   AD .................................|||.......
+   AC =================================+++=======
+   AB =================================+++=======
+   AA =================================+++=======
+    Z ......YYY........................|||.......
+    Y ......YYY........................|||.......
+    X ......Y@Y........................|||.......
     W ......|||........................|||.......
     V ......|||........................|||.......
     U ......|||........................|||.......

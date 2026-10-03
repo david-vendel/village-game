@@ -59,7 +59,7 @@ export function drawConstruction(ctx: Ctx, type: BuildingType, a: DrawArgs, prog
   }
   if (stage === 'staking') return;
   // a crossroads is a road, not a house: past the stakes it is the road taking shape (drawn with the ground)
-  if (type === 'intersection') return;
+  if (type === 'intersection' || type === 'road') return;
 
   // 2. foundation stones
   const fh = stage === 'foundation' ? 10 * t : 10;

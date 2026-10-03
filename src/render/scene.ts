@@ -8,7 +8,7 @@ import { employees } from '../game/people';
 import { GROUND_PILE_Y } from '../game/piles';
 import type { Worker } from '../game/worker';
 import { laidOut, onSite, upgrading } from '../game/site';
-import { crossings, streetOf, streetRange } from '../game/streets';
+import { crossings, streetOf } from '../game/streets';
 import { BUILDING_TYPES } from '../game/buildings';
 import { blockStartX, crossroadsPlaces, sizeOfBuilding } from '../game/grid';
 import { CELL_W } from '../game/layout';
@@ -16,6 +16,7 @@ import { buildingAt, canDemolish, canUpgrade, crossroadAt, getBuilding, roomToBu
 import { drawBackground, drawForeground, drawHaze, drawSideRoad, drawStreetEnds, type View } from './background';
 import { BUILDING_LINE_DIST, distAt, drawOtherGround, eyeOf, standingOn, TREE_LINE_DIST } from './plane';
 import { flushEmissive } from './assets';
+import { roadShown } from './roads';
 import { BUILDING_ART, drawCrossroadsSign, type DrawArgs } from './buildings';
 import { drawBuilding } from './sprites';
 import { drawConstruction, drawConstructionBehind, drawConstructionFront, drawDemolition, drawUpgrade } from './construction';
@@ -75,7 +76,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   drawBackground(ctx, v);
   // a street that ends short: the road stops and the grass runs on
   const street = streetOf(world.rider.x);
-  if (street > 0) drawStreetEnds(ctx, v, streetRange(world, street));
+  if (street > 0) drawStreetEnds(ctx, v, roadShown(world, street));
   const onScreen = (x: number, margin = 280) => x - camX > -margin && x - camX < viewW + margin;
   // the ground first: the other streets' roads and fields on the plane, and a road still being laid at a crossroads
   drawOtherGround(ctx, world, eye);

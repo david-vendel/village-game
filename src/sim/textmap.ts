@@ -33,6 +33,7 @@ export const GLYPH: Record<BuildingType, string> = {
   woodcutter: 'X',
   stonecutter: 'Q',
   intersection: 'I',
+  road: 'R',
 };
 
 /** A field by its state: claimed but still grass, tilled and fallow, growing, ripe. */

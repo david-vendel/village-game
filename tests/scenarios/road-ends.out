@@ -1,42 +1,57 @@
-# A road runs on past a street's last plot. A new street never runs over
-# another road's end without a crossroads: it ends short of it instead.
+# A new street runs a block past its crossroads each way. Road pieces lay it
+# on, a block at a time, from either end: a road runs on past its last plot,
+# and never over another road's end.
 > new empty
 > free on
 > construction off
 > build crossroads at s0:28
   #1 intersection at s0:28-30, done
+> streets
+  s0  runs east (lots on its north side), cells 10..252
+  s1  runs north (lots on its west side), cells 121..141, from crossroads #1
+    crossroads #1: s0:29 = s1:131 (cell A29)
 > ride #last
   rider: s0:29 facing +
 > turn up
   rider: s1:131 facing +
-> ride +27
+> lay road 8
+  s1 now runs cells 121..165
+> ride s1:158
   rider: s1:158 facing +
 > build crossroads here
-  #61 intersection at s1:157-159, done
+  #15 intersection at s1:157-159, done
 > ride #last
   rider: s1:158 facing +
 > turn up
   rider: s2:131 facing +
-> ride +27
+> lay road 8
+  s2 now runs cells 121..165
+> ride s2:158
   rider: s2:158 facing +
 > build crossroads here
-  #97 intersection at s2:157-159, done
-# the third street runs south at column 2, past the main street's west end
+  #24 intersection at s2:157-159, done
+> ride #last
+  rider: s2:158 facing +
+> turn up
+  rider: s3:131 facing +
+# the fourth street runs south at column 2, past the main street's west end
+> lay road 10
+  s3 now runs cells 121..171
 > streets
   s0  runs east (lots on its north side), cells 10..252
-  s1  runs north (lots on its west side), cells 10..252, from crossroads #1
-  s2  runs west (lots on its south side), cells 10..252, from crossroads #61
-  s3  runs south (lots on its east side), cells 10..252, from crossroads #97
+  s1  runs north (lots on its west side), cells 121..165, from crossroads #1
+  s2  runs west (lots on its south side), cells 121..165, from crossroads #15
+  s3  runs south (lots on its east side), cells 121..171, from crossroads #24
     crossroads #1: s0:29 = s1:131 (cell A29)
-    crossroads #61: s1:158 = s2:131 (cell AB29)
-    crossroads #97: s2:158 = s3:131 (cell AB2)
+    crossroads #15: s1:158 = s2:131 (cell AB29)
+    crossroads #24: s2:158 = s3:131 (cell AB2)
 > map AE0:-F36
       0         10        20        30
        |  |  |  |  |  |  |  |  |  |  |  |  
    AE .|||........................|||......
    AD .|||........................|||......
    AC =+++========================+++======
-   AB =+@+========================+++======
+   AB =+++========================+++======
    AA =+++========================+++======
     Z .|||........................|||......
     Y .|||........................|||......
@@ -73,7 +88,7 @@
   
     I intersection
     = | road  + crossing  Y kept for a crossroads  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
-# The rocks lie inside squares of the road grid: a street running past them
+# The rocks lie inside squares of the road grid: a street laid on past them
 # runs on beside them.
 > new empty
 > free on
@@ -81,20 +96,26 @@
 > build crossroads at s0:55
   #1 intersection at s0:55-57, done
 > build crossroads at s0:82
-  #61 intersection at s0:82-84, done
+  #7 intersection at s0:82-84, done
+> ride #last
+  rider: s0:83 facing +
+> turn up
+  rider: s2:131 facing +
+> lay road 8
+  s2 now runs cells 121..165
 > streets
   s0  runs east (lots on its north side), cells 10..252
-  s1  runs north (lots on its west side), cells 10..252, from crossroads #1
-  s2  runs north (lots on its west side), cells 10..252, from crossroads #61
+  s1  runs north (lots on its west side), cells 121..141, from crossroads #1
+  s2  runs north (lots on its west side), cells 121..165, from crossroads #7
     crossroads #1: s0:56 = s1:131 (cell A56)
-    crossroads #61: s0:83 = s2:131 (cell A83)
+    crossroads #7: s0:83 = s2:131 (cell A83)
 > map O50:-C90
       50        60        70        80        9
         |  |  |  |  |  |  |  |  |  |  |  |  |  
-    O .....|||......############......|||......
-    N .....|||......############......|||......
-    M .....|||......############......|||......
-    L .....|||......############......|||......
+    O ..............############......|||......
+    N ..............############......|||......
+    M ..............############......|||......
+    L ..............############......|||......
     K .....|||......############......|||......
     J .....|||......############......|||......
     I .....|||......############......|||......
@@ -105,7 +126,7 @@
     D .....|||........................|||......
     C .....|||........................|||......
     B =====+++========================+++======
-    A =====+++==============@=========+++======
+    A =====+++========================+++======
    -A =====+++========================+++======
    -B .....|||........................|||......
    -C .....|||........................|||......

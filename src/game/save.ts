@@ -27,10 +27,10 @@ import type { Worker, WorkerTask } from './worker';
 import { clearLand, type Tree } from './nature';
 import type { Pile } from './piles';
 import { cellKey, cellName, cellsOf, footprintOf } from './grid';
-import { streetOf } from './streets';
-import { createWorld, goneStreet, layStreet, MERGES, type Building, type Rider, type World } from './world';
+import { streetOf, type Street } from './streets';
+import { createWorld, goneStreet, layStreet, MERGES, PLOTS_PER_STREET, setStreetEnds, type Building, type Rider, type World } from './world';
 
-export const SAVE_VERSION = 22;
+export const SAVE_VERSION = 23;
 
 
 /** The persisted part of the world. */
@@ -51,6 +51,8 @@ export type SavedWorld = Pick<
 > & {
   /** The crossroads (building ids) each street after the main one branches off at, in the order they were opened. */
   branches: number[];
+  /** Where each street ends (its first and last plot), the main street first: road pieces lay streets on past where they began. */
+  ends: Array<[number, number]>;
 };
 
 export interface SaveData {
@@ -76,6 +78,7 @@ export function saveWorld(world: World): SaveData {
     nextId: world.nextId,
     rngState: world.rngState,
     branches: world.streets.slice(1).map((s) => (s.gone ? -1 : s.from!)),
+    ends: world.streets.map((s) => [s.lo, s.hi]),
   };
   return { version: SAVE_VERSION, world: JSON.parse(JSON.stringify(saved)) as SavedWorld };
 }
@@ -97,7 +100,7 @@ export function loadWorld(data: unknown): LoadResult {
 
 function build(saved: SavedWorld): World {
   const world = createWorld({ village: false });
-  const { branches, ...state } = saved;
+  const { branches, ends, ...state } = saved;
   Object.assign(world, state);
   // the streets, in the order they were opened: each branches off at a finished crossroads on one before
   // it, and joins the streets it meets where crossroads were made for it (so those go on their plots first)
@@ -108,10 +111,19 @@ function build(saved: SavedWorld): World {
       if (plot && plot.buildingId === null) plot.buildingId = b.id;
     }
   };
+  // a street runs as far as road was laid along it (setStreetEnds), never less than it was opened with
+  const reach = (s: Street) => {
+    const e = ends[s.index];
+    if (!e) return;
+    const [lo, hi] = e;
+    if (lo > s.lo || hi < s.hi || lo < 0 || hi >= PLOTS_PER_STREET) throw new SaveError(`street ${s.index}: ends ${lo}..${hi} leave out where it was opened`);
+    setStreetEnds(world, s, lo, hi);
+  };
+  reach(world.streets[0]);
   const layBranch = (b: Building) => {
     if (!plotOf(b)) throw new SaveError(`crossroads ${b.id}: no plot at ${b.x}`);
     seat();
-    layStreet(world, b);
+    reach(layStreet(world, b));
   };
   for (const id of branches) {
     if (id === -1) {
@@ -254,6 +266,10 @@ function savedWorld(v: unknown): SavedWorld {
     nextId: int(w.nextId, 'nextId'),
     rngState: int(w.rngState, 'rngState'),
     branches: arr(w.branches, 'branches').map((x, i) => int(x, `branches[${i}]`)),
+    ends: arr(w.ends, 'ends').map((x, i) => {
+      const e = arr(x, `ends[${i}]`);
+      return [int(e[0], `ends[${i}][0]`), int(e[1], `ends[${i}][1]`)] as [number, number];
+    }),
   };
 }
 

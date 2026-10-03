@@ -185,7 +185,12 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   (`crossroadsPlaces` in `grid.ts`) is kept for it: a signpost stands there, no other building
   goes over the land its road would take (`keptLand`) and no field is sown there, so the build
   menu opened there offers just the crossroads. It opens a new street, crossing it at the new street's middle plot
-  (`CROSS_PLOT`). Each street is still a line with its own stretch of world x (street i starts at
+  (`CROSS_PLOT`). A new street runs only one block past its crossroads each way at first (`STREET_STUB`), so it
+  never ends at the crossroads; the **road** building (1 wood), built at either end of a street, lays it
+  on a block (three cells) at a time (`roadEnd`, `whyNoRoad` in `world.ts`; the piece is part of the
+  street once laid, and saves keep each street's ends). A road piece never goes onto another road, a
+  crossroads (built or being built), a building or the rocks, nor within a cell of grass of one, so
+  roads never run into each other. Each street is still a line with its own stretch of world x (street i starts at
   i × `STREET_STRIDE`, plot k of street i is `plots[i × PLOTS_PER_STREET + k]`), so one x says where
   anything is. On the map all streets lie on one 250 px grid, so they meet at plots: a new street is
   laid out plot by plot both ways (`layStreet` in `world.ts`); meeting a street that crosses its way

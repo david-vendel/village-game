@@ -1,27 +1,37 @@
-# A road runs on past a street's last plot. A new street never runs over
-# another road's end without a crossroads: it ends short of it instead.
+# A new street runs a block past its crossroads each way. Road pieces lay it
+# on, a block at a time, from either end: a road runs on past its last plot,
+# and never over another road's end.
 new empty
 free on
 construction off
 build crossroads at s0:28
+streets
 ride #last
 turn up
-ride +27
+lay road 8
+ride s1:158
 build crossroads here
 ride #last
 turn up
-ride +27
+lay road 8
+ride s2:158
 build crossroads here
-# the third street runs south at column 2, past the main street's west end
+ride #last
+turn up
+# the fourth street runs south at column 2, past the main street's west end
+lay road 10
 streets
 map AE0:-F36
 
-# The rocks lie inside squares of the road grid: a street running past them
+# The rocks lie inside squares of the road grid: a street laid on past them
 # runs on beside them.
 new empty
 free on
 construction off
 build crossroads at s0:55
 build crossroads at s0:82
+ride #last
+turn up
+lay road 8
 streets
 map O50:-C90

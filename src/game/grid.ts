@@ -94,6 +94,11 @@ export function footprintAt(type: BuildingType, x: number, size = 1): Footprint 
     const i = alongCell(x);
     return { street, i0: i - 1, i1: i + 1, j0: LOT_ROW, j1: LOT_ROW + 2 };
   }
+  // a stretch of road being laid: the three lanes of the block past the street's end
+  if (type === 'road') {
+    const i = alongCell(x);
+    return { street, i0: i - 1, i1: i + 1, j0: -1, j1: 1 };
+  }
   const { w, d } = sizeOf(type, size);
   const i0 = Math.round((x - streetStart(street)) / CELL_W - w / 2);
   return { street, i0, i1: i0 + w - 1, j0: LOT_ROW, j1: LOT_ROW + d - 1 };

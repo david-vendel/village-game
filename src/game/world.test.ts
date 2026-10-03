@@ -1,5 +1,6 @@
 import { stockOf } from './resources';
-import { plotX } from './streets';
+import { CROSS_PLOT, plotX, streetRange } from './streets';
+import { CELL_W } from './layout';
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS, BUILDING_TYPES } from './buildings';
 import {
@@ -15,6 +16,8 @@ import {
   buildingAt,
   RIDER_MAX_SPEED,
   setConstructionEnabled,
+  STREET_STUB,
+  whyNotBuild,
   update,
   WORLD_WIDTH,
   type World,
@@ -94,13 +97,13 @@ describe('build menu', () => {
 
   it('selection wraps and is remembered after cancelling', () => {
     const w = emptyWorld();
-    w.rider.x = w.plots[4].x - 25; // where a crossroads can go (the last entry)
+    w.rider.x = w.plots[4].x - 25; // where a crossroads can go (the last entry that fits: no road away from a street's end)
     openMenu(w);
     moveMenu(w, -1);
-    expect(w.menu!.selection).toBe(BUILDING_TYPES.length - 1);
+    expect(w.menu!.selection).toBe(BUILDING_TYPES.indexOf('intersection'));
     closeMenu(w);
     openMenu(w);
-    expect(w.menu!.selection).toBe(BUILDING_TYPES.length - 1);
+    expect(w.menu!.selection).toBe(BUILDING_TYPES.indexOf('intersection'));
   });
 
   it('rider cannot move while the menu is open', () => {
@@ -216,12 +219,41 @@ describe('rider', () => {
   });
 });
 
+/** Lay road on street i, a piece at a time from its far end, until it runs to plot k. */
+function layRoadTo(w: World, i: number, k: number): void {
+  while (w.streets[i].hi < k) expect(placeBuilding(w, streetRange(w, i).max, 'road', { instant: true })).not.toBeNull();
+}
+
 describe('streets', () => {
+  it('a road piece lays its street a block further, only at an end and never onto another road', () => {
+    const w = createWorld();
+    w.buildings.find((b) => b.type === 'warehouse')!.stock.wood = 300;
+    placeBuilding(w, 2087.5, 'intersection', { instant: true });
+    const s = w.streets[1];
+    // a new street runs a block past its crossroads each way, no more
+    expect([s.lo, s.hi]).toEqual([CROSS_PLOT - STREET_STUB, CROSS_PLOT + STREET_STUB]);
+    expect(whyNotBuild(w, 'road', plotX(1, CROSS_PLOT))).toMatch(/end of a road/);
+    const { max } = streetRange(w, 1);
+    const wood = w.buildings.find((b) => b.type === 'warehouse')!.stock.wood;
+    placeBuilding(w, max, 'road', { instant: true });
+    expect(s.hi).toBe(CROSS_PLOT + STREET_STUB + 1);
+    expect(streetRange(w, 1).max).toBe(max + 3 * CELL_W);
+    expect(w.buildings.some((b) => b.type === 'road')).toBe(false);
+    expect(w.buildings.find((b) => b.type === 'warehouse')!.stock.wood).toBe(wood - 1);
+    // laid on from its other end, out into the land in front of the main street: as far as a street's plots go
+    while (!whyNotBuild(w, 'road', streetRange(w, 1).min)) placeBuilding(w, streetRange(w, 1).min, 'road', { instant: true });
+    expect(whyNotBuild(w, 'road', streetRange(w, 1).min)).toMatch(/no further/);
+    expect(s.lo).toBe(0);
+  });
+
+
   it('builders reach a site two streets away, turning at each crossroads only once', () => {
     const w = createWorld();
     w.buildings.find((b) => b.type === 'warehouse')!.stock.wood = 300;
     placeBuilding(w, 2087.5, 'intersection', { instant: true }); // cell 83, on the road grid
+    layRoadTo(w, 1, 48);
     placeBuilding(w, plotX(1, 47), 'intersection', { instant: true }); // 27 cells up the new street
+    layRoadTo(w, 2, 43);
     const h = placeBuilding(w, plotX(2, 42) - 25, 'house')!;
     runFor(w, 90, { left: false, right: false });
     expect(h.status).toBe('done');

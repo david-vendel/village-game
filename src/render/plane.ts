@@ -11,12 +11,13 @@
 // fields as shapes on the ground, and everything standing on it as a picture
 // scaled by distance.
 
+import { roadShown } from './roads';
 import { BUILDINGS } from '../game/buildings';
 import { crossroadsPlaces, sizeOfBuilding } from '../game/grid';
 import { BASE_Y, CELL_W, EYE_DIST, FIELD_ROWS, QUARRIES, quarryLand, ROAD_FAR_Y, ROAD_NEAR_Y, STREET_LINE_Y, TREE_Y } from '../game/layout';
 import { employees } from '../game/people';
 import { laidOut, onSite, upgrading } from '../game/site';
-import { backOf, crossings, groundPoint, mapPoint, SIDE_ROAD_HALF, streetOf, streetRange, type Street, type Vec } from '../game/streets';
+import { backOf, crossings, groundPoint, mapPoint, SIDE_ROAD_HALF, streetOf, type Street, type Vec } from '../game/streets';
 import { getBuilding, type Building, type World } from '../game/world';
 import { drawCrossroadsSign, type DrawArgs } from './buildings';
 import type { ViewId } from './manifest';
@@ -122,7 +123,7 @@ const others = (world: World, eye: Eye) => world.streets.filter((s) => s.index !
 /** The roads of the other streets, and the fields of the farms along them, on the ground. */
 export function drawOtherGround(ctx: Ctx, world: World, eye: Eye): void {
   const road = (s: Street) => {
-    const { min, max } = streetRange(world, s.index);
+    const { min, max } = roadShown(world, s.index);
     return [ground(world, min, ROAD_FAR_Y), ground(world, max, ROAD_FAR_Y), ground(world, max, ROAD_NEAR_Y), ground(world, min, ROAD_NEAR_Y)];
   };
   const far = (pts: Vec[]) => Math.max(...pts.map((p) => toEye(eye, p).z));

@@ -22,7 +22,8 @@ export type BuildingType =
   | 'well'
   | 'woodcutter'
   | 'stonecutter'
-  | 'intersection';
+  | 'intersection'
+  | 'road';
 
 /**
  * Jobs a building can offer (see people.ts); builders work on construction
@@ -273,6 +274,19 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     width: 75,
     buildTime: 4,
     cost: { wood: 10 },
+    storage: {},
+    jobs: {},
+  },
+  road: {
+    type: 'road',
+    door: null, // a stretch of road
+    name: 'Road',
+    purpose: 'Lays the road one block (three squares) further. Goes only at the end of a road, and never onto another road.',
+    // the three cells of road it adds past the street's end (world.ts roadEnd); once laid it is part of the street
+    width: 75,
+    depth: 3,
+    buildTime: 2,
+    cost: { wood: 1 },
     storage: {},
     jobs: {},
   },

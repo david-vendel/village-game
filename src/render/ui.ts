@@ -597,7 +597,7 @@ export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number):
   const cost = `Costs ${amounts(def.cost)}` + (Object.keys(lack).length ? ` — need ${amounts(lack)} more` : '');
   const { w, d } = sizeOf(def.type);
   const why = whyNotBuild(world, def.type, menuX);
-  const size = def.type === 'intersection' ? 'a road across' : `${w} × ${d} squares`;
+  const size = def.type === 'intersection' ? 'a road across' : def.type === 'road' ? `the road ${w} squares on` : `${w} × ${d} squares`;
   const info = `${cost}   ·   ${time}   ·   ${size}` + (why ? `   ·   ${why}` : '');
   text(ctx, info, uiW / 2, M.infoY + 20, fitSize(ctx, info, 12, M.panel.w - 24), Object.keys(lack).length || why ? '#e89a7a' : '#cbbfa4', 'center');
 

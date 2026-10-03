@@ -3,6 +3,7 @@
 // its lot, trees, and people and the rider moving about, all simply drawn.
 // Positions come straight from the game's map (game/streets.ts groundPoint).
 
+import { roadShown } from './roads';
 import { BUILDINGS, type BuildingType } from '../game/buildings';
 import { CELL_W, FIELD_ROWS, QUARRIES, quarryLand, ROAD_HALF, rowFar, rowNear, type FieldZone } from '../game/layout';
 import { cellName, crossroadsPlaces, footprintOf, landUse, type LandUse } from '../game/grid';
@@ -10,7 +11,7 @@ import { LINE_ALPHA, lineLevel, showLevel } from './grid';
 import { treeGrowth } from '../game/nature';
 import { GROUND_PILE_Y } from '../game/piles';
 import type { Load } from '../game/resources';
-import { backOf, groundPoint, mapPoint, streetOf, streetPoint, streetRange, streetStart, type Vec } from '../game/streets';
+import { backOf, groundPoint, mapPoint, streetOf, streetPoint, streetStart, type Vec } from '../game/streets';
 import { getBuilding, type World } from '../game/world';
 import { doorProgress } from './farm';
 import { figureOf, outfitOf } from './figure';
@@ -38,6 +39,7 @@ const ROOF: Record<BuildingType, string> = {
   woodcutter: '#6b4a2c',
   stonecutter: '#8a8680',
   intersection: '#a8875b',
+  road: '#a8875b',
 };
 
 const RESOURCE_COLOUR: Record<Load['resource'], string> = { wood: '#7b5634', stone: '#a89c88', grain: '#d8b850', flour: '#f1ece0', bread: '#c58a46' };
@@ -97,7 +99,7 @@ export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zo
   for (const s of world.streets) {
     if (s.gone) continue;
     // three lanes, a cell each
-    const { min, max } = streetRange(world, s.index);
+    const { min, max } = roadShown(world, s.index);
     const road = [streetPoint(world, min, ROAD_HALF), streetPoint(world, max, ROAD_HALF), streetPoint(world, max, -ROAD_HALF), streetPoint(world, min, -ROAD_HALF)];
     shape(road, '#b89668', '#8a6a44', 1);
     for (const d of [-ROAD_HALF / 3, ROAD_HALF / 3]) {
