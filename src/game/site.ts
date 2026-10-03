@@ -28,6 +28,7 @@ import { BUILDINGS } from './buildings';
 import { materialSource, nearestPile, storeSpot, takeOut } from './economy';
 import { pileItems, siteSlot, SPOT_PILE_DX, STAND_Y, type Spot } from './layout';
 import { employees } from './people';
+import { heapDx } from './roadwork';
 import { pileById, pileSpot as groundSpot, takeFromPile } from './piles';
 import { streetDist } from './streets';
 import { RESOURCES, stockOf, total, type Amounts, type Load, type Resource, type Stock } from './resources';
@@ -92,6 +93,8 @@ const takenResource = (action: string) => MATERIALS.find((r) => action === takeA
 
 /** Where builders stand along the front of the building (dx), to lay materials down and build. */
 export function workSpots(type: Building['type']): number[] {
+  // a road piece has one heap, which moves on with the road (roadwork.ts heapDx)
+  if (type === 'road') return [0];
   const w = BUILDINGS[type].width;
   const n = Math.max(3, Math.floor(w / 30));
   return Array.from({ length: n }, (_, k) => -w / 2 + ((k + 0.5) * w) / n);
@@ -100,6 +103,7 @@ export function workSpots(type: Building['type']): number[] {
 /** Materials lying at the work spots, each at its place beside the spot (for display). */
 export function laidOut(b: Building): Array<{ dx: number; amounts: Stock }> {
   if (!b.site) return [];
+  if (b.type === 'road') return [{ dx: heapDx(b), amounts: b.site.laid[0] }];
   const spots = workSpots(b.type);
   return b.site.laid.map((amounts, k) => ({ dx: (spots[k] ?? 0) + SPOT_PILE_DX, amounts }));
 }
@@ -177,7 +181,8 @@ export function builderPositions(world: World, b: Building): number {
   const need = stillNeeded(world, b);
   const x = b.x;
   for (const r of RESOURCES) if (need[r] && (materialSource(world, r, x) || nearestPile(world, r, x))) waiting += loads(need[r]);
-  return Math.min(BUILDERS_PER_SITE, busy.length + waiting);
+  // a road is laid parcel by parcel, by one builder
+  return Math.min(b.type === 'road' ? 1 : BUILDERS_PER_SITE, busy.length + waiting);
 }
 
 /** Materials lying on the site's pile, for display. */

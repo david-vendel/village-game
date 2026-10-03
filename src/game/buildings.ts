@@ -281,12 +281,12 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     type: 'road',
     door: null, // a stretch of road
     name: 'Road',
-    purpose: 'Lays the road one block (three squares) further. Goes only at the end of a road, and never onto another road.',
-    // the three cells of road it adds past the street's end (world.ts roadEnd); once laid it is part of the street
-    width: 75,
+    purpose: 'Lays the road nine parcels (27 squares) further. The only thing built at the end of a road; never onto another road.',
+    // the 27 cells of road it adds past the street's end (world.ts roadEnd); once laid it is part of the street
+    width: 675,
     depth: 3,
-    buildTime: 2,
-    cost: { wood: 1 },
+    buildTime: 14,
+    cost: { wood: 3 },
     storage: {},
     jobs: {},
   },

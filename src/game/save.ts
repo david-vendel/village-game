@@ -30,7 +30,7 @@ import { cellKey, cellName, cellsOf, footprintOf } from './grid';
 import { lowestPlot, streetOf, type Street } from './streets';
 import { createWorld, goneStreet, layStreet, MERGES, PLOT_LAST, setStreetEnds, type Building, type Rider, type World } from './world';
 
-export const SAVE_VERSION = 23;
+export const SAVE_VERSION = 24;
 
 
 /** The persisted part of the world. */
@@ -288,6 +288,10 @@ function building(v: unknown, path: string): Building {
   if (b.size !== undefined && MERGES[out.type]) out.size = oneOf(b.size, [2, 3] as const, `${path}.size`);
   if (b.junction !== undefined && bool(b.junction, `${path}.junction`) && out.type === 'intersection') out.junction = true;
   if (b.site !== undefined) out.site = site(b.site, `${path}.site`, out.type);
+  if (out.type === 'road') {
+    const r = obj(b.road, `${path}.road`);
+    out.road = { step: dir(r.step, `${path}.road.step`), from: int(r.from, `${path}.road.from`) };
+  }
   if (b.farm !== undefined) out.farm = farm(b.farm, `${path}.farm`);
   if (b.demolition !== undefined) {
     const d = obj(b.demolition, `${path}.demolition`);

@@ -1162,6 +1162,47 @@ function drawCrossroads(ctx: Ctx, a: DrawArgs): void {
 }
 
 /**
+ * A road piece, as the build menu shows it (once laid it is just the street's
+ * road): a strip of road being laid over and over, left to right, into the
+ * grass, a cart track running out between stakes, a heap of gravel at its
+ * growing end and the rammer at work.
+ */
+function drawRoadPiece(ctx: Ctx, a: DrawArgs): void {
+  const W = 200;
+  const left = a.x - W / 2;
+  const top = a.base - 34;
+  const cycle = 4;
+  const t = (a.time % cycle) / cycle;
+  // laid for three quarters of the loop, then a moment to look at it before it starts again
+  const laid = clamp01(t / 0.75);
+  const end = left + W * laid;
+  // the grass it runs into, with stakes and a cord marking where the road will go
+  rect(ctx, left, top - 6, W, a.base - top + 10, '#7a8e3e');
+  for (let i = 0; i <= 5; i++) {
+    const sx = left + (i / 5) * W;
+    if (sx < end) continue;
+    rect(ctx, sx - 1.5, top - 12, 3, 9, '#6b4c30');
+    rect(ctx, sx - 1.5, a.base - 4, 3, 9, '#6b4c30');
+  }
+  line(ctx, Math.max(end, left), top - 9, left + W, top - 9, 'rgba(230,220,190,0.7)', 1);
+  line(ctx, Math.max(end, left), a.base - 1, left + W, a.base - 1, 'rgba(230,220,190,0.7)', 1);
+  // the road laid so far: beaten earth, wheel ruts, grassy edges
+  rect(ctx, left, top, end - left, a.base - top, '#a8875b');
+  for (const y of [top + 10, a.base - 10]) rect(ctx, left, y, end - left, 2, '#8c6d45');
+  for (let x = left + 6; x < end - 4; x += 13) ellipse(ctx, x + (hash(x) - 0.5) * 6, top + 4 + hash(x + 1) * (a.base - top - 8), 1.6, 1, '#c4a777');
+  rect(ctx, left, top - 1, end - left, 2, '#5d7030');
+  rect(ctx, left, a.base - 1, end - left, 2, '#5d7030');
+  if (laid >= 1) return;
+  // a heap of gravel where it is being laid, and the rammer going up and down on it
+  ellipse(ctx, end + 4, a.base - (a.base - top) / 2 + 6, 11, 6, '#9a8a72');
+  ellipse(ctx, end + 2, a.base - (a.base - top) / 2 + 3, 7, 4, '#b5a68c');
+  const lift = Math.abs(Math.sin(a.time * 9)) * 9;
+  const rx = end - 6;
+  rect(ctx, rx - 1, top - 30 - lift, 2, 32, '#6b4c30');
+  rect(ctx, rx - 5, top + 2 - lift, 10, 6, '#5a5048');
+}
+
+/**
  * Where a crossroads can be built (game/grid.ts crossroadsPlaces): a signpost
  * on the grass at the middle of the place, its boards fresh and bare, pointing
  * both ways along the street and one into the land, where the new road would
@@ -1210,6 +1251,6 @@ export const BUILDING_ART: Record<BuildingType, BuildingArt> = {
   woodcutter: { height: 100, draw: drawWoodcutter },
   stonecutter: { height: 100, draw: drawStonecutter },
   intersection: { height: 56, draw: drawCrossroads },
-  // a stretch of road being laid: the road itself is drawn with the ground, as the street's end moves on (scene.ts)
-  road: { height: 12, draw: () => {} },
+  // a stretch of road being laid: its picture is for the build menu; in the street the road itself is drawn with the ground, as the street's end moves on (roads.ts)
+  road: { height: 64, draw: drawRoadPiece },
 };

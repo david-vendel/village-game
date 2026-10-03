@@ -17,19 +17,20 @@ import { buildShortfall, putAway, takeFromWarehouses, upgradeShortfall, WAREHOUS
 import { createFarm, DEFAULT_WORK, farmWorkplace, updateCrops, type FarmState } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
 import { BASE_Y, BLOCK, CELL_W, FIRST_PLOT_X, FRONT_LIMIT, PLOT_SPACING, ROAD_GRID, STREET_BAND_HALF, STREET_LENGTH, yAt } from './layout';
-import { alongCell, baseLand, blockStartX, cellKey, footprintOf, landUse, onRoadGrid, roadBlocked, roadInWay, siteX, sizeOfBuilding, streetCell, whyNotHere } from './grid';
+import { alongCell, baseLand, blockStartX, cellKey, footprintAt, footprintOf, landUse, onRoadGrid, roadBlocked, roadInWay, siteX, sizeOfBuilding, streetCell, whyNotHere } from './grid';
 import { clearLand, plantWoods, gatherWorkplace, isGatherHut, updateForest, type Tree } from './nature';
 import { employees, laneY, nameFor, openings, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
 import { builderPositions, builders, createSite, siteWork, siteWorkplace, upgrading, type Site } from './site';
 import { demolitionWork, demolitionWorkplace, dropAll, materialsIn, tearDown, type Demolition } from './demolition';
 import { dropOnGround, type Pile } from './piles';
 import { RESOURCES, stockOf, type Stock } from './resources';
-import { CROSS_PLOT, fromStreet, groundPoint, mainStreet, newStreet, plotPoint, lowestPlot, plotX, PLOT_FIRST, PLOT_LAST, PLOTS_PER_STREET, STREET_END_RUN, streetOf, streetRange, streetsAt, streetStart, turnFacing, type Junction, type Street, type Vec } from './streets';
+import { CROSS_PLOT, fromStreet, groundPoint, mainStreet, newStreet, plotPoint, lowestPlot, plotX, PLOT_FIRST, PLOT_LAST, PLOTS_PER_STREET, rideRange, STREET_END_RUN, streetOf, streetRange, streetsAt, streetStart, turnFacing, type Junction, type Street, type Vec } from './streets';
 import { findPath, terrainSpeed } from './paths';
 import { eatAtTaverns } from './tavern';
 import { serfPositions, transportHub, transportWorkplace } from './transport';
 import { createWorker, currentJob, offDuty, updateWorker, type Nav, type Worker, type Workplace } from './worker';
 import { workshopWorkplace } from './workshop';
+import { parcelsLaid, ROAD_PIECE, roadWorkplace } from './roadwork';
 
 /** Length of each street (streets.ts). */
 export const WORLD_WIDTH = STREET_LENGTH;
@@ -114,6 +115,8 @@ export interface Building {
   upgraded?: true;
   /** A crossroads made where a new street met an old one (not built from the menu). */
   junction?: true;
+  /** A road piece: which way it lays its street on, and the street's end plot when it was placed (roadwork.ts). */
+  road?: { step: 1 | -1; from: number };
   /** While being pulled down: how far it has to go (demolition.ts). */
   demolition?: Demolition;
   /** Fields — farms only, once finished. */
@@ -319,24 +322,26 @@ export function placeAt(world: World, type: BuildingType, x: number): number | n
   return crossroadsPlot(world, blockStartX(x) + CELL_W)?.x ?? null;
 }
 
-/** How near the end of a street (px) the rider must be to lay more road there. */
-const ROAD_END_REACH = PLOT_SPACING;
+export { ROAD_PIECE };
 
 /**
- * The end of the street the rider at world x is at, if within ROAD_END_REACH
- * of it: which way the street goes on there (step), the plot more road would
- * add (k), and where that road piece stands (x: the middle of the block of
- * three cells it adds past the end).
+ * The end of the street the rider at world x is at, if in its last parcel
+ * (the rider stops in the middle of it, rideRange): which way the street goes
+ * on there (step), its new last plot once a road piece is laid (k), and where
+ * that piece stands (x: the middle of the ROAD_PIECE parcels it adds past the
+ * end). Nothing but a road piece is built there (whyNotBuild).
  */
 export function roadEnd(world: World, x: number): { street: Street; step: 1 | -1; k: number; x: number } | null {
   const s = world.streets[streetOf(x)];
   if (!s || s.gone) return null;
-  const { min, max } = streetRange(world, s.index);
-  const toMax = max - x;
-  const toMin = x - min;
-  if (Math.min(toMax, toMin) > ROAD_END_REACH) return null;
+  const ride = rideRange(world, s.index);
+  const toMax = ride.max - x;
+  const toMin = x - ride.min;
+  if (Math.min(toMax, toMin) > PLOT_SPACING / 2) return null;
   const step = toMax <= toMin ? 1 : -1;
-  return { street: s, step, k: step > 0 ? s.hi + 1 : s.lo - 1, x: (step > 0 ? max : min) + step * 1.5 * CELL_W };
+  const { min, max } = streetRange(world, s.index);
+  const half = (ROAD_PIECE * PLOT_SPACING) / 2;
+  return { street: s, step, k: step > 0 ? s.hi + ROAD_PIECE : s.lo - ROAD_PIECE, x: step > 0 ? max + half : min - half };
 }
 
 /**
@@ -351,9 +356,9 @@ function whyNoRoad(world: World, end: { street: Street; step: 1 | -1; k: number;
   if (k < lowestPlot(s.index) || k > PLOT_LAST) return 'The road can go no further';
   if (world.buildings.some((b) => b.type === 'road' && b.x === end.x)) return 'The road is being laid here already';
   const land = baseLand(world);
-  const i = alongCell(end.x);
-  // its three cells, and one of grass past them
-  const [i0, i1] = step > 0 ? [i - 1, i + 2] : [i - 2, i + 1];
+  const f = footprintAt('road', end.x);
+  // its cells, and one of grass past them
+  const [i0, i1] = step > 0 ? [f.i0, f.i1 + 1] : [f.i0 - 1, f.i1];
   for (let a = i0; a <= i1; a++) {
     for (let j = -1; j <= 1; j++) {
       const cell = streetCell(s, a, j);
@@ -381,26 +386,42 @@ export function setStreetEnds(world: World, s: Street, lo: number, hi: number): 
   }
 }
 
-/** A road piece is laid: its street runs a block further, and the piece is part of it. */
-function layRoad(world: World, b: Building): void {
+/**
+ * The street of a road piece runs as far as its parcels are laid
+ * (roadwork.ts): each is road as soon as it is done.
+ */
+function roadSoFar(world: World, b: Building): void {
   const s = world.streets[streetOf(b.x)];
-  world.buildings = world.buildings.filter((o) => o !== b);
-  if (!s || s.gone) return;
-  const { min, max } = streetRange(world, s.index);
-  if (Math.abs(b.x - max) < Math.abs(b.x - min)) setStreetEnds(world, s, s.lo, Math.min(PLOT_LAST, s.hi + 1));
-  else setStreetEnds(world, s, Math.max(lowestPlot(s.index), s.lo - 1), s.hi);
+  if (!s || s.gone || !b.road) return;
+  const laid = b.status === 'done' ? ROAD_PIECE : parcelsLaid(b);
+  const end = b.road.from + b.road.step * laid;
+  const [lo, hi] = b.road.step > 0 ? [s.lo, Math.min(PLOT_LAST, Math.max(s.hi, end))] : [Math.max(lowestPlot(s.index), Math.min(s.lo, end)), s.hi];
+  if (lo === s.lo && hi === s.hi) return;
+  setStreetEnds(world, s, lo, hi);
   // the new road is cut through the woods, and fields give way to it
   clearLand(world);
   syncFarmFields(world);
 }
 
+/** Road pieces being laid: their streets go on, parcel by parcel. */
+function syncRoads(world: World): void {
+  for (const b of world.buildings) if (b.type === 'road' && b.status === 'constructing') roadSoFar(world, b);
+}
+
+/** A road piece is laid: its street runs ROAD_PIECE parcels further, and the piece is part of it. */
+function layRoad(world: World, b: Building): void {
+  b.status = 'done';
+  roadSoFar(world, b);
+  world.buildings = world.buildings.filter((o) => o !== b);
+}
+
 /** Why a building of this type can't be built where the rider wants it (world x), or null if it can. */
 export function whyNotBuild(world: World, type: BuildingType, x: number): string | null {
   if (closing(world, streetOf(x))) return 'This street is being closed';
-  if (type === 'road') {
-    const end = roadEnd(world, x);
-    return end ? whyNoRoad(world, end) : 'Roads go only at the end of a road';
-  }
+  const end = roadEnd(world, x);
+  if (type === 'road') return end ? whyNoRoad(world, end) : 'Roads go only at the end of a road';
+  // the end of a road is kept for the road to go on
+  if (end) return 'Only a road goes at the end of a road';
   const at = placeAt(world, type, x);
   if (at === null) return 'No room for a road here';
   if (type === 'intersection' && crossroadsPlot(world, at)?.buildingId != null) return 'There is a crossroads here already';
@@ -441,6 +462,10 @@ export function placeBuilding(
   };
   // builders bring the materials and build it (a free one has its materials on site already)
   if (!instant) b.site = createSite(type, opts.free ? BUILDINGS[type].cost : {});
+  if (type === 'road') {
+    const end = roadEnd(world, wantX)!;
+    b.road = { step: end.step, from: end.step > 0 ? end.street.hi : end.street.lo };
+  }
   world.buildings.push(b);
   if (type === 'road') {
     if (instant) layRoad(world, b);
@@ -1044,6 +1069,7 @@ export function update(world: World, dt: number, input: MoveInput): void {
   updateForest(world, dt, () => rand(world));
   updateWorkers(world, dt);
   // a site whose builders have done all the work is finished
+  syncRoads(world);
   for (const b of world.buildings) if (b.site && b.progress >= 1) complete(world, b);
   // and one being pulled down that is down is gone
   for (const b of [...world.buildings]) if (b.status === 'demolishing' && b.progress <= 1e-9) pulledDown(world, b);
@@ -1057,6 +1083,7 @@ export function update(world: World, dt: number, input: MoveInput): void {
  */
 export function workplaceOf(world: World, b: Building, role: Role): Workplace | null {
   if (b.status === 'demolishing') return role === 'builder' ? demolitionWorkplace(world, b) : null;
+  if (b.site && b.type === 'road') return role === 'builder' ? roadWorkplace(world, b, world.params.buildSpeed) : null;
   if (b.site && (b.status !== 'done' || role === 'builder')) return siteWorkplace(world, b, world.params.buildSpeed);
   if (b.farm) return farmWorkplace(b.farm, b.stock, world.params);
   const recipe = BUILDINGS[b.type].makes;
@@ -1183,7 +1210,8 @@ function updateRider(world: World, dt: number, input: MoveInput): void {
   }
   // a street that isn't there (a broken save): back to the main street
   if (!world.streets[streetOf(r.x)]) r.x = world.plots[0].x;
-  const { min, max } = streetRange(world, streetOf(r.x));
+  // (from the middle of the street's first parcel to the middle of its last)
+  const { min, max } = rideRange(world, streetOf(r.x));
   r.x += r.vx * dt;
   if (r.x < min || r.x > max) {
     r.x = Math.max(min, Math.min(max, r.x));

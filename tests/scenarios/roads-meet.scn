@@ -9,18 +9,18 @@ build crossroads at s0:55
 ride #last
 turn up
 expect cannot build road at s1:131 end of a road
-lay road 8
+lay road 1
 expect cannot build crossroads at s1:151 every 27 cells
 ride s1:158
 build crossroads here
 ride #last
 turn up
-lay road 12
+lay road 1
 build crossroads at s0:28
 ride #last
 turn up
-lay road 4
-# the next block would come within a cell of the road along row AB
-expect cannot build road at s3:153 another road is in the way
+# nine parcels on would come within a cell of the road along row AB
+ride end
+expect cannot build road at s3:134 another road is in the way
 streets
 map AE22:-C64

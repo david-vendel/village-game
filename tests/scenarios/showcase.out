@@ -4,40 +4,45 @@
 > free on
 > construction off
 > build house at s0:139
-  #81 house at s0:139-141, done
+  #77 house at s0:139-141, done
 > build bakery next
-  #82 bakery at s0:142-147, done
+  #78 bakery at s0:142-147, done
 > build tavern next
-  #83 tavern at s0:148-156, done
+  #79 tavern at s0:148-156, done
 > build house next
-  #84 house at s0:157-159, done
+  #80 house at s0:157-159, done
 > build well next
-  #85 well at s0:160-162, done
+  #81 well at s0:160-162, done
 > build woodcutter at s0:193
-  #86 woodcutter at s0:193-198, done
+  #82 woodcutter at s0:193-198, done
 > build stonecutter next
-  #87 stonecutter at s0:199-204, done
+  #83 stonecutter at s0:199-204, done
 > build blacksmith next
-  #88 blacksmith at s0:205-210, done
+  #84 blacksmith at s0:205-210, done
 > build chapel next
-  #89 chapel at s0:211-216, done
+  #85 chapel at s0:211-216, done
 > build mill at s0:220
-  #90 mill at s0:220-225, done
+  #86 mill at s0:220-225, done
 > build watchtower next
-  #91 watchtower at s0:226-228, done
+  #87 watchtower at s0:226-228, done
 > build market next
-  #92 market at s0:229-234, done
+  #88 market at s0:229-234, done
 > build farm next
-  #93 farm at s0:235-240, done
+  #89 farm at s0:235-240, done
 > build warehouse next
-  #94 warehouse at s0:241-243, done
+  #90 warehouse at s0:241-243, done
+# the street laid on a piece, for the stonecutter going up at its old end
+> ride s0:240
+  rider: s0:240 facing +
+> lay road 1
+  s0 now runs cells 16..273
 > construction on
 > build house at s0:166
-  #95 house at s0:166-168, constructing
+  #92 house at s0:166-168, constructing
 > build tavern at s0:178
-  #96 tavern at s0:178-186, constructing
+  #93 tavern at s0:178-186, constructing
 > build stonecutter at s0:247
-  #97 stonecutter at s0:247-252, constructing
+  #94 stonecutter at s0:247-252, constructing
 > run 50s
 > ride s0:150
   rider: s0:150 facing +
@@ -50,16 +55,16 @@
     E .....................YYY........................YYY......fffFFFFFFfff......YYY........................YYY........................YYY........................YYYNNNNNN..................YYY...........uuuuUUUUUUuuuYYY.........
     D ...AAAAAABBBBBBBBBCCCYYY......DDDDDD......EEE...YYY......fffFFFFFFfff......YYY............GGGGGG......YYYIIIJJJJJJKKKKKKKKKLLLMMMYYYWWW......HHHXXXXXXXXX...YYYNNNNNNOOOOOOPPPPPPQQQQQQYYYRRRRRRSSSTTTTTTUUUUUUVVVYYYYYYYYY...
     C ...AAAAAABBBBBBBBBCCCYYY......DDDDDD......EEE...YYY......fffFFFFFFfff......YYY............GGGGGG......YYYIIIJJJJJJKKKKKKKKKLLLMMMYYYWWW......HHHXXXXXXXXX...YYYNNNNNNOOOOOOPPPPPPQQQQQQYYYRRRRRRSSSTTTTTTUUUUUUVVVYYYYYYYYY...
-    B ===========================================================================================================================================================================================================================...
-    A ====================================================================================================================@======================================================================================================...
-   -A ===========================================================================================================================================================================================================================...
+    B ==============================================================================================================================================================================================================================
+    A ====================================================================================================================@=========================================================================================================
+   -A ==============================================================================================================================================================================================================================
    -B ............................................................ffffff.....................................................................................................................................uuuuuuuuuu.............
    -C ........................................................................................................................................................................................................uuuuuuu...............
    -D ..............................................................................................................................................................................................................................
    -E ..............................................................................................................................................................................................................................
    -F ..............................................................................................................................................................................................................................
   
-    A=#1 house  B=#3 tavern  C=#4 well  D=#5 warehouse  E=#7 house  F=#8 farm  G=#9 chapel  H=#10 house  I=#81 house  J=#82 bakery  K=#83 tavern  L=#84 house  M=#85 well  N=#86 woodcutter  O=#87 stonecutter  P=#88 blacksmith  Q=#89 chapel  R=#90 mill  S=#91 watchtower  T=#92 market  U=#93 farm  V=#94 warehouse  W=#95 house  X=#96 tavern  Y=#97 stonecutter
+    A=#1 house  B=#3 tavern  C=#4 well  D=#5 warehouse  E=#7 house  F=#8 farm  G=#9 chapel  H=#10 house  I=#77 house  J=#78 bakery  K=#79 tavern  L=#80 house  M=#81 well  N=#82 woodcutter  O=#83 stonecutter  P=#84 blacksmith  Q=#85 chapel  R=#86 mill  S=#87 watchtower  T=#88 market  U=#89 farm  V=#90 warehouse  W=#92 house  X=#93 tavern  Y=#94 stonecutter
     = | road  + crossing  Y kept for a crossroads  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
 > list
   #1  house×2  s0:37-42  done
@@ -70,20 +75,20 @@
   #8  farm  s0:94-99  done  fields=24 (grass 10, fallow 1, growing 13, ripe 0)  staff: farmer
   #9  chapel  s0:124-129  done
   #10  house  s0:175-177  done
-  #81  house  s0:139-141  done
-  #82  bakery  s0:142-147  done  staff: baker
-  #83  tavern  s0:148-156  done
-  #84  house  s0:157-159  done
-  #85  well  s0:160-162  done
-  #86  woodcutter  s0:193-198  done  staff: woodcutter
-  #87  stonecutter  s0:199-204  done  staff: stonecutter
-  #88  blacksmith  s0:205-210  done
-  #89  chapel  s0:211-216  done
-  #90  mill  s0:220-225  done  staff: miller
-  #91  watchtower  s0:226-228  done
-  #92  market  s0:229-234  done
-  #93  farm  s0:235-240  done  fields=24 (grass 18, fallow 0, growing 6, ripe 0)  staff: farmer
-  #94  warehouse  s0:241-243  done
-  #95  house  s0:166-168  done
-  #96  tavern  s0:178-186  done
-  #97  stonecutter  s0:247-252  done  staff: stonecutter
+  #77  house  s0:139-141  done
+  #78  bakery  s0:142-147  done  staff: baker
+  #79  tavern  s0:148-156  done
+  #80  house  s0:157-159  done
+  #81  well  s0:160-162  done
+  #82  woodcutter  s0:193-198  done  staff: woodcutter
+  #83  stonecutter  s0:199-204  done  staff: stonecutter
+  #84  blacksmith  s0:205-210  done
+  #85  chapel  s0:211-216  done
+  #86  mill  s0:220-225  done  staff: miller
+  #87  watchtower  s0:226-228  done
+  #88  market  s0:229-234  done
+  #89  farm  s0:235-240  done  fields=24 (grass 18, fallow 0, growing 6, ripe 0)  staff: farmer
+  #90  warehouse  s0:241-243  done
+  #92  house  s0:166-168  done
+  #93  tavern  s0:178-186  done
+  #94  stonecutter  s0:247-252  done  staff: stonecutter

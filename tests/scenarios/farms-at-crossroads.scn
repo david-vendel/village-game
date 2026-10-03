@@ -11,7 +11,9 @@ streets
 ride #last
 turn up
 expect rider s1
-ride +5
+# the end of the road is kept for more road: lay some, then build beside it
+lay road 1
+ride s1:136
 build farm here
 expect at s1:136 farm done
 expect fields at s0:43 24

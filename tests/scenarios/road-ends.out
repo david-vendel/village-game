@@ -7,52 +7,52 @@
 > build crossroads at s0:28
   #1 intersection at s0:28-30, done
 > streets
-  s0  runs east (lots on its north side), cells 10..252
-  s1  runs north (lots on its west side), cells 121..141, from crossroads #1
+  s0  runs east (lots on its north side), cells 16..246
+  s1  runs north (lots on its west side), cells 127..135, from crossroads #1
     crossroads #1: s0:29 = s1:131 (cell A29)
 > ride #last
   rider: s0:29 facing +
 > turn up
   rider: s1:131 facing +
-> lay road 8
-  s1 now runs cells 121..165
+> lay road 1
+  s1 now runs cells 127..162
 > ride s1:158
   rider: s1:158 facing +
 > build crossroads here
-  #15 intersection at s1:157-159, done
+  #5 intersection at s1:157-159, done
 > ride #last
   rider: s1:158 facing +
 > turn up
   rider: s2:131 facing +
-> lay road 8
-  s2 now runs cells 121..165
+> lay road 1
+  s2 now runs cells 127..162
 > ride s2:158
   rider: s2:158 facing +
 > build crossroads here
-  #24 intersection at s2:157-159, done
+  #8 intersection at s2:157-159, done
 > ride #last
   rider: s2:158 facing +
 > turn up
   rider: s3:131 facing +
 # the fourth street runs south at column 2, past the main street's west end
-> lay road 10
-  s3 now runs cells 121..171
+> lay road 1
+  s3 now runs cells 127..162
 > streets
-  s0  runs east (lots on its north side), cells 10..252
-  s1  runs north (lots on its west side), cells 121..165, from crossroads #1
-  s2  runs west (lots on its south side), cells 121..165, from crossroads #15
-  s3  runs south (lots on its east side), cells 121..171, from crossroads #24
+  s0  runs east (lots on its north side), cells 16..246
+  s1  runs north (lots on its west side), cells 127..162, from crossroads #1
+  s2  runs west (lots on its south side), cells 127..162, from crossroads #5
+  s3  runs south (lots on its east side), cells 127..162, from crossroads #8
     crossroads #1: s0:29 = s1:131 (cell A29)
-    crossroads #15: s1:158 = s2:131 (cell AB29)
-    crossroads #24: s2:158 = s3:131 (cell AB2)
+    crossroads #5: s1:158 = s2:131 (cell AB29)
+    crossroads #8: s2:158 = s3:131 (cell AB2)
 > map AE0:-F36
       0         10        20        30
        |  |  |  |  |  |  |  |  |  |  |  |  
    AE .|||........................|||......
    AD .|||........................|||......
-   AC =+++========================+++======
-   AB =+++========================+++======
-   AA =+++========================+++======
+   AC =+++========================+++===...
+   AB =+++========================+++===...
+   AA =+++========================+++===...
     Z .|||........................|||......
     Y .|||........................|||......
     X .|||........................|||......
@@ -77,14 +77,14 @@
     E .|||........................|||......
     D .|||........................|||......
     C .|||........................|||......
-    B .|||YYY...==================+++======
-    A .|||YYY...==================+++======
-   -A .|||YYY...==================+++======
+    B .|||YYY.........============+++======
+    A .|||YYY.........============+++======
+   -A .|||YYY.........============+++======
    -B .|||........................|||......
-   -C .|||........................|||......
+   -C .|@|........................|||......
    -D .|||........................|||......
-   -E .|||........................|||......
-   -F .|||........................|||......
+   -E .....................................
+   -F .....................................
   
     I intersection
     = | road  + crossing  Y kept for a crossroads  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
@@ -96,19 +96,19 @@
 > build crossroads at s0:55
   #1 intersection at s0:55-57, done
 > build crossroads at s0:82
-  #7 intersection at s0:82-84, done
+  #3 intersection at s0:82-84, done
 > ride #last
   rider: s0:83 facing +
 > turn up
   rider: s2:131 facing +
-> lay road 8
-  s2 now runs cells 121..165
+> lay road 1
+  s2 now runs cells 127..162
 > streets
-  s0  runs east (lots on its north side), cells 10..252
-  s1  runs north (lots on its west side), cells 121..141, from crossroads #1
-  s2  runs north (lots on its west side), cells 121..165, from crossroads #7
+  s0  runs east (lots on its north side), cells 16..246
+  s1  runs north (lots on its west side), cells 127..135, from crossroads #1
+  s2  runs north (lots on its west side), cells 127..162, from crossroads #3
     crossroads #1: s0:56 = s1:131 (cell A56)
-    crossroads #7: s0:83 = s2:131 (cell A83)
+    crossroads #3: s0:83 = s2:131 (cell A83)
 > map O50:-C90
       50        60        70        80        9
         |  |  |  |  |  |  |  |  |  |  |  |  |  
@@ -116,12 +116,12 @@
     N ..............############......|||......
     M ..............############......|||......
     L ..............############......|||......
-    K .....|||......############......|||......
-    J .....|||......############......|||......
-    I .....|||......############......|||......
-    H .....|||......############......|||......
-    G .....|||......############......|||......
-    F .....|||......############......|||......
+    K ..............############......|||......
+    J ..............############......|||......
+    I ..............############......|||......
+    H ..............############......|||......
+    G ..............############......|||......
+    F ..............############......|||......
     E .....|||........................|||......
     D .....|||........................|||......
     C .....|||........................|||......

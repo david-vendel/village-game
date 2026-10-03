@@ -34,18 +34,18 @@
 > menu
   build menu: intersection; chosen: intersection
 > build crossroads here
-  #81 intersection at s0:82-84, constructing
+  #77 intersection at s0:82-84, constructing
 > expect at s0:82 crossroads constructing
-  ok: #81 intersection at s0:82-84, constructing
+  ok: #77 intersection at s0:82-84, constructing
 > run until built
   all built after 14.7s
 > expect streets 2
   ok: 2 streets
 # its street has places of its own, every 27 cells along it
 > streets
-  s0  runs east (lots on its north side), cells 10..252
-  s1  runs north (lots on its west side), cells 121..141, from crossroads #81
-    crossroads #81: s0:83 = s1:131 (cell A83)
+  s0  runs east (lots on its north side), cells 16..246
+  s1  runs north (lots on its west side), cells 127..135, from crossroads #77
+    crossroads #77: s0:83 = s1:131 (cell A83)
 > map AE70:-C100
       70        80        90        1
       |  |  |  |  |  |  |  |  |  |  |
@@ -69,12 +69,12 @@
     N ######.........................
     M ######.........................
     L ######.........................
-    K ######......|||................
-    J ######......|||................
-    I ######......|||................
-    H ######......|||................
-    G ######......|||................
-    F ######......|||................
+    K ######.........................
+    J ######.........................
+    I ######.........................
+    H ######.........................
+    G ######.........................
+    F ######.........................
     E ............|||......,,,FFFFFF,
     D ......HHH...|||......_,,FFFFFF,
     C ......HHH...|||......",,FFFFFF,
@@ -91,8 +91,8 @@
 > turn up
   rider: s1:131 facing +
 # it runs a block past its crossroads; road pieces lay it on to the next place
-> lay road 8
-  s1 now runs cells 121..165
+> lay road 1
+  s1 now runs cells 127..162
 > ride s1:158
   rider: s1:158 facing +
 > menu

@@ -582,7 +582,8 @@ export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number):
     const fits = menu.fits[i];
     if (fits && Object.keys(buildShortfall(world, type)).length) ctx.globalAlpha = 0.4;
     const previewH = r.h - 34;
-    const scale = Math.min(0.6, (r.w - 8) / (def.width * 1.3), previewH / (BUILDING_ART[type].height + 20));
+    // (a road piece is much longer than its picture)
+    const scale = Math.min(0.6, (r.w - 8) / ((type === 'road' ? 200 : def.width) * 1.3), previewH / (BUILDING_ART[type].height + 20));
     if (fits) drawBuildingIcon(ctx, type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time);
     else drawBuildingIconGrey(ctx, type, r.x + r.w / 2, r.y + r.h - 30, scale);
     ctx.restore();

@@ -148,7 +148,7 @@ describe('farms in the world', () => {
 
   it('a farm hires a farmer once finished: a free farmer, else someone looking for work (builders never farm)', () => {
     const w = createWorld();
-    const b = placeBuilding(w, 412.5, 'farm')!;
+    const b = placeBuilding(w, 487.5, 'farm')!;
     expect(b.farm).toBeUndefined();
     tick(w, 1);
     expect(employees(w, b).every((p) => p.job!.role === 'builder')).toBe(true);
@@ -160,7 +160,7 @@ describe('farms in the world', () => {
     expect(farmer.profession).toBe('farmer');
     expect(farmer.seeker).toBeUndefined();
     const empty = createWorld({ village: false });
-    const lonely = placeBuilding(empty, 412.5, 'farm', { instant: true, free: true })!;
+    const lonely = placeBuilding(empty, 487.5, 'farm', { instant: true, free: true })!;
     tick(empty, 1);
     expect(employees(empty, lonely)).toHaveLength(0);
   });

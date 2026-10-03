@@ -244,7 +244,8 @@ export function checkInvariants(world: World): string[] {
     if (b.type === 'intersection') continue;
     const f = footprintOf(b)!;
     if ((((f.i0 - 1) % BLOCK) + BLOCK) % BLOCK !== 0) bad.push(`${name(b)} does not start at a cell 3n + 1 (starts at ${f.i0})`);
-    if (f.i1 - f.i0 + 1 !== sizeOfBuilding(b).w) bad.push(`${name(b)} is ${f.i1 - f.i0 + 1} cells wide, not ${sizeOfBuilding(b).w}`);
+    // (a road piece being laid takes only the parcels not laid yet)
+    if (b.type !== 'road' && f.i1 - f.i0 + 1 !== sizeOfBuilding(b).w) bad.push(`${name(b)} is ${f.i1 - f.i0 + 1} cells wide, not ${sizeOfBuilding(b).w}`);
     for (const c of cellsOf(world, f)) {
       const k = cellKey(c.c, c.r);
       const other = at.get(k);

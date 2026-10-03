@@ -1,5 +1,5 @@
 import { stockOf } from './resources';
-import { CROSS_PLOT, plotX, streetRange } from './streets';
+import { CROSS_PLOT, plotX, rideRange, streetRange } from './streets';
 import { CELL_W } from './layout';
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS, BUILDING_TYPES } from './buildings';
@@ -16,6 +16,7 @@ import {
   buildingAt,
   RIDER_MAX_SPEED,
   setConstructionEnabled,
+  ROAD_PIECE,
   STREET_STUB,
   whyNotBuild,
   update,
@@ -44,17 +45,17 @@ describe('building registry', () => {
 describe('placement', () => {
   it('places a building on whole cells where the rider wants it', () => {
     const w = emptyWorld();
-    const b = placeBuilding(w, 412.5, 'mill', { free: true });
+    const b = placeBuilding(w, 487.5, 'mill', { free: true });
     expect(b).not.toBeNull();
-    expect(buildingAt(w, plotOf(w, 0, 0).x)).toBe(b);
+    expect(buildingAt(w, plotOf(w, 0, 1).x)).toBe(b);
     expect(b!.x % 25).toBe(0); // 6 cells wide: its middle on a cell edge
     expect(b!.status).toBe('constructing');
   });
 
   it('refuses to place over another building or off the streets', () => {
     const w = emptyWorld();
-    placeBuilding(w, 412.5, 'house', { free: true });
-    expect(placeBuilding(w, 412.5, 'farm', { free: true })).toBeNull();
+    placeBuilding(w, 487.5, 'house', { free: true });
+    expect(placeBuilding(w, 487.5, 'farm', { free: true })).toBeNull();
     expect(placeBuilding(w, 999999, 'farm', { free: true })).toBeNull();
     expect(w.buildings).toHaveLength(1);
   });
@@ -109,7 +110,7 @@ describe('build menu', () => {
 
   it('rider cannot move while the menu is open', () => {
     const w = emptyWorld();
-    w.rider.x = plotOf(w, 0, 0).x - 25;
+    w.rider.x = plotOf(w, 0, 1).x - 25;
     openMenu(w);
     const x = w.rider.x;
     runFor(w, 1, { left: false, right: true });
@@ -132,7 +133,7 @@ describe('construction', () => {
 
   it('nothing gets built without anyone to build it', () => {
     const w = emptyWorld();
-    const b = placeBuilding(w, 412.5, 'well', { free: true })!;
+    const b = placeBuilding(w, 487.5, 'well', { free: true })!;
     runFor(w, BUILDINGS.well.buildTime * 2);
     expect(b.progress).toBe(0);
   });
@@ -226,7 +227,7 @@ function layRoadTo(w: World, i: number, k: number): void {
 }
 
 describe('streets', () => {
-  it('a road piece lays its street a block further, only at an end and never onto another road', () => {
+  it('a road piece lays its street nine parcels further, only at an end and never onto another road', () => {
     const w = createWorld();
     w.buildings.find((b) => b.type === 'warehouse')!.stock.wood = 300;
     placeBuilding(w, 2087.5, 'intersection', { instant: true });
@@ -237,14 +238,43 @@ describe('streets', () => {
     const { max } = streetRange(w, 1);
     const wood = w.buildings.find((b) => b.type === 'warehouse')!.stock.wood;
     placeBuilding(w, max, 'road', { instant: true });
-    expect(s.hi).toBe(CROSS_PLOT + STREET_STUB + 1);
-    expect(streetRange(w, 1).max).toBe(max + 3 * CELL_W);
+    expect(s.hi).toBe(CROSS_PLOT + STREET_STUB + ROAD_PIECE);
+    expect(streetRange(w, 1).max).toBe(max + ROAD_PIECE * 3 * CELL_W);
     expect(w.buildings.some((b) => b.type === 'road')).toBe(false);
-    expect(w.buildings.find((b) => b.type === 'warehouse')!.stock.wood).toBe(wood - 1);
+    expect(w.buildings.find((b) => b.type === 'warehouse')!.stock.wood).toBe(wood - 3);
     // laid on from its other end, out into the land in front of the main street: as far as a street's plots go
     while (!whyNotBuild(w, 'road', streetRange(w, 1).min)) placeBuilding(w, streetRange(w, 1).min, 'road', { instant: true });
     expect(whyNotBuild(w, 'road', streetRange(w, 1).min)).toMatch(/no further/);
-    expect(s.lo).toBe(0);
+    expect(s.lo).toBeLessThan(ROAD_PIECE);
+  });
+
+  it('only a road piece goes at the end of a road, and the rider stops in the middle of the last parcel', () => {
+    const w = createWorld();
+    const end = plotX(0, w.streets[0].hi);
+    expect(whyNotBuild(w, 'house', end)).toMatch(/only a road/i);
+    expect(whyNotBuild(w, 'road', end)).toBeNull();
+    expect(whyNotBuild(w, 'house', end - 3 * CELL_W)).toBeNull();
+    w.rider.x = end - 100;
+    runFor(w, 3, { left: false, right: true });
+    expect(w.rider.x).toBe(end);
+  });
+
+  it('a road is laid parcel by parcel, and each parcel is road (and ridden on) as soon as it is laid', () => {
+    const w = createWorld();
+    const s = w.streets[0];
+    const hi = s.hi;
+    const piece = placeBuilding(w, plotX(0, hi), 'road')!;
+    const seen = new Set<number>();
+    for (let t = 0; t < 400 && w.buildings.includes(piece); t += 0.5) {
+      runFor(w, 0.5);
+      seen.add(s.hi);
+      // the rider can ride out onto what is laid so far, and no further
+      expect(rideRange(w, 0).max).toBe(plotX(0, s.hi));
+    }
+    expect(w.buildings.includes(piece)).toBe(false);
+    expect(s.hi).toBe(hi + ROAD_PIECE);
+    // every parcel in between was a road end on the way
+    for (let k = hi; k <= hi + ROAD_PIECE; k++) expect(seen.has(k) || k === hi).toBe(true);
   });
 
   it('the main street is laid on both ways, west into negative x', () => {
@@ -252,16 +282,15 @@ describe('streets', () => {
     w.buildings.find((b) => b.type === 'warehouse')!.stock.wood = 300;
     const { min, max } = streetRange(w, 0);
     expect(placeBuilding(w, max, 'road', { instant: true })).not.toBeNull();
-    expect(placeBuilding(w, min, 'road', { instant: true })).not.toBeNull();
-    for (let i = 0; i < 12; i++) placeBuilding(w, streetRange(w, 0).min, 'road', { instant: true });
-    expect(streetRange(w, 0)).toEqual({ min: min - 13 * 3 * CELL_W, max: max + 3 * CELL_W });
+    for (let i = 0; i < 4; i++) expect(placeBuilding(w, streetRange(w, 0).min, 'road', { instant: true })).not.toBeNull();
+    const piece = ROAD_PIECE * 3 * CELL_W;
+    expect(streetRange(w, 0)).toEqual({ min: min - 4 * piece, max: max + piece });
     expect(streetRange(w, 0).min).toBeLessThan(0);
     // and the rider rides out along it
     w.rider.x = 0;
     runFor(w, 3, { left: true, right: false });
     expect(w.rider.x).toBeLessThan(-300);
   });
-
 
   it('builders reach a site two streets away, turning at each crossroads only once', () => {
     const w = createWorld();

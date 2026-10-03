@@ -20,6 +20,7 @@
 
 import { BUILDINGS, type BuildingType } from './buildings';
 import { BLOCK, CELL_W, FIELD_ROW_J, LOT_ROW, QUARRIES, quarryLand, ROAD_GRID, ROAD_GRID_COL, ROAD_GRID_ROW } from './layout';
+import { parcelsLaid } from './roadwork';
 import { backOf, mapPoint, streetOf, streetRange, streetStart, type Street, type Vec } from './streets';
 import type { Building, World } from './world';
 
@@ -94,19 +95,20 @@ export function footprintAt(type: BuildingType, x: number, size = 1): Footprint 
     const i = alongCell(x);
     return { street, i0: i - 1, i1: i + 1, j0: LOT_ROW, j1: LOT_ROW + 2 };
   }
-  // a stretch of road being laid: the three lanes of the block past the street's end
-  if (type === 'road') {
-    const i = alongCell(x);
-    return { street, i0: i - 1, i1: i + 1, j0: -1, j1: 1 };
-  }
   const { w, d } = sizeOf(type, size);
   const i0 = Math.round((x - streetStart(street)) / CELL_W - w / 2);
+  // a stretch of road being laid: the three lanes past the street's end
+  if (type === 'road') return { street, i0, i1: i0 + w - 1, j0: -1, j1: 1 };
   return { street, i0, i1: i0 + w - 1, j0: LOT_ROW, j1: LOT_ROW + d - 1 };
 }
 
-/** The cells a building takes (none for a finished crossroads: it is road). */
+/** The cells a building takes (none for a finished crossroads: it is road; a road piece, the parcels not laid yet). */
 export function footprintOf(b: Building): Footprint | null {
-  return b.type === 'intersection' && b.status !== 'constructing' ? null : footprintAt(b.type, b.x, b.size);
+  if (b.type === 'intersection' && b.status !== 'constructing') return null;
+  const f = footprintAt(b.type, b.x, b.size);
+  if (b.type !== 'road') return f;
+  const cut = BLOCK * parcelsLaid(b);
+  return (b.road?.step ?? 1) > 0 ? { ...f, i0: f.i0 + cut } : { ...f, i1: f.i1 - cut };
 }
 
 /** Whether world x is on a cell 3n + 1 along its street: where a building can start. */

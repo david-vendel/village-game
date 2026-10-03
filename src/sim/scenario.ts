@@ -37,7 +37,7 @@ import { buildShortfall, warehouses } from '../game/economy';
 import { footprintOf } from '../game/grid';
 import { CELL_W } from '../game/layout';
 import { RESOURCES } from '../game/resources';
-import { streetOf, streetRange, streetStart } from '../game/streets';
+import { rideRange, streetOf, streetRange, streetStart } from '../game/streets';
 import {
   buildingAt,
   confirmMenu,
@@ -274,7 +274,7 @@ export function runScenario(script: string, opts: ScenarioOptions = {}): Scenari
         case 'ride': {
           const rel = /^([+-]\d+)$/.exec(w[1] ?? '');
           world.rider.vx = 0;
-          const range = streetRange(world, streetOf(world.rider.x));
+          const range = rideRange(world, streetOf(world.rider.x));
           if (w[1] === 'end' || w[1] === 'start') world.rider.x = w[1] === 'end' ? range.max : range.min;
           else world.rider.x = rel ? world.rider.x + +rel[1] * CELL_W : xOf(w[1]);
           if (rel) world.rider.facing = +rel[1] >= 0 ? 1 : -1;
@@ -286,13 +286,14 @@ export function runScenario(script: string, opts: ScenarioOptions = {}): Scenari
           if (w[1] !== 'road' || !(n > 0)) fail('lay road <count> [start]');
           const s = streetOf(world.rider.x);
           for (let i = 0; i < n; i++) {
-            const range = streetRange(world, s);
-            world.rider.x = w[3] === 'start' ? range.min : range.max;
+            const ride = rideRange(world, s);
+            world.rider.x = w[3] === 'start' ? ride.min : ride.max;
             buildHere('road');
             if (!runFor(seconds('3d'), () => !world.buildings.some((b) => b.type === 'road'), label)) fail('the road piece was not laid');
           }
           const range = streetRange(world, s);
-          world.rider.x = w[3] === 'start' ? range.min : range.max;
+          const ride = rideRange(world, s);
+          world.rider.x = w[3] === 'start' ? ride.min : ride.max;
           say(`s${s} now runs cells ${Math.round((range.min - streetStart(s)) / CELL_W)}..${Math.round((range.max - streetStart(s)) / CELL_W) - 1}`);
           break;
         }

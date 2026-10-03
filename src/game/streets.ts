@@ -51,8 +51,8 @@ export const CROSS_PLOT = Math.floor(MAIN_PLOTS / 2);
 export const SIDE_ROAD_HALF = ROAD_HALF;
 /** A street's band across the ground (layout.ts): where another street crosses, none of this one's fields lie within it. */
 export { STREET_BAND_HALF };
-/** How far past its first and last plot a street runs on (px): to a cell's edge. */
-const STREET_END = 7.5 * CELL_W;
+/** How far past its first and last plot a street runs on (px): to the edge of the last parcel (block of three cells). */
+const STREET_END = 1.5 * CELL_W;
 export interface Vec {
   x: number;
   y: number;
@@ -156,6 +156,12 @@ export const plotPoint = (s: Street, k: number) => onMap(s, plotX(s.index, k));
 export function streetRange(world: World, i: number): { min: number; max: number } {
   const s = world.streets[i] ?? world.streets[0];
   return { min: plotX(s.index, s.lo) - STREET_END, max: plotX(s.index, s.hi) + STREET_END };
+}
+
+/** Where the rider can ride on street i (world x): from the middle of its first parcel to the middle of its last. */
+export function rideRange(world: World, i: number): { min: number; max: number } {
+  const s = world.streets[i] ?? world.streets[0];
+  return { min: plotX(s.index, s.lo), max: plotX(s.index, s.hi) };
 }
 
 /**

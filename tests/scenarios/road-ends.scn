@@ -8,18 +8,18 @@ build crossroads at s0:28
 streets
 ride #last
 turn up
-lay road 8
+lay road 1
 ride s1:158
 build crossroads here
 ride #last
 turn up
-lay road 8
+lay road 1
 ride s2:158
 build crossroads here
 ride #last
 turn up
 # the fourth street runs south at column 2, past the main street's west end
-lay road 10
+lay road 1
 streets
 map AE0:-F36
 
@@ -32,6 +32,6 @@ build crossroads at s0:55
 build crossroads at s0:82
 ride #last
 turn up
-lay road 8
+lay road 1
 streets
 map O50:-C90
