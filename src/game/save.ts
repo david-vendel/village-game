@@ -27,8 +27,8 @@ import type { Worker, WorkerTask } from './worker';
 import { clearLand, type Tree } from './nature';
 import type { Pile } from './piles';
 import { cellKey, cellName, cellsOf, footprintOf } from './grid';
-import { streetOf, type Street } from './streets';
-import { createWorld, goneStreet, layStreet, MERGES, PLOTS_PER_STREET, setStreetEnds, type Building, type Rider, type World } from './world';
+import { lowestPlot, streetOf, type Street } from './streets';
+import { createWorld, goneStreet, layStreet, MERGES, PLOT_LAST, setStreetEnds, type Building, type Rider, type World } from './world';
 
 export const SAVE_VERSION = 23;
 
@@ -116,7 +116,7 @@ function build(saved: SavedWorld): World {
     const e = ends[s.index];
     if (!e) return;
     const [lo, hi] = e;
-    if (lo > s.lo || hi < s.hi || lo < 0 || hi >= PLOTS_PER_STREET) throw new SaveError(`street ${s.index}: ends ${lo}..${hi} leave out where it was opened`);
+    if (lo > s.lo || hi < s.hi || lo < lowestPlot(s.index) || hi > PLOT_LAST) throw new SaveError(`street ${s.index}: ends ${lo}..${hi} leave out where it was opened`);
     setStreetEnds(world, s, lo, hi);
   };
   reach(world.streets[0]);

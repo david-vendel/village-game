@@ -7,7 +7,7 @@ import { HOME, SHEAF_SLOTS } from './layout';
 import { employees } from './people';
 import { stockOf } from './resources';
 import { createWorker, LUNCH_AT, MIDDAY, updateWorker } from './worker';
-import { createWorld, placeBuilding, update } from './world';
+import { createWorld, placeBuilding, plotOf, update } from './world';
 
 const CAPACITY = BUILDINGS.farm.storage.grain!;
 
@@ -240,7 +240,7 @@ describe('construction by builders', () => {
     w.buildings.find((b) => b.type === 'warehouse')!.stock = stockOf(BUILDINGS.farm.cost);
     expect(placeBuilding(w, 2162.5, 'farm')).not.toBeNull();
     expect(placeBuilding(w, 2662.5, 'house')).toBeNull(); // the wood is promised to the farm
-    expect(w.plots[36].buildingId).toBeNull();
+    expect(plotOf(w, 0, 36).buildingId).toBeNull();
   });
 
   it('empty-handed people walk faster than loaded ones', () => {

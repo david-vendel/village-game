@@ -24,7 +24,7 @@ import { builderPositions, builders, createSite, siteWork, siteWorkplace, upgrad
 import { demolitionWork, demolitionWorkplace, dropAll, materialsIn, tearDown, type Demolition } from './demolition';
 import { dropOnGround, type Pile } from './piles';
 import { RESOURCES, stockOf, type Stock } from './resources';
-import { CROSS_PLOT, fromStreet, groundPoint, mainStreet, newStreet, plotPoint, plotX, PLOTS_PER_STREET, STREET_END_RUN, streetOf, streetRange, streetsAt, streetStart, turnFacing, type Junction, type Street, type Vec } from './streets';
+import { CROSS_PLOT, fromStreet, groundPoint, mainStreet, newStreet, plotPoint, lowestPlot, plotX, PLOT_FIRST, PLOT_LAST, PLOTS_PER_STREET, STREET_END_RUN, streetOf, streetRange, streetsAt, streetStart, turnFacing, type Junction, type Street, type Vec } from './streets';
 import { findPath, terrainSpeed } from './paths';
 import { eatAtTaverns } from './tavern';
 import { serfPositions, transportHub, transportWorkplace } from './transport';
@@ -211,11 +211,11 @@ export interface CreateWorldOptions {
   village?: boolean;
 }
 
-export { PLOTS_PER_STREET };
+export { PLOT_FIRST, PLOT_LAST, PLOTS_PER_STREET };
 
-/** Mark out the plots of a street: plot k of street i is plots[i × PLOTS_PER_STREET + k]; those past its ends are `off`. */
+/** Mark out the plots of a street: plot k of street i is plots[i × PLOTS_PER_STREET + k − PLOT_FIRST]; those past its ends are `off`. */
 function layPlots(world: World, s: Street): void {
-  for (let k = 0; k < PLOTS_PER_STREET; k++) {
+  for (let k = PLOT_FIRST; k <= PLOT_LAST; k++) {
     const plot: Plot = { index: world.plots.length, street: s.index, x: plotX(s.index, k), buildingId: null };
     if (k < s.lo || k > s.hi) plot.off = true;
     world.plots.push(plot);
@@ -223,7 +223,7 @@ function layPlots(world: World, s: Street): void {
 }
 
 /** Plot k of street i. */
-const plotOf = (world: World, street: number, k: number) => world.plots[street * PLOTS_PER_STREET + k];
+export const plotOf = (world: World, street: number, k: number) => world.plots[street * PLOTS_PER_STREET + k - PLOT_FIRST];
 
 export function createWorld(opts: CreateWorldOptions = {}): World {
   const world: World = {
@@ -308,7 +308,7 @@ export function plotAt(world: World, x: number): Plot | null {
 function crossroadsPlot(world: World, x: number): Plot | null {
   const street = streetOf(x);
   const k = Math.round((x - plotX(street, 0)) / PLOT_SPACING);
-  const plot = k >= 0 && k < PLOTS_PER_STREET ? world.plots[street * PLOTS_PER_STREET + k] : undefined;
+  const plot = k >= lowestPlot(street) && k <= PLOT_LAST ? plotOf(world, street, k) : undefined;
   return plot && !plot.off && plot.street === street ? plot : null;
 }
 
@@ -348,7 +348,7 @@ export function roadEnd(world: World, x: number): { street: Street; step: 1 | -1
  */
 function whyNoRoad(world: World, end: { street: Street; step: 1 | -1; k: number; x: number }): string | null {
   const { street: s, step, k } = end;
-  if (k < 0 || k >= PLOTS_PER_STREET) return 'The road can go no further';
+  if (k < lowestPlot(s.index) || k > PLOT_LAST) return 'The road can go no further';
   if (world.buildings.some((b) => b.type === 'road' && b.x === end.x)) return 'The road is being laid here already';
   const land = baseLand(world);
   const i = alongCell(end.x);
@@ -374,7 +374,7 @@ function whyNoRoad(world: World, end: { street: Street; step: 1 | -1; k: number;
 export function setStreetEnds(world: World, s: Street, lo: number, hi: number): void {
   s.lo = lo;
   s.hi = hi;
-  for (let k = 0; k < PLOTS_PER_STREET; k++) {
+  for (let k = PLOT_FIRST; k <= PLOT_LAST; k++) {
     const plot = plotOf(world, s.index, k);
     if (k < lo || k > hi) plot.off = true;
     else delete plot.off;
@@ -387,8 +387,8 @@ function layRoad(world: World, b: Building): void {
   world.buildings = world.buildings.filter((o) => o !== b);
   if (!s || s.gone) return;
   const { min, max } = streetRange(world, s.index);
-  if (Math.abs(b.x - max) < Math.abs(b.x - min)) setStreetEnds(world, s, s.lo, Math.min(PLOTS_PER_STREET - 1, s.hi + 1));
-  else setStreetEnds(world, s, Math.max(0, s.lo - 1), s.hi);
+  if (Math.abs(b.x - max) < Math.abs(b.x - min)) setStreetEnds(world, s, s.lo, Math.min(PLOT_LAST, s.hi + 1));
+  else setStreetEnds(world, s, Math.max(lowestPlot(s.index), s.lo - 1), s.hi);
   // the new road is cut through the woods, and fields give way to it
   clearLand(world);
   syncFarmFields(world);
@@ -852,7 +852,7 @@ export function planStreet(world: World, from: number, at: number): { street: St
     return roadInWay(world, street, t + step * 1.5 * CELL_W, t + step * (STREET_END_RUN + CELL_W));
   };
   for (const step of [-1, 1]) {
-    for (let k = CROSS_PLOT + step; k >= 0 && k < PLOTS_PER_STREET && Math.abs(k - CROSS_PLOT) <= STREET_STUB; k += step) {
+    for (let k = CROSS_PLOT + step; k >= 0 && k <= PLOT_LAST && Math.abs(k - CROSS_PLOT) <= STREET_STUB; k += step) {
       const meet = streetsAt(world, street.dir, plotPoint(street, k));
       // it stops short of a street along the same line, and of a quarry or a building in its way (a quarry beside it is no matter)
       const t = plotX(street.index, k) - streetStart(street.index);
@@ -1100,8 +1100,9 @@ function navFrom(world: World, x: number): Nav {
         const s = world.streets[i];
         if (!s || s.gone) return null;
         const r = fromStreet(world, i, p);
-        const t = r.x - streetStart(i);
-        return t >= 0 && t < STREET_LENGTH && r.d > -FRONT_REACH ? r : null;
+        // (a little way past its ends too: builders laying more road work there)
+        const { min, max } = streetRange(world, i);
+        return r.x > min - 200 && r.x < max + 200 && r.d > -FRONT_REACH ? r : null;
       };
       const here = streetOf(x + nearDx);
       let best = seen(here);

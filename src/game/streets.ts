@@ -32,10 +32,21 @@ import type { World } from './world';
 
 /** Distance in x between the starts of neighbouring streets (more than a street's length). */
 export const STREET_STRIDE = 10000;
-/** Plots a street can have: every PLOT_SPACING from FIRST_PLOT_X. */
-export const PLOTS_PER_STREET = Math.ceil((STREET_LENGTH - 200 - FIRST_PLOT_X) / PLOT_SPACING);
-/** Which plot of a new street is where it crosses the street it branches off: the middle one. */
-export const CROSS_PLOT = Math.floor(PLOTS_PER_STREET / 2);
+/** The main street's plots at first: every PLOT_SPACING from FIRST_PLOT_X, 0..MAIN_PLOTS-1. */
+export const MAIN_PLOTS = Math.ceil((STREET_LENGTH - 200 - FIRST_PLOT_X) / PLOT_SPACING);
+/**
+ * The plots any street can ever have, as road is laid on (world.ts roadEnd):
+ * k from PLOT_FIRST to PLOT_LAST. Below 0 only on the main street, which runs
+ * on west into negative x; every other street keeps to its own stretch of x.
+ */
+export const PLOT_FIRST = -60;
+export const PLOT_LAST = 120;
+/** Places for plots each street has in World.plots (plot k of street i is plots[i × PLOTS_PER_STREET + k − PLOT_FIRST]). */
+export const PLOTS_PER_STREET = PLOT_LAST - PLOT_FIRST + 1;
+/** The first plot street i can ever reach. */
+export const lowestPlot = (i: number) => (i === 0 ? PLOT_FIRST : 0);
+/** Which plot of a new street is where it crosses the street it branches off. */
+export const CROSS_PLOT = Math.floor(MAIN_PLOTS / 2);
 /** Half the width of a road running into the street at a crossroads (px). */
 export const SIDE_ROAD_HALF = ROAD_HALF;
 /** A street's band across the ground (layout.ts): where another street crosses, none of this one's fields lie within it. */
@@ -54,7 +65,7 @@ export interface Street {
   /** Map position of the street's start (x = its first world x), and the way it runs (unit vector). */
   origin: Vec;
   dir: Vec;
-  /** Its first and last plot (0..PLOTS_PER_STREET-1): it may end short where it met another street. */
+  /** Its first and last plot (lowestPlot..PLOT_LAST): road pieces lay it on from either end. */
   lo: number;
   hi: number;
   /** Gone (its crossroads was pulled down): no road and no plots, kept only for its place in the list. */
@@ -70,13 +81,13 @@ export interface Junction {
 
 export function mainStreet(): Street {
   // its middle lane runs down the middle of row A of the land grid (grid.ts)
-  return { index: 0, from: null, origin: { x: 0, y: CELL_W / 2 }, dir: { x: 1, y: 0 }, lo: 0, hi: PLOTS_PER_STREET - 1 };
+  return { index: 0, from: null, origin: { x: 0, y: CELL_W / 2 }, dir: { x: 1, y: 0 }, lo: 0, hi: MAIN_PLOTS - 1 };
 }
 
 /** World x where street i starts. */
 export const streetStart = (i: number) => i * STREET_STRIDE;
 
-/** World x of plot k (0..PLOTS_PER_STREET-1) of street i. */
+/** World x of plot k (lowestPlot(i)..PLOT_LAST) of street i. */
 export const plotX = (i: number, k: number) => streetStart(i) + FIRST_PLOT_X + k * PLOT_SPACING;
 
 /** The street world x is on. */

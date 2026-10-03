@@ -21,6 +21,7 @@ import {
   update,
   WORLD_WIDTH,
   type World,
+  plotOf,
 } from './world';
 
 const idle = { left: false, right: false };
@@ -45,7 +46,7 @@ describe('placement', () => {
     const w = emptyWorld();
     const b = placeBuilding(w, 412.5, 'mill', { free: true });
     expect(b).not.toBeNull();
-    expect(buildingAt(w, w.plots[0].x)).toBe(b);
+    expect(buildingAt(w, plotOf(w, 0, 0).x)).toBe(b);
     expect(b!.x % 25).toBe(0); // 6 cells wide: its middle on a cell edge
     expect(b!.status).toBe('constructing');
   });
@@ -67,9 +68,9 @@ describe('placement', () => {
     expect(w.events).toHaveLength(0);
   });
 
-  it('plots stay inside the world', () => {
+  it("a new world's plots stay inside it", () => {
     const w = emptyWorld();
-    for (const p of w.plots) expect(p.x + 100).toBeLessThan(WORLD_WIDTH);
+    for (const p of w.plots) if (!p.off) expect(p.x + 100).toBeLessThan(WORLD_WIDTH);
   });
 });
 
@@ -77,7 +78,7 @@ describe('build menu', () => {
   it('builds at an empty plot, and offers what can be done to a building', () => {
     const w = emptyWorld();
     placeBuilding(w, 2912.5, 'warehouse', { instant: true, free: true })!.stock = stockOf({ wood: 300, stone: 300 });
-    w.rider.x = w.plots[8].x - 25; // a cell 3n + 1, where a building starts
+    w.rider.x = plotOf(w, 0, 8).x - 25; // a cell 3n + 1, where a building starts
     expect(openMenu(w)).toBe(true);
     moveMenu(w, 2);
     const b = confirmMenu(w);
@@ -89,15 +90,15 @@ describe('build menu', () => {
 
   it('opens on any cell of a block of three, the building starting at its cell 3n + 1', () => {
     const w = emptyWorld();
-    w.rider.x = w.plots[4].x + 20; // the block's last cell
+    w.rider.x = plotOf(w, 0, 4).x + 20; // the block's last cell
     expect(openMenu(w)).toBe(true);
     expect(w.menu?.kind).toBe('build');
-    expect(placeAt(w, 'farm', w.rider.x)).toBe(w.plots[4].x - 25 + (BUILDINGS.farm.width - 25) / 2);
+    expect(placeAt(w, 'farm', w.rider.x)).toBe(plotOf(w, 0, 4).x - 25 + (BUILDINGS.farm.width - 25) / 2);
   });
 
   it('selection wraps and is remembered after cancelling', () => {
     const w = emptyWorld();
-    w.rider.x = w.plots[4].x - 25; // where a crossroads can go (the last entry that fits: no road away from a street's end)
+    w.rider.x = plotOf(w, 0, 4).x - 25; // where a crossroads can go (the last entry that fits: no road away from a street's end)
     openMenu(w);
     moveMenu(w, -1);
     expect(w.menu!.selection).toBe(BUILDING_TYPES.indexOf('intersection'));
@@ -108,7 +109,7 @@ describe('build menu', () => {
 
   it('rider cannot move while the menu is open', () => {
     const w = emptyWorld();
-    w.rider.x = w.plots[0].x - 25;
+    w.rider.x = plotOf(w, 0, 0).x - 25;
     openMenu(w);
     const x = w.rider.x;
     runFor(w, 1, { left: false, right: true });
@@ -244,6 +245,21 @@ describe('streets', () => {
     while (!whyNotBuild(w, 'road', streetRange(w, 1).min)) placeBuilding(w, streetRange(w, 1).min, 'road', { instant: true });
     expect(whyNotBuild(w, 'road', streetRange(w, 1).min)).toMatch(/no further/);
     expect(s.lo).toBe(0);
+  });
+
+  it('the main street is laid on both ways, west into negative x', () => {
+    const w = createWorld();
+    w.buildings.find((b) => b.type === 'warehouse')!.stock.wood = 300;
+    const { min, max } = streetRange(w, 0);
+    expect(placeBuilding(w, max, 'road', { instant: true })).not.toBeNull();
+    expect(placeBuilding(w, min, 'road', { instant: true })).not.toBeNull();
+    for (let i = 0; i < 12; i++) placeBuilding(w, streetRange(w, 0).min, 'road', { instant: true });
+    expect(streetRange(w, 0)).toEqual({ min: min - 13 * 3 * CELL_W, max: max + 3 * CELL_W });
+    expect(streetRange(w, 0).min).toBeLessThan(0);
+    // and the rider rides out along it
+    w.rider.x = 0;
+    runFor(w, 3, { left: true, right: false });
+    expect(w.rider.x).toBeLessThan(-300);
   });
 
 

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { cellKey, cellName, cellsOf, fieldCell, footprintOf, landUse, onRoadLine, rowName, whyNotHere } from './grid';
 import { FIELD_CELLS } from './land';
 import { CELL_W, LOT_ROW, QUARRIES, quarryLand } from './layout';
-import { createWorld, demolishSection, placeBuilding, whyNotBuild, type Building, type World } from './world';
+import { createWorld, demolishSection, placeBuilding, plotOf, whyNotBuild, type Building, type World } from './world';
 
 const emptyWorld = () => createWorld({ village: false });
 
@@ -46,8 +46,8 @@ describe('land grid', () => {
     expect(whyNotBuild(w, 'farm', a.x + 25)).toMatch(/in the way/);
     expect(whyNotHere(w, 'farm', QUARRIES[0].x)).toBeNull(); // the rocks start behind the lots
     // a crossroads: right up to its road, but not on it
-    const x = w.plots[22].x; // cell 83: crossroads go every 27 cells
-    expect(whyNotBuild(w, 'intersection', w.plots[21].x)).toMatch(/every 27 cells/);
+    const x = plotOf(w, 0, 22).x; // cell 83: crossroads go every 27 cells
+    expect(whyNotBuild(w, 'intersection', plotOf(w, 0, 21).x)).toMatch(/every 27 cells/);
     placeBuilding(w, x, 'intersection', { instant: true, free: true });
     expect(whyNotBuild(w, 'farm', x + 30)).toMatch(/road/);
     expect(whyNotBuild(w, 'farm', x + 112.5)).toBeNull();

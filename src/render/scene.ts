@@ -76,7 +76,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
   drawBackground(ctx, v);
   // a street that ends short: the road stops and the grass runs on
   const street = streetOf(world.rider.x);
-  if (street > 0) drawStreetEnds(ctx, v, roadShown(world, street));
+  drawStreetEnds(ctx, v, roadShown(world, street));
   const onScreen = (x: number, margin = 280) => x - camX > -margin && x - camX < viewW + margin;
   // the ground first: the other streets' roads and fields on the plane, and a road still being laid at a crossroads
   drawOtherGround(ctx, world, eye);
