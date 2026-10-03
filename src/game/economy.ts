@@ -7,7 +7,7 @@
 
 import { START_STOCK } from './balance';
 import { BUILDINGS, doorOf, nextUpgrade, type BuildingType, storageOf } from './buildings';
-import { FARM_HORSE, marketSlot, reeveSlot, SMITHY_SLOTS, STABLE_SLOTS, WORKSHOP_DOOR, storehouseSlot, WORKSHOP_ALSO, WORKSHOP_IN, WORKSHOP_OUT, houseSlot, isYardItem, FEED_SLOTS, GOODS_SLOTS, HAY_SLOTS, BAKERY_SLOTS, BAKERY_WATER_SLOTS, WELL_SLOTS, BASKET, MILL_SLOTS, SACK, SAWMILL_SLOTS, STONECUTTER_SLOTS, TAVERN_SLOTS, SHEAF_SLOTS, STAND_Y, PILE_UNIT, warehouseSlot, WOODCUTTER_SLOTS, type Slot, type Spot } from './layout';
+import { DRINK_SLOTS, woodpileSlot, FARM_HORSE, marketSlot, reeveSlot, SMITHY_SLOTS, STABLE_SLOTS, WORKSHOP_DOOR, storehouseSlot, WORKSHOP_ALSO, WORKSHOP_IN, WORKSHOP_OUT, houseSlot, isYardItem, FEED_SLOTS, GOODS_SLOTS, HAY_SLOTS, BAKERY_SLOTS, BAKERY_WATER_SLOTS, WELL_SLOTS, BASKET, MILL_SLOTS, SACK, SAWMILL_SLOTS, STONECUTTER_SLOTS, TAVERN_SLOTS, SHEAF_SLOTS, STAND_Y, PILE_UNIT, warehouseSlot, WOODCUTTER_SLOTS, type Slot, type Spot } from './layout';
 import { goodsOf } from './livestock';
 import { room, RESOURCES, shortfall, stockOf, type Amounts, type Load, type Resource, type Stock } from './resources';
 import { takeFromPile, type Pile } from './piles';
@@ -181,6 +181,7 @@ export function storeSlots(b: Building, r: Resource): { unit: number; perTrip: n
   if (stock) {
     const def = BUILDINGS[b.type];
     if (r === stock.feed) return { unit: 1, perTrip: 1, slot: pick(FEED_SLOTS) };
+    if (r === 'water') return { unit: 1, perTrip: 1, slot: pick(DRINK_SLOTS) };
     // what the animals give, side by side right of the door, each kind after the one before (livestock.ts goodsOf)
     const goods = goodsOf(def);
     const k = goods.indexOf(r);
@@ -195,7 +196,11 @@ export function storeSlots(b: Building, r: Resource): { unit: number; perTrip: n
   if (b.type === 'bakery' && r === 'water') return { unit: 1, perTrip: 1, slot: pick(BAKERY_WATER_SLOTS) };
   if (b.type === 'well' && r === 'water') return { unit: 1, perTrip: 1, slot: pick(WELL_SLOTS) };
   if (b.type === 'tavern' && r === 'bread') return { unit: BASKET, perTrip: 1, slot: pick(TAVERN_SLOTS) };
-  if (b.type === 'sawmill' && (r === 'wood' || r === 'planks')) return { unit: 1, perTrip: 1, slot: pick(SAWMILL_SLOTS[r]) };
+  if (b.type === 'sawmill' && (r === 'wood' || r === 'planks' || r === 'firewood')) return { unit: 1, perTrip: 1, slot: pick(SAWMILL_SLOTS[r]) };
+  if (r === 'firewood' && b.type !== 'sawmill' && storageOf(b).firewood) {
+    const width = BUILDINGS[b.type].width * (b.size ?? 1);
+    return { unit: 1, perTrip: 1, slot: (i) => woodpileSlot(width, i) };
+  }
   if (b.type === 'woodcutter' && r === 'wood') return { unit: 1, perTrip: 1, slot: pick(WOODCUTTER_SLOTS) };
   if (b.type === 'stonecutter' && r === 'stone') return { unit: 1, perTrip: 1, slot: pick(STONECUTTER_SLOTS) };
   // the newer workshops' shared yard (layout.ts WORKSHOP_IN)

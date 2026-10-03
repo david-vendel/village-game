@@ -329,6 +329,8 @@ export const WELL_DRAW: Spot = { dx: 36, y: STAND_Y };
 export const LIVESTOCK_DOOR: Spot = { dx: -30, y: STAND_Y };
 export const LIVESTOCK_TROUGH_DX = 34;
 export const LIVESTOCK_FEED: Spot = { dx: LIVESTOCK_TROUGH_DX - 16, y: STAND_Y };
+/** Buckets of water for the animals, by the trough inside the paddock. */
+export const DRINK_SLOTS: readonly Slot[] = [LIVESTOCK_TROUGH_DX + 14, LIVESTOCK_TROUGH_DX + 21, LIVESTOCK_TROUGH_DX + 28].map((dx) => ({ dx, lift: 0 }));
 export const FEED_SLOTS: readonly Slot[] = [
   { dx: -66, lift: 0 },
   { dx: -54, lift: 0 },
@@ -390,6 +392,11 @@ export function reeveSlot(k: number, i: number): Slot {
 
 /** A farm's plough horse, tethered by the barn. */
 export const FARM_HORSE: Slot = { dx: 70, lift: 0 };
+
+/** A building's woodpile, against its right-hand corner: split logs two wide, stacked up. */
+export function woodpileSlot(width: number, i: number): Slot {
+  return { dx: width / 2 - 6 - (i % 2) * 6, lift: Math.floor(i / 2) * 4 };
+}
 
 /** Baskets of loaves on the bench in front of the tavern, where its guests help themselves. */
 export const TAVERN_SLOTS: readonly Slot[] = [
@@ -465,18 +472,19 @@ export const SAWMILL_DOOR: Spot = { dx: -26, y: STAND_Y };
 /** The middle of the saw bench, where the log lies while it is sawn. */
 export const SAWMILL_BENCH_DX = 50;
 export const SAWMILL_SAW: Spot = { dx: SAWMILL_BENCH_DX - 20, y: STAND_Y };
-export const SAWMILL_SLOTS: Record<'wood' | 'planks', readonly Slot[]> = {
+export const SAWMILL_SLOTS: Record<'wood' | 'planks' | 'firewood', readonly Slot[]> = {
   wood: [
     { dx: -62, lift: 0 },
     { dx: -48, lift: 0 },
     { dx: -55, lift: 5 },
   ],
   planks: [
-    { dx: 6, lift: 0 },
-    { dx: 6, lift: 3 },
-    { dx: 6, lift: 6 },
-    { dx: 6, lift: 9 },
+    { dx: 14, lift: 0 },
+    { dx: 14, lift: 3 },
+    { dx: 14, lift: 6 },
+    { dx: 14, lift: 9 },
   ],
+  firewood: [-12, -6, 0, -12, -6, 0].map((dx, i) => ({ dx, lift: i < 3 ? 0 : 4 })),
 };
 
 /** The stonecutter's hut door, and its store: dressed blocks set down on the right. */

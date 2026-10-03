@@ -2,9 +2,9 @@
 // a sunlit front face, a shaded side face receding up-right, and a pitched
 // roof. The sun is to the left, so right-hand faces are in shadow.
 
-import { BUILDINGS, doorOf, storageOf, type BuildingType } from '../game/buildings';
+import { BUILDINGS, doorOf, HAS_FIRE, storageOf, type BuildingType } from '../game/buildings';
 import type { FarmState } from '../game/farm';
-import { BAKERY_OVEN_MOUTH_DX, BAKERY_SLOTS, BAKERY_WATER_SLOTS, BASKET, WELL_SLOTS, MILL_SLOTS, PILE_UNIT, SACK, SAWMILL_BENCH_DX, SAWMILL_SLOTS, houseSlot, pileItems, FARM_HORSE, marketSlot, reeveSlot, SMITHY_SLOTS, STABLE_SLOTS, storehouseSlot, WORKSHOP_ALSO, WORKSHOP_IN, WORKSHOP_OUT, FEED_SLOTS, GOODS_SLOTS, HAY_SLOTS, LIVESTOCK_TROUGH_DX, STONECUTTER_SLOTS, TAVERN_SLOTS, warehouseSlot, WOODCUTTER_SLOTS, YARD_ITEMS, type Slot } from '../game/layout';
+import { BAKERY_OVEN_MOUTH_DX, BAKERY_SLOTS, BAKERY_WATER_SLOTS, BASKET, WELL_SLOTS, MILL_SLOTS, PILE_UNIT, SACK, SAWMILL_BENCH_DX, SAWMILL_SLOTS, houseSlot, pileItems, DRINK_SLOTS, woodpileSlot, FARM_HORSE, marketSlot, reeveSlot, SMITHY_SLOTS, STABLE_SLOTS, storehouseSlot, WORKSHOP_ALSO, WORKSHOP_IN, WORKSHOP_OUT, FEED_SLOTS, GOODS_SLOTS, HAY_SLOTS, LIVESTOCK_TROUGH_DX, STONECUTTER_SLOTS, TAVERN_SLOTS, warehouseSlot, WOODCUTTER_SLOTS, YARD_ITEMS, type Slot } from '../game/layout';
 import type { Amounts, Resource, Stock } from '../game/resources';
 import type { Worker } from '../game/worker';
 import { goodsOf, type Herd } from '../game/livestock';
@@ -44,6 +44,8 @@ export interface DrawArgs {
   herd?: Herd;
   /** How many upgrades it has had (a house: 1 farmstead, 2 townhouse). */
   level?: number;
+  /** A building with a fire (game/firewood.ts): how hard it burns now (0: out, no smoke). */
+  fire?: number;
   /** A market: the merchant is there today (game/market.ts). */
   merchant?: boolean;
   /** A house: what its family lacks now (game/households.ts), shown in a bubble over its door. */
@@ -310,7 +312,8 @@ function chimney(ctx: Ctx, x: number, top: number, h: number, a: DrawArgs, stren
   rect(ctx, x, top - h, 11, h, '#8a7462');
   rect(ctx, x + 7, top - h, 4, h, '#6b594b');
   rect(ctx, x - 1.5, top - h - 3, 14, 4, '#6e5c4e');
-  smoke(ctx, x + 5, top - h - 4, a.time, a.seed, strength);
+  // smoke only from a fire that burns (game/firewood.ts)
+  if (a.fire === undefined || a.fire > 0) smoke(ctx, x + 5, top - h - 4, a.time, a.seed, strength * (a.fire === undefined ? 1 : Math.max(0.4, a.fire)));
 }
 
 function barrel(ctx: Ctx, x: number, base: number, s = 1): void {
@@ -687,7 +690,7 @@ function drawBakery(ctx: Ctx, a: DrawArgs): void {
     ctx.fillRect(ovx - 26, a.base - 36, 52, 40);
   }
   rect(ctx, ovx + 8, a.base - 58, 8, 16, '#8a5a40');
-  smoke(ctx, ovx + 12, a.base - 60, a.time, a.seed, baked === null ? 0.8 : 1.3);
+  if (a.fire !== 0) smoke(ctx, ovx + 12, a.base - 60, a.time, a.seed, baked === null ? 0.8 : 1.3);
   // the bakehouse
   stonePlinth(ctx, x0, a.base, w, 12, d);
   block(ctx, x0, a.base - 12, w, 40, d, '#e9d6b0');
@@ -840,7 +843,7 @@ function drawBlacksmith(ctx: Ctx, a: DrawArgs): void {
   rect(ctx, x0 + 6, a.base - 128, 18, 60, '#8f8474');
   rect(ctx, x0 + 18, a.base - 128, 6, 60, '#6c6356');
   rect(ctx, x0 + 4, a.base - 131, 22, 5, '#6c6356');
-  smoke(ctx, x0 + 15, a.base - 132, a.time, a.seed, 1.3);
+  if (a.fire !== 0) smoke(ctx, x0 + 15, a.base - 132, a.time, a.seed, 1.3);
   // anvil + smith outside under the eave
   const ax = x0 + w - 14;
   rect(ctx, ax - 4, a.base - 12, 8, 12, '#4a4440');
@@ -1247,6 +1250,7 @@ function drawSawmill(ctx: Ctx, a: DrawArgs): void {
     circle(ctx, cx + 9, cy - 2.5, 2.6, '#c9a06a');
     circle(ctx, cx + 9, cy - 2.5, 1, '#8a6440');
   }
+  for (let i = 0; i < Math.min(SAWMILL_SLOTS.firewood.length, pileItems(a.stock?.firewood ?? 0)); i++) drawItem(ctx, 'firewood', a.x + SAWMILL_SLOTS.firewood[i].dx, a.base + 2 - SAWMILL_SLOTS.firewood[i].lift, 0.9, a.time);
   const boards = Math.min(SAWMILL_SLOTS.planks.length, pileItems(a.stock?.planks ?? 0));
   for (let i = 0; i < boards; i++) {
     const s = SAWMILL_SLOTS.planks[i];
@@ -1306,6 +1310,8 @@ function drawLivestockFarm(type: keyof typeof SHEDS) {
     });
     line(ctx, p0, a.base - 4, p1, a.base - 4, '#8a6a44', 2);
 
+    // their water by the trough
+    for (let i = 0; i < Math.min(DRINK_SLOTS.length, pileItems(a.stock?.water ?? 0)); i++) waterBucket(ctx, a.x + DRINK_SLOTS[i].dx, a.base + 2, 0.8);
     // the store: the feed by the shed, what the animals give right of the door
     const feed = def.livestock!.feed;
     for (let i = 0; i < Math.min(FEED_SLOTS.length, pileItems(a.stock?.[feed] ?? 0)); i++) {
@@ -1671,3 +1677,17 @@ export const BUILDING_ART: Record<BuildingType, BuildingArt> = {
   // a stretch of road being laid: its picture is for the build menu; in the street the road itself is drawn with the ground, as the street's end moves on (roads.ts)
   road: { height: 64, draw: drawRoadPiece },
 };
+
+// Every building with a fire has its woodpile against its right-hand corner (game/layout.ts woodpileSlot).
+for (const t of HAS_FIRE) {
+  const art = BUILDING_ART[t];
+  const draw = art.draw;
+  art.draw = (ctx, a) => {
+    draw(ctx, a);
+    const width = a.width ?? BUILDINGS[t].width;
+    for (let i = 0; i < pileItems(a.stock?.firewood ?? 0); i++) {
+      const s = woodpileSlot(width, i);
+      drawItem(ctx, 'firewood', a.x + s.dx, a.base + 2 - s.lift, 0.8, a.time);
+    }
+  };
+}

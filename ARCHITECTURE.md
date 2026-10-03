@@ -137,6 +137,13 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   out of the door; discontent, people leave one by one from the unhappiest household
   (`Person.leaving`: they walk to the end of their street and are gone). `HOUSEHOLD` in
   `balance.ts` holds the rates. A house lacking something shows it in a bubble over its door.
+- `firewood.ts`: firewood, split from logs at the sawmill (`FIREWOOD.perLog` a log; it makes planks
+  or firewood, whichever the village is shorter of: `Recipe.or`). Every building with a fire
+  (`HAS_FIRE`: homes, the farm, the tavern, the watch, and every building whose workers live in it but
+  the mill and the sawmill) keeps a woodpile by its corner (`woodpileSlot`) and burns it as hard as
+  `hearth.ts` says its fire burns, `WINTER_FIRE` times as much in winter; households burn theirs as a
+  need. No firewood: the fire is out (no smoke), and a fire trade (`Recipe.fire`: bakery, smithy,
+  smokehouse, brewery, chandler, pastry cook) can't work.
 - `spoilage.ts`: fresh goods (`SHELF_LIFE` in `balance.ts`: milk, eggs, meat, bread) spoil a whole
   item at a time, about n / life a day, in any store or pile on the ground.
 - House levels: a house upgrades to a farmstead (freemen) and then a townhouse (burghers): `Upgrade.next`
@@ -171,7 +178,8 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   `ageHerds`); a new farm starts with a grown pair. `ANIMALS` in `balance.ts` gives each kind's real
   life: grown up, productive until, lifespan, feeds per young one, most kept, meat. Productive
   females give eggs or milk (cows two pails a feed), productive adults wool, and a productive pair
-  breeds (female and male young in turn). The keeper (`herder`) carries the feed (grain for hens,
+  breeds (female and male young in turn). They drink from the farm's store of water (brought from the
+  well); thirsty, they give nothing and don't breed. The keeper (`herder`) carries the feed (grain for hens,
   hay for the rest) to the trough, carries back what the animals give, and butchers an animal at the
   end of its lifespan for meat. They share one yard layout (`LIVESTOCK_DOOR`, `FEED_SLOTS`,
   `GOODS_SLOTS` in `layout.ts`). Their goods stay in their stores for now: nothing uses them yet.
@@ -219,9 +227,10 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   the farm store has room for the sheaf, else sow, nearest first; each takes `sowPerCell` /
   `harvestPerCell` seconds (tuning sliders). A harvest yields a sheaf, stacked in its own place in the
   store (`SHEAF_SLOTS`), from where serfs carry them to a warehouse (`transport.ts`).
-- `daynight.ts`: the seasons: every `YEAR_DAYS` (12) days the last `WINTER_DAYS` (3) are winter
-  (`season`, `isWinter`): crops don't grow and nobody sows, and snow lies and falls
-  (`render/winter.ts`). Time of day, from `world.dayClock`, which runs at the `timeSpeed` knob (a day is
+- `daynight.ts`: the seasons: every `YEAR_DAYS` (12) days are spring, summer and autumn (three
+  each) and winter, the last `WINTER_DAYS` (3) (`season`, `isWinter`, `isSummer`). In winter crops
+  don't grow, nobody sows, fires burn twice the wood, and snow lies and falls (`render/winter.ts`); in
+  summer animals drink twice the water (`ANIMAL_WATER`, `SUMMER_DRINK`). Time of day, from `world.dayClock`, which runs at the `timeSpeed` knob (a day is
   `DAY_LENGTH` = 300 s at 1×). The `nightHours` knob (0–12) shapes the sun's path: fewer hours
   lift it, like a summer far north; 0 is the midnight sun. `timeOfDay` gives villagers what they plan
   by: daylight (enough light to work: from half an hour after sunrise to half an hour before

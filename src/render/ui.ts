@@ -6,8 +6,9 @@
 //   in world coordinates, scaled by `k` around their anchor so they stay
 //   readable when zoomed out.
 
-import { BUILDINGS, BUILDING_TYPES, nameOf, nextUpgrade, ROLES, type Role, storageOf } from '../game/buildings';
+import { BUILDINGS, BUILDING_TYPES, HAS_FIRE, nameOf, nextUpgrade, ROLES, type Role, storageOf } from '../game/buildings';
 import { stillAsked, upgradeLocked, whyLocked } from '../game/castle';
+import { thirsty } from '../game/livestock';
 import { merchantHere } from '../game/market';
 import { MARKET } from '../game/balance';
 import { clock, season } from '../game/daynight';
@@ -236,7 +237,7 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
   const c = clock(world);
   const hhmm = `${String(c.hours).padStart(2, '0')}:${String(c.minutes).padStart(2, '0')}`;
   const s = season(world);
-  const when = s.winter ? `winter, day ${s.dayOfYear - (YEAR_DAYS - WINTER_DAYS)} of ${WINTER_DAYS}` : `winter in ${YEAR_DAYS - WINTER_DAYS + 1 - s.dayOfYear} days`;
+  const when = s.winter ? `winter, day ${s.dayOfYear - (YEAR_DAYS - WINTER_DAYS)} of ${WINTER_DAYS}` : `${s.name}, winter in ${YEAR_DAYS - WINTER_DAYS + 1 - s.dayOfYear} days`;
   text(ctx, `Day ${c.day} (${when}) · ${hhmm}   Buildings: ${built}`, 16, y + 2, 12, '#cbbfa4');
   const working = world.people.filter((p) => p.job).length;
   const stockLine = `Stored: ${amounts(villageStock(world))}   People ${world.people.length} (${working} at work)   Coin ${Math.floor(world.treasury)}   Charters ${world.castle.charters}`;
@@ -711,6 +712,8 @@ export function drawBuildingLabel(ctx: Ctx, world: World, b: Building, sx: numbe
     const short = locked ? ` — ${locked.toLowerCase()}` : Object.keys(upgradeShortfall(world, b)).length ? ' — not enough yet' : '';
     lines.push(`${upgradeHint} to a ${next.name} (${cost})${short}`);
   }
+  if (HAS_FIRE.has(b.type) && b.status === 'done' && b.stock.firewood < 1e-6) lines.push('The fire is out: no firewood');
+  if (def.livestock && b.status === 'done' && thirsty(b)) lines.push('The animals are thirsty: no water');
   if (b.type === 'reeve') lines.push(world.castle.request ? `Gathering for the castle: still wanting ${amounts(stillAsked(world))}` : `No request from the castle just now (standing ${world.castle.standing})`);
   if (b.type === 'market') lines.push(merchantHere(world) ? 'The merchant is here today' : `The merchant comes every ${MARKET.everyDays} days`);
   if (b.type === 'stable') lines.push(`Carts: ${Math.floor(Math.min(b.stock.horse, b.stock.harness) + 1e-9)}${b.stock.hay < 1e-9 && b.stock.horse >= 1 ? ' — the horses want hay' : ''}`);

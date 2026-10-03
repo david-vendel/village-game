@@ -10,7 +10,7 @@ import { Builder, type Element } from './elements';
 import { block, breadBasket, cordwood, sack, stook } from './kit/props';
 import { m, plotOf } from './plot';
 
-export type StockKind = 'wood' | 'stone' | 'planks' | 'grain' | 'hay' | 'flour' | 'bread' | 'water' | 'milk' | 'wool' | 'eggs' | 'meat' | 'cheese' | 'smokedmeat' | 'cloth' | 'hides' | 'tallow' | 'leather' | 'candles' | 'harness' | 'horse' | 'ale' | 'pastries' | 'iron' | 'tools' | 'salt';
+export type StockKind = 'wood' | 'stone' | 'planks' | 'grain' | 'hay' | 'flour' | 'bread' | 'water' | 'milk' | 'wool' | 'eggs' | 'meat' | 'cheese' | 'smokedmeat' | 'cloth' | 'hides' | 'tallow' | 'leather' | 'candles' | 'harness' | 'horse' | 'ale' | 'pastries' | 'iron' | 'tools' | 'salt' | 'firewood';
 
 /** How deep into the plot (from its front edge) each kind of thing lies. */
 const FRONT = 0.3;

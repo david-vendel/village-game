@@ -15,9 +15,9 @@
 // People without a home (a house pulled down, or new to the village) move into
 // the nearest house with room as soon as there is one.
 
-import { CHAPEL_REACH, FARMSTEAD_EXTRA, HOUSE_RESIDENTS, HOUSEHOLD, NEEDS, TAX_PER_DAY, TOWNHOUSE_EXTRA, type Need } from './balance';
+import { WINTER_FIRE, CHAPEL_REACH, FARMSTEAD_EXTRA, HOUSE_RESIDENTS, HOUSEHOLD, NEEDS, TAX_PER_DAY, TOWNHOUSE_EXTRA, type Need } from './balance';
 import { upgradesDone } from './buildings';
-import { timeOfDay } from './daynight';
+import { isWinter, timeOfDay } from './daynight';
 import { release, type Person } from './people';
 import type { Resource } from './resources';
 import { streetDist, streetOf, streetRange } from './streets';
@@ -99,6 +99,7 @@ function gone(world: World): void {
 export function updateHouseholds(world: World, dt: number, moveIn: (b: Building, n: number) => void): void {
   const days = (dt * timeOfDay(world).hoursPerSecond) / 24;
   settle(world);
+  const winter = isWinter(world);
   // the unhappiest discontent household is the one people leave from next
   const discontent = houses(world).filter((b) => residentsOf(world, b).length && householdOf(b).content < HOUSEHOLD.leaveBelow);
   const unhappiest = discontent.sort((a, b) => householdOf(a).content - householdOf(b).content)[0];
@@ -110,7 +111,9 @@ export function updateHouseholds(world: World, dt: number, moveIn: (b: Building,
     for (const n of needs) {
       // owed builds up as they eat and drink, and is paid off the shelf an item at a time, of whichever good there is
       const k = keyOf(n);
-      h.owed[k] = Math.min(2, (h.owed[k] ?? 0) + people.length * n.perDay * days);
+      // a winter fire burns twice the wood
+      const cold = winter && n.goods.includes('firewood') ? WINTER_FIRE : 1;
+      h.owed[k] = Math.min(2, (h.owed[k] ?? 0) + people.length * n.perDay * cold * days);
       for (let r = n.goods.find((g) => b.stock[g] >= 1); h.owed[k] >= 1 && r; r = n.goods.find((g) => b.stock[g] >= 1)) {
         b.stock[r] -= 1;
         h.owed[k] -= 1;

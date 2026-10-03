@@ -58,7 +58,7 @@ const ROOF: Record<BuildingType, string> = {
   road: '#a8875b',
 };
 
-const RESOURCE_COLOUR: Record<Load['resource'], string> = { wood: '#7b5634', stone: '#a89c88', planks: '#c9a06a', grain: '#d8b850', flour: '#f1ece0', bread: '#c58a46', water: '#5d86a8', hay: '#cdb860', milk: '#f4f1e8', wool: '#ece6d6', eggs: '#e8dcc4', meat: '#b5523b', cheese: '#e8c35a', smokedmeat: '#7a3424', cloth: '#6a7fa8', hides: '#8a5a34', tallow: '#efe6c8', leather: '#a8703a', candles: '#f4ecd2', harness: '#6b4226', horse: '#8a4a26', ale: '#8a5a30', pastries: '#d89a4a', iron: '#5c6168', tools: '#8a8f96', salt: '#f7f7f2' };
+const RESOURCE_COLOUR: Record<Load['resource'], string> = { wood: '#7b5634', stone: '#a89c88', planks: '#c9a06a', grain: '#d8b850', flour: '#f1ece0', bread: '#c58a46', water: '#5d86a8', hay: '#cdb860', milk: '#f4f1e8', wool: '#ece6d6', eggs: '#e8dcc4', meat: '#b5523b', cheese: '#e8c35a', smokedmeat: '#7a3424', cloth: '#6a7fa8', hides: '#8a5a34', tallow: '#efe6c8', leather: '#a8703a', candles: '#f4ecd2', harness: '#6b4226', horse: '#8a4a26', ale: '#8a5a30', pastries: '#d89a4a', iron: '#5c6168', tools: '#8a8f96', salt: '#f7f7f2', firewood: '#9a6a3a' };
 
 export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zoom: number, showGrid: boolean, hover: { x: number; y: number } | null = null): void {
   const time = world.time;

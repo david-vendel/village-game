@@ -20,7 +20,8 @@ import { drawingAt } from '../game/transport';
 import { pastureCells } from '../game/pasture';
 import { lacking } from '../game/households';
 import { merchantHere } from '../game/market';
-import { upgradesDone } from '../game/buildings';
+import { HAS_FIRE, upgradesDone } from '../game/buildings';
+import { hearthOf } from '../game/hearth';
 import { laidOut, onSite, upgrading } from '../game/site';
 import { backOf, crossings, groundPoint, mapPoint, SIDE_ROAD_HALF, streetOf, type Street, type Vec } from '../game/streets';
 import { getBuilding, type Building, type World } from '../game/world';
@@ -256,6 +257,7 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
       drawing: b.type === 'well' ? drawingAt(world, b) : null,
       herd: b.herd,
       level: upgradesDone(b),
+      fire: HAS_FIRE.has(b.type) ? fireOf(world, b) : undefined,
       merchant: b.type === 'market' && merchantHere(world),
       wants: b.type === 'house' && b.status === 'done' ? lacking(b) : undefined,
       pasture: b.type === 'horsefarm' && b.status === 'done' ? pastureCells(world, b).length : undefined,
@@ -343,4 +345,10 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
     add(ground(world, a.stroll.x, a.stroll.y), 20, () => drawVillager(ctx, walker(a), 0, 0, world.time));
   }
   return out.sort((a, b) => b.z - a.z);
+}
+
+/** How hard a building's fire burns now (its hearth or furnace, whichever is more; 0: out). */
+function fireOf(world: World, b: Building): number {
+  const h = hearthOf(world, b);
+  return Math.max(h.hearth, h.furnace);
 }

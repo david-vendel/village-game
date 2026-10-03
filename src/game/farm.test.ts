@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { WELL_DRAW_SECONDS } from './balance';
+import { FIREWOOD, WELL_DRAW_SECONDS } from './balance';
 import { BUILDINGS } from './buildings';
 import type { TimeOfDay } from './daynight';
 import { villageStock, WAREHOUSE_START } from './economy';
@@ -211,12 +211,14 @@ describe('farms in the world', () => {
     // logs count as one, boards as half: sawing keeps the sum, wherever things lie or are carried
     const timber = () => {
       let n = 0;
-      for (const b of w.buildings) n += b.stock.wood + b.stock.planks / 2;
-      for (const p of w.piles) n += p.resource === 'wood' ? p.amount : p.resource === 'planks' ? p.amount / 2 : 0;
+      // firewood counts a sixth of a log, wherever it is (fires burn a little of it)
+      const share = { wood: 1, planks: 1 / 2, firewood: 1 / FIREWOOD.perLog } as const;
+      const of = (r: string, n: number) => (r in share ? n * share[r as keyof typeof share] : 0);
+      for (const b of w.buildings) n += b.stock.wood + b.stock.planks / 2 + b.stock.firewood / FIREWOOD.perLog;
+      for (const p of w.piles) n += of(p.resource, p.amount);
       for (const p of w.people) {
         const c = p.job?.worker.carrying;
-        if (c?.resource === 'wood') n += c.amount;
-        if (c?.resource === 'planks') n += c.amount / 2;
+        if (c) n += of(c.resource, c.amount);
       }
       return n;
     };
@@ -233,7 +235,9 @@ describe('farms in the world', () => {
     expect(villageStock(w).planks).toBeGreaterThanOrEqual(planks + 4);
     expect(villageStock(w).wood).toBeLessThan(WAREHOUSE_START.wood);
     expect(carriedBoards).toBe(true);
-    expect(timber()).toBeCloseTo(before, 6);
+    // nothing made from nothing; only what the fires burnt is gone
+    expect(timber()).toBeLessThanOrEqual(before + 1e-6);
+    expect(timber()).toBeGreaterThan(before - 1);
   });
 });
 
@@ -260,6 +264,7 @@ describe('water from the well', () => {
     const w = createWorld();
     w.buildings.find((b) => b.type === 'warehouse')!.stock.flour = 5;
     const bakery = placeBuilding(w, 2587.5, 'bakery', { instant: true, free: true })!;
+    bakery.stock.firewood = 3; // for the oven
     const draws = new Set<number>();
     let baked = false;
     tick(w, 300, () => {
@@ -281,6 +286,7 @@ describe('water from the well', () => {
     w.buildings = w.buildings.filter((b) => b.type !== 'warehouse');
     const bakery = placeBuilding(w, 2587.5, 'bakery', { instant: true, free: true })!;
     bakery.stock.flour = 3;
+    bakery.stock.firewood = 3; // for the oven
     let bakerDrew = false;
     let baked = false;
     tick(w, 200, () => {

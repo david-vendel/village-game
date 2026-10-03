@@ -4,7 +4,9 @@
 // is young (ANIMALS.adult, balance.ts), then productive (until
 // productiveUntil): only then do females give eggs or milk, adults give wool,
 // and a productive pair breeds. At the end of its lifespan its keeper
-// butchers it for meat.
+// butchers it for meat. Animals drink (ANIMAL_WATER, SUMMER_DRINK times as
+// much in summer) from the farm's store, brought from the well; thirsty, they
+// give nothing and don't breed.
 //
 // The keeper's work (a Workplace, worker.ts): butcher an animal whose time
 // has come; else, while feeding is worth it (the herd can grow, or there is
@@ -15,9 +17,9 @@
 // place in the store. With no feed left the keeper fetches some
 // (transport.ts), unless someone is bringing it already.
 
-import { ANIMALS } from './balance';
+import { ANIMAL_WATER, ANIMALS, SUMMER_DRINK } from './balance';
 import { BUILDINGS, storageOf, type BuildingDef } from './buildings';
-import { timeOfDay } from './daynight';
+import { isSummer, timeOfDay } from './daynight';
 import { putAway, storeSpot } from './economy';
 import { LIVESTOCK_FEED } from './layout';
 import { pastureCells, PASTURE_CELLS_PER_HORSE } from './pasture';
@@ -41,6 +43,8 @@ export interface Herd {
   animals: Beast[];
   fed: number;
   born: number;
+  /** Water drunk and not yet taken from the store (buckets). */
+  thirst?: number;
 }
 
 /** What an animal farm keeps (BuildingDef.livestock). */
@@ -93,11 +97,23 @@ export function herdRoom(world: World, b: Building): number {
 /** Every animal on every finished farm grows a year older each game day. */
 export function ageHerds(world: World, dt: number): void {
   const years = (dt * timeOfDay(world).hoursPerSecond) / 24;
+  const summer = isSummer(world);
   for (const b of world.buildings) {
-    if (b.status !== 'done' || !livestockOf(b)) continue;
-    for (const a of herdOf(b).animals) a.age += years;
+    const kept = livestockOf(b);
+    if (b.status !== 'done' || !kept) continue;
+    const h = herdOf(b);
+    for (const a of h.animals) a.age += years;
+    // they drink, more in the summer heat, a bucket at a time from the store
+    h.thirst = Math.min(2, (h.thirst ?? 0) + h.animals.length * ANIMAL_WATER[kept.animal] * (summer ? SUMMER_DRINK : 1) * years);
+    while (h.thirst >= 1 && b.stock.water >= 1) {
+      b.stock.water -= 1;
+      h.thirst -= 1;
+    }
   }
 }
+
+/** Animals owed a whole bucket and none in the store are thirsty: they give nothing and don't breed. */
+export const thirsty = (b: Building): boolean => (herdOf(b).thirst ?? 0) >= 1 && b.stock.water < 1;
 
 /** An animal farm as a workplace for its keeper. */
 export function livestockWorkplace(world: World, b: Building, def: Livestock): Workplace {
@@ -112,12 +128,14 @@ export function livestockWorkplace(world: World, b: Building, def: Livestock): W
 
   const due = () => herdOf(b).animals.findIndex((a) => isDue(kind, a));
   const canBreed = () => {
+    if (thirsty(b)) return false;
     const h = herdOf(b);
     const has = (sex: Sex) => h.animals.some((a) => a.sex === sex && isProductive(kind, a));
     return has('female') && has('male') && h.animals.length < herdRoom(world, b);
   };
   /** What a feed gives now, if anything: by productive females (eggs, milk) or any productive adult (wool), where there is room. */
   const yieldOf = (): Load | null => {
+    if (thirsty(b)) return null;
     const h = herdOf(b);
     const per = def.per ?? 1;
     const options: Resource[] = [];

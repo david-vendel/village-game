@@ -91,16 +91,19 @@ export const NEEDS: Record<'cottage' | 'farmstead' | 'townhouse', Need[]> = {
   cottage: [
     { goods: ['bread'], perDay: 1 / 3 },
     { goods: ['water'], perDay: 1 / 2 },
+    { goods: ['firewood'], perDay: 1 / 6 },
   ],
   farmstead: [
     { goods: ['bread'], perDay: 1 / 3 },
     { goods: ['water'], perDay: 1 / 2 },
+    { goods: ['firewood'], perDay: 1 / 6 },
     { goods: ['cheese', 'smokedmeat'], perDay: 1 / 4 },
     { goods: ['cloth'], perDay: 1 / 12 },
   ],
   townhouse: [
     { goods: ['bread'], perDay: 1 / 3 },
     { goods: ['water'], perDay: 1 / 2 },
+    { goods: ['firewood'], perDay: 1 / 6 },
     { goods: ['cheese', 'smokedmeat'], perDay: 1 / 4 },
     { goods: ['cloth'], perDay: 1 / 12 },
     { goods: ['ale'], perDay: 1 / 4 },
@@ -156,6 +159,20 @@ export const MARKET = {
 export const HORSE_HAY = 0.25;
 /** Work goes this many times as fast while the stores hold tools (tools wear out: SHELF_LIFE). */
 export const TOOL_SPEED = 1.25;
+
+/**
+ * Firewood (firewood.ts): split at the sawmill, `perLog` from a log. A fire
+ * burns `hearthPerDay` a day at full blaze (a home's or a workshop's hearth),
+ * a furnace `furnacePerDay` (the oven, the forge); households burn theirs as a
+ * need (NEEDS), twice as much in winter. A building keeps `kept` by its wall.
+ */
+export const FIREWOOD = { perLog: 6, hearthPerDay: 0.5, furnacePerDay: 1, kept: 3 };
+/** How many times as much firewood every fire burns in winter (heating). */
+export const WINTER_FIRE = 2;
+
+/** Water each animal drinks a day (livestock.ts), from its farm's store; SUMMER_DRINK times as much in summer. */
+export const ANIMAL_WATER: Record<AnimalKind, number> = { chicken: 0.05, cow: 0.4, sheep: 0.15, horse: 0.4 };
+export const SUMMER_DRINK = 2;
 
 /** What the starting village's storage yard holds. */
 export const START_STOCK: Amounts = { wood: 25, stone: 20, planks: 10, bread: 10 };

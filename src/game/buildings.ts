@@ -7,7 +7,7 @@
 // and an entry in BUILDING_ART.
 
 import { WORKSHOP_DOOR, BAKERY_DOOR, BAKERY_OVEN, CHAPEL_DOOR, HOME, HOUSE_DOOR_DX, MILL_DOOR, SAWMILL_DOOR, SAWMILL_SAW, SMITHY_DOOR, STAND_Y, STONECUTTER_DOOR, TAVERN_DOOR, PILE_UNIT, LIVESTOCK_DOOR, WELL_DRAW, WOODCUTTER_DOOR, YARD_ITEMS, type Spot } from './layout';
-import { COSTS, UPGRADE_COSTS } from './balance';
+import { COSTS, FIREWOOD, UPGRADE_COSTS } from './balance';
 import type { Livestock } from './livestock';
 import type { Amounts, Resource } from './resources';
 
@@ -75,6 +75,10 @@ export interface Recipe {
   at?: Spot;
   /** A second thing each batch uses up, `amount` of it per one of `from` (the bakery's water). */
   also?: { resource: Resource; amount: number };
+  /** Made instead of `to`, `per` of it for each one of `from`, when the village is shorter of it (the sawmill's firewood). */
+  or?: { resource: Resource; per: number };
+  /** Worked over a fire: no firewood, no work (firewood.ts). */
+  fire?: true;
   /** Used if there is any, one a batch, for `factor` times as much made (the smokehouse's salt: two joints cured from one). */
   boost?: { resource: Resource; factor: number };
 }
@@ -256,7 +260,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     jobs: { baker: 1 },
     ships: ['bread'],
     needs: ['flour', 'water'],
-    makes: { from: 'flour', to: 'bread', batch: 1, per: 2, seconds: 6, verb: 'bake', door: BAKERY_DOOR, at: BAKERY_OVEN, also: { resource: 'water', amount: 1 } },
+    makes: { from: 'flour', to: 'bread', batch: 1, per: 2, seconds: 6, verb: 'bake', door: BAKERY_DOOR, at: BAKERY_OVEN, fire: true, also: { resource: 'water', amount: 1 } },
   },
   blacksmith: {
     type: 'blacksmith',
@@ -271,7 +275,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     jobs: { smith: 1 },
     ships: ['tools'],
     needs: ['iron'],
-    makes: { from: 'iron', to: 'tools', batch: 1, per: 1, seconds: 10, verb: 'forge', door: SMITHY_DOOR },
+    makes: { from: 'iron', to: 'tools', batch: 1, per: 1, seconds: 10, verb: 'forge', door: SMITHY_DOOR, fire: true },
   },
   market: {
     type: 'market',
@@ -354,16 +358,16 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     type: 'sawmill',
     door: SAWMILL_DOOR,
     name: 'Sawmill',
-    purpose: 'Saws logs from the woodcutters into planks, two from each log.',
+    purpose: 'Saws logs from the woodcutters into planks (two a log) or splits them into firewood (six a log), whichever the village is shorter of.',
     width: 150,
     buildTime: 11,
     cost: COSTS.sawmill,
-    // logs waiting left of the door, boards stacked by the saw bench (layout.ts SAWMILL_SLOTS)
-    storage: { wood: 3, planks: 4 },
+    // logs waiting left of the door, split firewood and boards stacked by the saw bench (layout.ts SAWMILL_SLOTS)
+    storage: { wood: 3, planks: 4, firewood: 6 },
     jobs: { sawyer: 1 },
-    ships: ['planks'],
+    ships: ['planks', 'firewood'],
     needs: ['wood'],
-    makes: { from: 'wood', to: 'planks', batch: 1, per: 2, seconds: 5, verb: 'saw', door: SAWMILL_DOOR, at: SAWMILL_SAW },
+    makes: { from: 'wood', to: 'planks', batch: 1, per: 2, seconds: 5, verb: 'saw', door: SAWMILL_DOOR, at: SAWMILL_SAW, or: { resource: 'firewood', per: FIREWOOD.perLog } },
   },
   dairy: {
     type: 'dairy',
@@ -395,7 +399,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     jobs: { smoker: 1 },
     ships: ['smokedmeat'],
     needs: ['meat', 'salt'],
-    makes: { from: 'meat', to: 'smokedmeat', batch: 1, per: 1, seconds: 8, verb: 'smoke', door: WORKSHOP_DOOR, boost: { resource: 'salt', factor: 2 } },
+    makes: { from: 'meat', to: 'smokedmeat', batch: 1, per: 1, seconds: 8, verb: 'smoke', door: WORKSHOP_DOOR, fire: true, boost: { resource: 'salt', factor: 2 } },
   },
   weaver: {
     type: 'weaver',
@@ -453,7 +457,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     jobs: { chandler: 1 },
     ships: ['candles'],
     needs: ['tallow'],
-    makes: { from: 'tallow', to: 'candles', batch: 1, per: 2, seconds: 8, verb: 'dip', door: WORKSHOP_DOOR },
+    makes: { from: 'tallow', to: 'candles', batch: 1, per: 2, seconds: 8, verb: 'dip', door: WORKSHOP_DOOR, fire: true },
   },
   saddler: {
     type: 'saddler',
@@ -497,7 +501,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     jobs: { brewer: 1 },
     ships: ['ale'],
     needs: ['grain', 'water'],
-    makes: { from: 'grain', to: 'ale', batch: 1, per: 1, seconds: 10, verb: 'brew', door: WORKSHOP_DOOR, also: { resource: 'water', amount: 1 } },
+    makes: { from: 'grain', to: 'ale', batch: 1, per: 1, seconds: 10, verb: 'brew', door: WORKSHOP_DOOR, fire: true, also: { resource: 'water', amount: 1 } },
   },
   pastrycook: {
     type: 'pastrycook',
@@ -512,7 +516,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     jobs: { pastrycook: 1 },
     ships: ['pastries'],
     needs: ['flour', 'eggs'],
-    makes: { from: 'flour', to: 'pastries', batch: 1, per: 2, seconds: 8, verb: 'bake-pastries', door: WORKSHOP_DOOR, also: { resource: 'eggs', amount: 1 } },
+    makes: { from: 'flour', to: 'pastries', batch: 1, per: 2, seconds: 8, verb: 'bake-pastries', door: WORKSHOP_DOOR, fire: true, also: { resource: 'eggs', amount: 1 } },
   },
   reeve: {
     type: 'reeve',
@@ -625,8 +629,14 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
 export const BUILDING_TYPES = Object.keys(BUILDINGS) as BuildingType[];
 
 /** What a building's store holds, and how much of each: a merged one (Building.size) holds as much as all its parts; an upgraded one, its upgrade's store. */
+const storages = new Map<string, Amounts>();
 export function storageOf(b: { type: BuildingType; size?: number; upgraded?: true; level?: number }): Amounts {
+  // the same few kinds over and over: worked out once each
+  const key = `${b.type}|${b.size ?? 1}|${upgradesDone(b)}`;
+  const known = storages.get(key);
+  if (known) return known;
   const out: Amounts = {};
+  storages.set(key, out);
   for (const [r, n] of Object.entries(currentUpgrade(b)?.storage ?? BUILDINGS[b.type].storage)) out[r as keyof Amounts] = (n ?? 0) * (b.size ?? 1);
   return out;
 }
@@ -634,4 +644,32 @@ export function storageOf(b: { type: BuildingType; size?: number; upgraded?: tru
 /** A building's door (BuildingDef.door), for its size: a merged house's is in the middle of its front. */
 export function doorOf(type: BuildingType, size: 1 | 2 | 3 = 1): Spot | null {
   return type === 'house' ? { dx: HOUSE_DOOR_DX[size], y: STAND_Y } : BUILDINGS[type].door;
+}
+
+/**
+ * The buildings with a fire, which burn firewood (firewood.ts): homes, and
+ * every building whose workers live in it (but the mill, whose miller keeps
+ * no fire among the flour), the tavern, the watch's brazier. Each keeps a
+ * woodpile by its wall (FIREWOOD.kept) that serfs keep stocked. The sawmill keeps
+ * none either, for its sawdust.
+ */
+export const HAS_FIRE: ReadonlySet<BuildingType> = new Set(
+  BUILDING_TYPES.filter((t) => t !== 'mill' && t !== 'sawmill' && (t === 'house' || t === 'tavern' || t === 'watchtower' || Object.keys(BUILDINGS[t].jobs).length > 0)),
+);
+for (const t of HAS_FIRE) {
+  const def = BUILDINGS[t];
+  def.storage = { ...def.storage, firewood: Math.max(def.storage.firewood ?? 0, FIREWOOD.kept) };
+  def.needs = [...(def.needs ?? []), 'firewood'];
+  for (let u = def.upgrade; u; u = u.next) {
+    if (u.storage) u.storage = { ...u.storage, firewood: FIREWOOD.kept };
+    if (u.needs) u.needs = [...u.needs, 'firewood'];
+  }
+}
+
+// Every animal farm keeps water for its animals (livestock.ts), brought from the well.
+for (const t of BUILDING_TYPES) {
+  const def = BUILDINGS[t];
+  if (!def.livestock) continue;
+  def.storage = { ...def.storage, water: 3 };
+  def.needs = [...(def.needs ?? []), 'water'];
 }

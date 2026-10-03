@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { HOUSEHOLD, SHELF_LIFE } from './balance';
+import { FIREWOOD, HOUSEHOLD, SHELF_LIFE, SUMMER_DRINK } from './balance';
+import { herdOf, thirsty } from './livestock';
 import { DAY_LENGTH, season, timeOfDay } from './daynight';
 import { householdOf, residentsOf, roomIn } from './households';
 import { createWorld, placeBuilding, update, type World } from './world';
@@ -35,11 +36,11 @@ describe('households', () => {
     expect(house.stock.water).toBeLessThan(2);
   });
 
-  it('wanting both bread and water, a village loses its people one by one', () => {
+  it('wanting bread, water and firewood, a village loses its people one by one', () => {
     const w = createWorld();
     // no bread anywhere, no well, no yard to bring anything from
     w.buildings = w.buildings.filter((b) => b.type !== 'warehouse' && b.type !== 'well');
-    for (const b of houses(w)) b.stock.bread = b.stock.water = 0;
+    for (const b of houses(w)) b.stock.bread = b.stock.water = b.stock.firewood = 0;
     const start = w.people.length;
     const counts: number[] = [];
     tick(w, dayOf(w) * 2, () => {
@@ -122,5 +123,70 @@ describe('spoilage', () => {
     });
     expect(cows.stock.milk).toBeLessThan(4);
     expect(yard.stock.flour).toBe(4);
+  });
+});
+
+describe('the seasons', () => {
+  const dayAt = (w: World, d: number) => {
+    w.dayClock = (d - 1) * DAY_LENGTH + DAY_LENGTH / 2;
+    return season(w).name;
+  };
+
+  it('spring, summer and autumn three days each, then winter', () => {
+    const w = createWorld();
+    expect([1, 3, 4, 6, 7, 9, 10, 12].map((d) => dayAt(w, d))).toEqual(['spring', 'spring', 'summer', 'summer', 'autumn', 'autumn', 'winter', 'winter']);
+  });
+
+  it('fires burn twice the firewood in winter', () => {
+    const burnt = (day: number) => {
+      const w = createWorld();
+      dayAt(w, day);
+      const farm = w.buildings.find((b) => b.type === 'farm')!;
+      farm.stock.firewood = 3;
+      tick(w, 30);
+      return 3 - farm.stock.firewood;
+    };
+    const summer = burnt(5);
+    const winter = burnt(11);
+    expect(summer).toBeGreaterThan(0);
+    expect(winter / summer).toBeCloseTo(2, 0);
+  });
+
+  it('animals drink twice the water in summer, and thirsty they give no milk', () => {
+    const drunk = (day: number) => {
+      const w = createWorld();
+      dayAt(w, day);
+      const cows = placeBuilding(w, 2587.5, 'cowfarm', { instant: true, free: true })!;
+      tick(w, 1 / 30);
+      const before = herdOf(cows).thirst ?? 0;
+      cows.stock.water = 0;
+      tick(w, 20, () => (cows.stock.water = 0));
+      return (herdOf(cows).thirst ?? 0) - before;
+    };
+    expect(drunk(5) / drunk(2)).toBeCloseTo(SUMMER_DRINK, 1);
+
+    const w = createWorld();
+    const cows = placeBuilding(w, 2587.5, 'cowfarm', { instant: true, free: true })!;
+    herdOf(cows).animals = [{ sex: 'female', age: 5 }];
+    herdOf(cows).thirst = 1.5;
+    tick(w, 60, () => {
+      cows.stock.water = 0;
+      cows.stock.hay = 3;
+    });
+    expect(thirsty(cows)).toBe(true);
+    expect(cows.stock.milk).toBe(0);
+  });
+});
+
+describe('firewood', () => {
+  it('the sawmill splits logs into firewood, six a log, when the village is short of it', () => {
+    const w = createWorld();
+    const saw = placeBuilding(w, 2587.5, 'sawmill', { instant: true, free: true })!;
+    saw.stock.wood = 1;
+    // plenty of planks about, no firewood: it splits
+    w.buildings.find((b) => b.type === 'warehouse')!.stock.planks = 20;
+    tick(w, 40, () => (saw.stock.wood = Math.min(saw.stock.wood, 1)));
+    expect(saw.stock.firewood + w.people.filter((p) => p.job?.worker.carrying?.resource === 'firewood').length).toBeGreaterThan(0);
+    expect(FIREWOOD.perLog).toBe(6);
   });
 });

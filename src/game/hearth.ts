@@ -10,7 +10,7 @@
 // the same way; one nobody works at stays cold and shut. Each household keeps
 // its own hours a little (by the building's id).
 
-import { BUILDINGS } from './buildings';
+import { BUILDINGS, HAS_FIRE } from './buildings';
 import { dayPhase, isWorkTime, sunHours, sunNow } from './daynight';
 import { employees } from './people';
 import type { Building, World } from './world';
@@ -51,7 +51,10 @@ export function hearthOf(world: World, b: Building): Hearth {
   const { hour, dark } = hours(world, b);
   const allNight = b.type === 'tavern' || b.type === 'chapel' || b.type === 'watchtower';
   const lantern = dark && (allNight || hour > 12 || hour < 1) ? 1 : 0;
-  return { ...inside(world, b), lantern };
+  const now = inside(world, b);
+  // no firewood by the wall: the fire is out (firewood.ts)
+  if (HAS_FIRE.has(b.type) && b.stock.firewood < 1e-6) return { ...now, hearth: 0, furnace: 0, lantern };
+  return { ...now, lantern };
 }
 
 /** What burns and shines inside (hearthOf, without the lantern). */

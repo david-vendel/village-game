@@ -85,10 +85,16 @@ export function clock(world: World): { day: number; hours: number; minutes: numb
 }
 
 /** Which day of the year it is (1..YEAR_DAYS), and whether it is winter (the last WINTER_DAYS of them). */
-export function season(world: World): { dayOfYear: number; winter: boolean } {
+export type Season = 'spring' | 'summer' | 'autumn' | 'winter';
+
+/** Which day of the year it is (1..YEAR_DAYS), its season (the year in four equal parts, winter last), and whether it is winter. */
+export function season(world: World): { dayOfYear: number; name: Season; winter: boolean } {
   const dayOfYear = ((clock(world).day - 1) % YEAR_DAYS) + 1;
-  return { dayOfYear, winter: dayOfYear > YEAR_DAYS - WINTER_DAYS };
+  const winter = dayOfYear > YEAR_DAYS - WINTER_DAYS;
+  const part = Math.min(2, Math.floor(((dayOfYear - 1) / (YEAR_DAYS - WINTER_DAYS)) * 3));
+  return { dayOfYear, name: winter ? 'winter' : (['spring', 'summer', 'autumn'] as const)[part], winter };
 }
+export const isSummer = (world: World) => season(world).name === 'summer';
 export const isWinter = (world: World) => season(world).winter;
 
 /** The chapel bell's swing rate (rad/s) and how many times it rings at noon. */

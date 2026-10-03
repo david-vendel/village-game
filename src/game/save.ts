@@ -31,7 +31,7 @@ import { cellKey, cellName, cellsOf, footprintOf } from './grid';
 import { lowestPlot, streetOf, type Street } from './streets';
 import { createWorld, goneStreet, layStreet, MERGES, PLOT_LAST, setStreetEnds, type Building, type Rider, type World } from './world';
 
-export const SAVE_VERSION = 31;
+export const SAVE_VERSION = 33;
 
 
 /** The persisted part of the world. */
@@ -315,6 +315,7 @@ function building(v: unknown, path: string): Building {
     const h = obj(b.herd, `${path}.herd`);
     out.herd = {
       fed: Math.max(0, num(h.fed, `${path}.herd.fed`)),
+      ...(h.thirst !== undefined ? { thirst: Math.max(0, num(h.thirst, `${path}.herd.thirst`)) } : {}),
       born: Math.max(0, int(h.born, `${path}.herd.born`)),
       animals: arr(h.animals, `${path}.herd.animals`).map((v, i) => {
         const a = obj(v, `${path}.herd.animals[${i}]`);

@@ -91,6 +91,7 @@ describe('step 3: what butchering leaves', () => {
     const w = createWorld();
     const shop = place(w, 2587.5, 'chandler');
     shop.stock.tallow = 1;
+    shop.stock.firewood = 3;
     tick(w, 40);
     expect(shop.stock.candles + villageStock(w).candles).toBe(2);
   });
@@ -222,6 +223,7 @@ describe('step 6: the merchant', () => {
     const smithy = place(w, 2587.5, 'blacksmith');
     w.castle.charters = 3;
     smithy.stock.iron = 1;
+    smithy.stock.firewood = 3;
     // a freeman to forge
     tick(w, 1 / 30);
     const seeker = w.people.find((p) => p.seeker && p.home !== undefined)!;
@@ -237,6 +239,7 @@ describe('step 6: the merchant', () => {
     const smoke = place(w, 2587.5, 'smokehouse');
     smoke.stock.meat = 1;
     smoke.stock.salt = 1;
+    smoke.stock.firewood = 3;
     tick(w, 40, () => (smoke.stock.meat = Math.min(smoke.stock.meat, 1)));
     expect(smoke.stock.smokedmeat + villageStock(w).smokedmeat).toBeGreaterThanOrEqual(2);
   });

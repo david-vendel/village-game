@@ -16,6 +16,8 @@ function finished(world: World, type: Building['type']): Building {
   const b = placeBuilding(world, 487.5, type, { free: true })!;
   b.status = 'done';
   b.progress = 1;
+  // its woodpile stacked (firewood.ts)
+  b.stock.firewood = 3;
   return b;
 }
 
@@ -49,6 +51,13 @@ describe('hearths', () => {
     const tower = finished(w2, 'watchtower');
     expect(hearthOf(at(w2, 2), tower).furnace).toBe(1);
     expect(hearthOf(at(w2, 12), tower).furnace).toBe(0);
+  });
+
+  it('with no firewood by the wall, the fire is out', () => {
+    const w = createWorld({ village: false });
+    const h = finished(w, 'house');
+    h.stock.firewood = 0;
+    expect(hearthOf(at(w, 12), h).hearth).toBe(0);
   });
 
   it('nothing burns in a building still going up', () => {

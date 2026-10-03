@@ -103,6 +103,13 @@ export function drawItem(ctx: Ctx, r: Resource, x: number, base: number, s = 1, 
       line(ctx, x + 4 * s, base, x - 1 * s, base - 9 * s, '#7a5634', 1.2 * s);
       poly(ctx, [x - 1 * s, base - 9 * s, x - 4 * s, base - 11 * s, x - 3 * s, base - 7 * s], '#9a9fa6'); // an axe's blade
       return;
+    case 'firewood':
+      // split logs, their pale split faces showing
+      for (const [dx, dy] of [[-4, 0], [0, 0], [4, 0], [-2, -3.4], [2, -3.4]] as const) {
+        poly(ctx, [x + (dx - 2) * s, base + dy * s, x + (dx + 2) * s, base + dy * s, x + dx * s, base + (dy - 3.4) * s], '#8a5a30');
+        poly(ctx, [x + (dx - 1.2) * s, base + (dy - 0.6) * s, x + (dx + 1.2) * s, base + (dy - 0.6) * s, x + dx * s, base + (dy - 2.6) * s], '#d8b07a');
+      }
+      return;
     default:
       ellipse(ctx, x, base - 3 * s, 3 * s, 3 * s, '#a89c88');
   }

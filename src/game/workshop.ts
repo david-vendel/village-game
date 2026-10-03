@@ -13,8 +13,8 @@
 // away. The rest of the day is the generic worker routine.
 
 import { type Recipe, storageOf } from './buildings';
-import { putAway, storeSpot } from './economy';
-import { room, type Load } from './resources';
+import { putAway, storeSpot, villageStock } from './economy';
+import { room, type Load, type Resource } from './resources';
 import { errandResource, errandSpot, errandWork, fetchFor } from './transport';
 import type { JobTicket, Workplace } from './worker';
 import type { Building, World } from './world';
@@ -25,16 +25,27 @@ const PICK_UP_TIME = 0.4;
 export function workshopWorkplace(world: World, b: Building, recipe: Recipe): Workplace {
   const x = b.x;
   const capacity = storageOf(b);
-  const { from, to, batch, per, seconds, verb, door, at, also, boost } = recipe;
+  const { from, to, batch, per, seconds, verb, door, at, also, boost, or, fire } = recipe;
+  /** What a batch makes now: `to`, or `or` when the village is shorter of it (in batches' worth) and the store has room for it. */
+  const output = (): { resource: Resource; per: number } => {
+    if (!or) return { resource: to, per };
+    const have = villageStock(world);
+    const fitsOr = room(b.stock, capacity, or.resource) >= or.per * batch - 1e-9;
+    const fitsTo = room(b.stock, capacity, to) >= per * batch - 1e-9;
+    const shortOfOr = have[or.resource] + b.stock[or.resource] < ((have[to] + b.stock[to]) / per) * or.per;
+    return fitsOr && (!fitsTo || shortOfOr) ? or : { resource: to, per };
+  };
   const errand = errandWork(world, x);
   const isErrand = (job: JobTicket) => errandResource(job.action) !== null;
   /** How much of `from` the next batch takes: as much as is there, up to a batch, that what it makes has room for. */
   // only a whole batch is worked (two pails make a cheese)
   const nextBatch = () =>
     b.stock[from] < batch - 1e-9 ? 0 :
-    Math.min(batch, b.stock[from], also ? b.stock[also.resource] / also.amount : Infinity, Math.floor(room(b.stock, capacity, to) / per + 1e-9));
+    // worked over a fire: none without firewood
+    fire && b.stock.firewood < 1e-6 ? 0 :
+    Math.min(batch, b.stock[from], also ? b.stock[also.resource] / also.amount : Infinity, Math.floor(room(b.stock, capacity, output().resource) / output().per + 1e-9));
   /** What a batch is made of: `amount` of each per one of `from`. */
-  const inputs = [{ resource: from, amount: 1 }, ...(also ? [also] : [])];
+  const inputs = [{ resource: from, amount: 1 }, ...(also ? [also] : []), ...(fire ? [{ resource: 'firewood' as Resource, amount: 1 }] : [])];
   return {
     door,
     nextJob() {
@@ -60,9 +71,14 @@ export function workshopWorkplace(world: World, b: Building, recipe: Recipe): Wo
       if (carried && carried.resource === from && boost && b.stock[boost.resource] >= 1) {
         // salt to hand: it goes in, and the batch makes more
         b.stock[boost.resource] -= 1;
-        return { resource: to, amount: carried.amount * per * boost.factor };
+        const out = output();
+        return { resource: out.resource, amount: carried.amount * out.per * boost.factor };
       }
-      if (carried) return carried.resource === from ? { resource: to, amount: carried.amount * per } : carried;
+      if (carried) {
+        if (carried.resource !== from) return carried;
+        const out = output();
+        return { resource: out.resource, amount: carried.amount * out.per };
+      }
       // outside: a sack taken off the store, to carry in
       const n = nextBatch();
       if (n <= 1e-9) return null;

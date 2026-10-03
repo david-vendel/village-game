@@ -38,6 +38,7 @@ import { ageHerds, livestockWorkplace, type Herd } from './livestock';
 import { parcelsLaid, ROAD_PIECE, roadWorkplace } from './roadwork';
 import { newCastle, updateCastle, upgradeLocked, whyLocked, type Castle } from './castle';
 import { feedStables, PLOUGH_SPEED } from './carts';
+import { burnFires, stackWoodpiles } from './firewood';
 import { updateMarkets } from './market';
 import { TOOL_SPEED } from './balance';
 
@@ -280,6 +281,8 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
       b.completedAt = -100; // no completion effect for the starting village
       if (type === 'warehouse') b.stock = { ...WAREHOUSE_START };
     }
+    // their woodpiles stacked: smoke from every chimney from the start
+    stackWoodpiles(world);
     world.events.length = 0;
     // six workers with a fixed profession for life (one farmer, five builders),
     // two townsfolk who never work, and five out of work, looking for a job
@@ -1092,6 +1095,7 @@ export function update(world: World, dt: number, input: MoveInput): void {
   updateMarkets(world, clockBefore);
   updateCastle(world);
   feedStables(world, dt);
+  burnFires(world, dt);
   updateRider(world, dt, world.menu ? { left: false, right: false } : input);
   arrive(world, dt);
   staff(world);
@@ -1143,7 +1147,11 @@ function baseWorkplace(world: World, b: Building, role: Role): Workplace | null 
 /** Hire for open jobs; builders and serfs work day and night. */
 function staff(world: World): void {
   const hub = transportHub(world);
-  const openingsOf = (b: Building) => (b === hub ? { serf: serfPositions(world) } : openings(b, builderPositions(world, b), true));
+  // the errands are planned once a frame, not once for every kind of job asked about
+  let serfs: number | null = null;
+  const builders = new Map<number, number>();
+  const buildersAt = (b: Building) => builders.get(b.id) ?? builders.set(b.id, builderPositions(world, b)).get(b.id)!;
+  const openingsOf = (b: Building) => (b === hub ? { serf: (serfs ??= serfPositions(world)) } : openings(b, buildersAt(b), true));
   staffBuildings(world, (b, role, who) => newWorker(world, b, role, who), openingsOf);
 }
 

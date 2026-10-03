@@ -9,7 +9,8 @@ import { drawingAt } from '../game/transport';
 import { pastureCells } from '../game/pasture';
 import { lacking } from '../game/households';
 import { merchantHere } from '../game/market';
-import { upgradesDone } from '../game/buildings';
+import { HAS_FIRE, upgradesDone } from '../game/buildings';
+import { hearthOf } from '../game/hearth';
 import { snowfall, snowOnLand } from './winter';
 import { GROUND_PILE_Y } from '../game/piles';
 import type { Worker } from '../game/worker';
@@ -112,6 +113,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     drawing: b.type === 'well' ? drawingAt(world, b) : null,
     herd: b.herd,
     level: upgradesDone(b),
+    fire: HAS_FIRE.has(b.type) ? fireOf(world, b) : undefined,
     merchant: b.type === 'market' && merchantHere(world),
     wants: b.type === 'house' && b.status === 'done' ? lacking(b) : undefined,
     pasture: b.type === 'horsefarm' && b.status === 'done' ? pastureCells(world, b).length : undefined,
@@ -290,4 +292,10 @@ function drawGrade(ctx: Ctx, viewW: number, top: number, bottom: number): void {
   g.addColorStop(1, 'rgba(40,24,10,0.45)');
   ctx.fillStyle = g;
   ctx.fillRect(0, top, viewW, h);
+}
+
+/** How hard a building's fire burns now (its hearth or furnace, whichever is more; 0: out). */
+function fireOf(world: World, b: Building): number {
+  const h = hearthOf(world, b);
+  return Math.max(h.hearth, h.furnace);
 }

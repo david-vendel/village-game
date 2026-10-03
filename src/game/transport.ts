@@ -128,16 +128,49 @@ function underway(world: World): Underway[] {
   return out;
 }
 
-const sum = (list: Underway[]) => list.reduce((n, u) => n + u.amount, 0);
 /** What of r in b's store is still free once those on their way have picked theirs up (drawing takes none of it). */
-const unclaimed = (runs: Underway[], b: Source, r: Resource) =>
-  amountAt(b, r) - sum(runs.filter((u) => !u.carrying && u.job.target === b.id && errandResource(u.job.action) === r && !isDraw(u.job.action)));
+const unclaimed = (runs: Runs, b: Source, r: Resource) => amountAt(b, r) - (runs.claimed.get(`${b.id}|${r}`) ?? 0);
 /** Room left in b's store for r once what is on its way (shipped or supplied) has arrived. */
-const roomLeft = (runs: Underway[], b: Building, r: Resource) =>
-  room(b.stock, storageOf(b), r) - sum(runs.filter((u) => u.job.to === b.id && errandResource(u.job.action) === r));
+const roomLeft = (runs: Runs, b: Building, r: Resource) => room(b.stock, storageOf(b), r) - (runs.coming.get(`${b.id}|${r}`) ?? 0);
+
+/**
+ * The errands underway, tallied once: how much of each thing at each place is
+ * already claimed by someone on their way to pick it up (drawing claims none),
+ * and how much is on its way to each place; and what each building wants, as
+ * asked once. Planning an errand adds to it (note).
+ */
+interface Runs {
+  claimed: Map<string, number>;
+  coming: Map<string, number>;
+  wants: Map<number, Resource[]>;
+}
+
+function tally(world: World): Runs {
+  const runs: Runs = { claimed: new Map(), coming: new Map(), wants: new Map() };
+  for (const u of underway(world)) note(runs, u);
+  return runs;
+}
+
+function note(runs: Runs, u: Underway): void {
+  const r = errandResource(u.job.action);
+  if (!r) return;
+  const add = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + u.amount);
+  if (!u.carrying && !isDraw(u.job.action)) add(runs.claimed, `${u.job.target}|${r}`);
+  if (u.job.to !== undefined) add(runs.coming, `${u.job.to}|${r}`);
+}
+
+/** What b wants, asked once for the whole plan. */
+function wanted(world: World, runs: Runs, b: Building): Resource[] {
+  let w = runs.wants.get(b.id);
+  if (!w) {
+    w = wantsOf(world, b);
+    runs.wants.set(b.id, w);
+  }
+  return w;
+}
 
 /** The nearest place to x with some of r free to take, or to draw: a building that makes it or a warehouse; at equal distance the maker. */
-function nearestSource(world: World, runs: Underway[], r: Resource, x: number, not: Building): Building | null {
+function nearestSource(world: World, runs: Runs, r: Resource, x: number, not: Building): Building | null {
   // (what lies on the ground is collected by serfs, not fetched from)
   const places = world.buildings.filter(
     (b) => b !== not && b.status === 'done' && (isStore(b) || BUILDINGS[b.type].ships?.includes(r)) && (unclaimed(runs, b, r) > 1e-9 || drawnAt(b, r)),
@@ -147,7 +180,7 @@ function nearestSource(world: World, runs: Underway[], r: Resource, x: number, n
 }
 
 /** The errand bringing b some of r, if it has room for it and it can be had somewhere. */
-function supplyErrand(world: World, runs: Underway[], b: Building, r: Resource): (Errand & { from: Building }) | null {
+function supplyErrand(world: World, runs: Runs, b: Building, r: Resource): (Errand & { from: Building }) | null {
   if (roomLeft(runs, b, r) <= 1e-9) return null;
   const from = nearestSource(world, runs, r, xOf(world, b), b);
   if (!from) return null;
@@ -158,7 +191,7 @@ function supplyErrand(world: World, runs: Underway[], b: Building, r: Resource):
 
 /** A well within WELL_REACH of x with room in its store, for a serf with nothing else to do to fill. */
 function wellToFill(world: World, x: number): Errand | null {
-  const runs = underway(world);
+  const runs = tally(world);
   const near = world.buildings
     .filter((b) => b.status === 'done' && BUILDINGS[b.type].drawn && streetDist(world, x, b.x) <= WELL_REACH)
     .filter((b) => roomLeft(runs, b, BUILDINGS[b.type].drawn!.resource) > 1e-9)
@@ -187,25 +220,25 @@ export function drawingAt(world: World, b: Building): number | null {
 
 /** An errand to fetch something b needs, for b's own worker. */
 export function fetchFor(world: World, b: Building, r: Resource): (Errand & { from: Building }) | null {
-  return supplyErrand(world, underway(world), b, r);
+  return supplyErrand(world, tally(world), b, r);
 }
 
 /** Where what b makes goes: the nearest building that needs it and has room, else the nearest warehouse with room. */
-function shipTo(world: World, runs: Underway[], b: Source, r: Resource): Building | null {
+function shipTo(world: World, runs: Runs, b: Source, r: Resource): Building | null {
   const d = (o: Building) => streetDist(world, xOf(world, b), xOf(world, o));
   const byDistance = (list: Building[]) => list.sort((a, c) => d(a) - d(c))[0] ?? null;
-  const users = world.buildings.filter((o) => o !== b && o.status === 'done' && wantsOf(world, o).includes(r) && roomLeft(runs, o, r) > 1e-9);
+  const users = world.buildings.filter((o) => o !== b && o.status === 'done' && wanted(world, runs, o).includes(r) && roomLeft(runs, o, r) > 1e-9);
   return byDistance(users) ?? byDistance(warehouses(world).filter((w) => roomLeft(runs, w, r) > 1e-9));
 }
 
 /** Errands waiting for someone to run them, nearest first to x. */
 export function errands(world: World, x = 0): Errand[] {
-  const runs = underway(world);
+  const runs = tally(world);
   const out: Errand[] = [];
   // each errand planned claims its load and the room it fills, like one being run
   const plan = (e: Errand) => {
     out.push(e);
-    runs.push({ job: e.job, amount: Math.min(loadAt(e.from, e.r), unclaimed(runs, e.from, e.r)), carrying: false });
+    note(runs, { job: e.job, amount: Math.min(loadAt(e.from, e.r), unclaimed(runs, e.from, e.r)), carrying: false });
   };
   const finished = world.buildings.filter((b) => b.status === 'done');
   // what makers have goes out first, so it is matched with who needs it
@@ -226,7 +259,7 @@ export function errands(world: World, x = 0): Errand[] {
   }
   // then what is still needed is fetched from wherever it can be had
   for (const b of finished) {
-    for (const r of wantsOf(world, b)) {
+    for (const r of wanted(world, runs, b)) {
       const e = supplyErrand(world, runs, b, r);
       if (e) plan(e);
     }
