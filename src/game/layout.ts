@@ -140,16 +140,22 @@ export interface Slot {
 /** Where someone stands to reach things lying along the building line. */
 export const STAND_Y = BASE_Y + 3;
 
-/** How much of a resource one item in a pile stands for: a log, a block of stone, a sack. */
+/**
+ * How much of a resource one item in a pile stands for: a wood is a log and a
+ * stone a block (one item each, what one person carries), grain, flour and
+ * bread come in sacks and baskets of PILE_UNIT.
+ */
 export const PILE_UNIT = 10;
+/** How much of resource r one item in a pile holds (PILE_UNIT). */
+export const unitOf = (r: string) => (r === 'wood' || r === 'stone' ? 1 : PILE_UNIT);
 
 /** What a sack holds (grain or flour) in a workshop's store; one sack per place. */
 export const SACK = 10;
 /** Loaves in a basket; one basket per place in a store. */
 export const BASKET = 10;
 
-/** Items in a pile holding `amount` (a part-filled item counts). */
-export const pileItems = (amount: number) => Math.ceil(amount / PILE_UNIT - 1e-9);
+/** Items in a pile holding `amount` of r (a part-filled item counts). */
+export const pileItems = (amount: number, r = 'wood') => Math.ceil(amount / unitOf(r) - 1e-9);
 
 /** Where each sheaf stands in the farm's grain store, in the order they are stacked. */
 export const SHEAF_SLOTS: readonly Slot[] = [
@@ -174,7 +180,7 @@ function pyramid(i: number, rows: readonly number[]): { row: number; col: number
  * Items a small storage yard (the `warehouse` building, three cells wide)
  * holds, per resource; a medium or large one (two or three merged) holds
  * twice or three times as much. Everything it stores lies out in the open
- * where it can be seen, so this is also its capacity: YARD_ITEMS × PILE_UNIT
+ * where it can be seen, so this is also its capacity: YARD_ITEMS × unitOf
  * (buildings.ts).
  */
 export const YARD_ITEMS = { wood: 15, stone: 15, grain: 5, flour: 5, bread: 5 } as const;

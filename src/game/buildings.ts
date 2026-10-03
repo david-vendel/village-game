@@ -5,7 +5,7 @@
 // its own module (farm.ts).
 // To add a building: add an entry here and an entry in BUILDING_ART.
 
-import { BAKERY_DOOR, BAKERY_OVEN, CHAPEL_DOOR, HOME, HOUSE_DOOR_DX, MILL_DOOR, PILE_UNIT, SMITHY_DOOR, STAND_Y, STONECUTTER_DOOR, TAVERN_DOOR, WOODCUTTER_DOOR, YARD_ITEMS, type Spot } from './layout';
+import { BAKERY_DOOR, BAKERY_OVEN, CHAPEL_DOOR, HOME, HOUSE_DOOR_DX, MILL_DOOR, SMITHY_DOOR, STAND_Y, STONECUTTER_DOOR, TAVERN_DOOR, unitOf, WOODCUTTER_DOOR, YARD_ITEMS, type Spot } from './layout';
 import type { Amounts, Resource } from './resources';
 
 export type BuildingType =
@@ -107,9 +107,9 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: "Open yard with the village's wood, stone, grain, flour and bread in piles. Builders fetch from here.",
     width: 75,
     buildTime: 14,
-    cost: { wood: 60, stone: 40 },
+    cost: { wood: 6, stone: 4 },
     // everything lies out in the open, in its place in a pile (layout.ts warehouseSlot)
-    storage: Object.fromEntries(Object.entries(YARD_ITEMS).map(([r, n]) => [r, n * PILE_UNIT])),
+    storage: Object.fromEntries(Object.entries(YARD_ITEMS).map(([r, n]) => [r, n * unitOf(r)])),
     jobs: {},
   },
   house: {
@@ -119,7 +119,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: 'Shelter for villagers. More homes, more hands.',
     width: 75,
     buildTime: 10,
-    cost: { wood: 40, stone: 10 },
+    cost: { wood: 4, stone: 1 },
     storage: {},
     jobs: {},
   },
@@ -132,12 +132,12 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     width: 150,
     depth: 3,
     buildTime: 12,
-    cost: { wood: 50, stone: 20 },
+    cost: { wood: 5, stone: 2 },
     storage: { grain: 5 },
     jobs: { farmer: 1 },
     ships: ['grain'],
     // a second room built on: two farmers live and work here
-    upgrade: { name: 'Large farm', cost: { wood: 40, stone: 20 }, buildTime: 8, jobs: { farmer: 2 } },
+    upgrade: { name: 'Large farm', cost: { wood: 4, stone: 2 }, buildTime: 8, jobs: { farmer: 2 } },
   },
   mill: {
     type: 'mill',
@@ -146,7 +146,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: 'Grinds grain from the farms into flour.',
     width: 150,
     buildTime: 16,
-    cost: { wood: 60, stone: 60 },
+    cost: { wood: 6, stone: 6 },
     // a sack of grain waiting per slot, a sack of flour per slot (layout.ts MILL_SLOTS)
     storage: { grain: 30, flour: 30 },
     jobs: { miller: 1 },
@@ -161,7 +161,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: 'Bakes flour from the mill into bread for the tavern.',
     width: 150,
     buildTime: 12,
-    cost: { wood: 40, stone: 50 },
+    cost: { wood: 4, stone: 5 },
     // a sack of flour waiting per slot, a basket of loaves per slot (layout.ts BAKERY_SLOTS)
     storage: { flour: 30, bread: 40 },
     jobs: { baker: 1 },
@@ -176,7 +176,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: 'Forges tools and arms at the glowing anvil.',
     width: 150,
     buildTime: 14,
-    cost: { wood: 40, stone: 80 },
+    cost: { wood: 4, stone: 8 },
     storage: {},
     jobs: {},
   },
@@ -187,7 +187,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: 'Stalls where merchants trade goods and coin.',
     width: 150,
     buildTime: 9,
-    cost: { wood: 60, stone: 20 },
+    cost: { wood: 6, stone: 2 },
     storage: {},
     jobs: {},
   },
@@ -198,7 +198,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: 'Bells, prayer and a steeple seen for miles.',
     width: 150,
     buildTime: 18,
-    cost: { wood: 40, stone: 150 },
+    cost: { wood: 4, stone: 15 },
     storage: {},
     jobs: {},
   },
@@ -209,7 +209,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: 'Ale, songs, rumours and bread for weary travellers.',
     width: 225,
     buildTime: 13,
-    cost: { wood: 80, stone: 40 },
+    cost: { wood: 8, stone: 4 },
     // baskets of loaves on the bench outside (layout.ts TAVERN_SLOTS); guests eat them (tavern.ts)
     storage: { bread: 20 },
     jobs: {},
@@ -222,7 +222,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: 'Guards keep watch over the road and the woods.',
     width: 75,
     buildTime: 12,
-    cost: { wood: 60, stone: 60 },
+    cost: { wood: 6, stone: 6 },
     storage: {},
     jobs: {},
   },
@@ -233,7 +233,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: 'Fresh water for the whole street.',
     width: 75,
     buildTime: 6,
-    cost: { wood: 5, stone: 30 },
+    cost: { wood: 1, stone: 3 },
     storage: {},
     jobs: {},
   },
@@ -246,9 +246,9 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     width: 150,
     depth: 3,
     buildTime: 9,
-    cost: { wood: 30, stone: 10 },
+    cost: { wood: 3, stone: 1 },
     // a cord of split wood per load in the yard (layout.ts WOODCUTTER_SLOTS); the woods: nature.ts
-    storage: { wood: 30 },
+    storage: { wood: 3 },
     jobs: { woodcutter: 1 },
     ships: ['wood'],
   },
@@ -259,9 +259,9 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     purpose: 'Cuts blocks of stone out of the nearest quarry in the hills.',
     width: 150,
     buildTime: 10,
-    cost: { wood: 40, stone: 10 },
+    cost: { wood: 4, stone: 1 },
     // blocks set down by the wall (layout.ts STONECUTTER_SLOTS)
-    storage: { stone: 30 },
+    storage: { stone: 3 },
     jobs: { stonecutter: 1 },
     ships: ['stone'],
   },
@@ -273,7 +273,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     // the road it opens is a street of its own (streets.ts); the footprint is where it meets this one
     width: 75,
     buildTime: 4,
-    cost: { wood: 10 },
+    cost: { wood: 1 },
     storage: {},
     jobs: {},
   },

@@ -6,7 +6,7 @@
 // own place (storeSlot), where it is picked up from and put down.
 
 import { BUILDINGS, type BuildingType, storageOf } from './buildings';
-import { BAKERY_SLOTS, BASKET, MILL_SLOTS, PILE_UNIT, SACK, STONECUTTER_SLOTS, TAVERN_SLOTS, SHEAF_SLOTS, STAND_Y, warehouseSlot, WOODCUTTER_SLOTS, type Slot, type Spot } from './layout';
+import { BAKERY_SLOTS, BASKET, MILL_SLOTS, SACK, STONECUTTER_SLOTS, TAVERN_SLOTS, SHEAF_SLOTS, STAND_Y, unitOf, warehouseSlot, WOODCUTTER_SLOTS, type Slot, type Spot } from './layout';
 import { room, RESOURCES, shortfall, stockOf, type Amounts, type Load, type Resource, type Stock } from './resources';
 import { takeFromPile, type Pile } from './piles';
 import { owed } from './site';
@@ -15,7 +15,7 @@ import { delivering } from './worker';
 import type { Building, World } from './world';
 
 /** What the starting village's warehouse holds. */
-export const WAREHOUSE_START: Stock = stockOf({ wood: 250, stone: 200 });
+export const WAREHOUSE_START: Stock = stockOf({ wood: 25, stone: 20 });
 
 const xOf = (_world: World, b: Building) => b.x;
 /** How far building b is from world x, along the streets. */
@@ -146,21 +146,21 @@ export function putAway(world: World, load: Load, x: number): number {
  */
 export function storeSlots(b: Building, r: Resource): { unit: number; perTrip: number; slot: (i: number) => Slot } | null {
   const pick = (slots: readonly Slot[]) => (i: number) => slots[Math.max(0, Math.min(i, slots.length - 1))];
-  if (b.type === 'warehouse') return { unit: PILE_UNIT, perTrip: 1, slot: (i) => warehouseSlot(r, i, b.size ?? 1) };
+  if (b.type === 'warehouse') return { unit: unitOf(r), perTrip: 1, slot: (i) => warehouseSlot(r, i, b.size ?? 1) };
   if (b.type === 'farm' && r === 'grain') return { unit: 1, perTrip: 2, slot: pick(SHEAF_SLOTS) };
   if (b.type === 'mill' && (r === 'grain' || r === 'flour')) return { unit: SACK, perTrip: 1, slot: pick(MILL_SLOTS[r]) };
   if (b.type === 'bakery' && r === 'flour') return { unit: SACK, perTrip: 1, slot: pick(BAKERY_SLOTS.flour) };
   if (b.type === 'bakery' && r === 'bread') return { unit: BASKET, perTrip: 1, slot: pick(BAKERY_SLOTS.bread) };
   if (b.type === 'tavern' && r === 'bread') return { unit: BASKET, perTrip: 1, slot: pick(TAVERN_SLOTS) };
-  if (b.type === 'woodcutter' && r === 'wood') return { unit: PILE_UNIT, perTrip: 1, slot: pick(WOODCUTTER_SLOTS) };
-  if (b.type === 'stonecutter' && r === 'stone') return { unit: PILE_UNIT, perTrip: 1, slot: pick(STONECUTTER_SLOTS) };
+  if (b.type === 'woodcutter' && r === 'wood') return { unit: 1, perTrip: 1, slot: pick(WOODCUTTER_SLOTS) };
+  if (b.type === 'stonecutter' && r === 'stone') return { unit: 1, perTrip: 1, slot: pick(STONECUTTER_SLOTS) };
   return null;
 }
 
 /** How much of r one person carries away from this store at a time. */
 export function tripLoad(b: Building, r: Resource): number {
   const s = storeSlots(b, r);
-  return s ? s.unit * s.perTrip : PILE_UNIT;
+  return s ? s.unit * s.perTrip : unitOf(r);
 }
 
 /**
@@ -169,7 +169,7 @@ export function tripLoad(b: Building, r: Resource): number {
  */
 export function storeSpot(world: World, b: Building, r: Resource, fromX: number, top: boolean, adding = 0): Spot {
   const s = storeSlots(b, r);
-  const items = (amount: number) => Math.ceil(amount / (s?.unit ?? PILE_UNIT) - 1e-9);
+  const items = (amount: number) => Math.ceil(amount / (s?.unit ?? unitOf(r)) - 1e-9);
   const i = top ? items(b.stock[r]) - 1 : items(b.stock[r] + Math.max(adding, 1e-6)) - 1;
   return { dx: xOf(world, b) + (s?.slot(Math.max(0, i)).dx ?? 0) - fromX, y: STAND_Y };
 }

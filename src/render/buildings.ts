@@ -501,7 +501,7 @@ function drawWarehouse(ctx: Ctx, a: DrawArgs): void {
   const size = Math.max(1, Math.round((a.width ?? 75) / 75));
   const k = size / 2;
   const stock = a.stock;
-  const items = (r: keyof typeof YARD_ITEMS) => Math.min(YARD_ITEMS[r] * size, pileItems(stock?.[r] ?? 0));
+  const items = (r: keyof typeof YARD_ITEMS) => Math.min(YARD_ITEMS[r] * size, pileItems(stock?.[r] ?? 0, r));
   const slot = (r: keyof typeof YARD_ITEMS, i: number) => warehouseSlot(r, i, size);
   // trodden earth and a wattle fence round the back of the yard
   ctx.globalAlpha = 0.35;
@@ -1088,7 +1088,7 @@ function drawWoodcutter(ctx: Ctx, a: DrawArgs): void {
   poly(ctx, [bx - 2, a.base - 10, bx + 4, a.base - 10, bx + 3, a.base - 15, bx - 1, a.base - 14], '#9a9a9a');
   for (let i = 0; i < 5; i++) rect(ctx, bx - 16 + hash(a.seed, 60 + i) * 30, a.base + 1 + hash(a.seed, 70 + i) * 3, 3, 1.5, '#d8b98a');
   // the store: logs stacked by the wall, one per load
-  const logs = Math.min(WOODCUTTER_SLOTS.length, pileItems(a.stock?.wood ?? 0));
+  const logs = Math.min(WOODCUTTER_SLOTS.length, pileItems(a.stock?.wood ?? 0, 'wood'));
   for (let i = 0; i < logs; i++) {
     const sl = WOODCUTTER_SLOTS[i];
     const cx = a.x + sl.dx;
@@ -1126,7 +1126,7 @@ function drawStonecutter(ctx: Ctx, a: DrawArgs): void {
   rect(ctx, bx - 5, a.base - 19, 10, 7, '#aaa398');
   rect(ctx, bx - 5, a.base - 19, 10, 2, '#c4beb3');
   // the store: dressed blocks set down by the wall, one per load
-  const blocks = Math.min(STONECUTTER_SLOTS.length, pileItems(a.stock?.stone ?? 0));
+  const blocks = Math.min(STONECUTTER_SLOTS.length, pileItems(a.stock?.stone ?? 0, 'stone'));
   for (let i = 0; i < blocks; i++) {
     const sl = STONECUTTER_SLOTS[i];
     const cx = a.x + sl.dx;

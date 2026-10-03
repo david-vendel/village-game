@@ -29,7 +29,7 @@ function busyWorld(): World {
 describe('save games', () => {
   it('keeps the road laid on past where a street began, and a road piece being laid', () => {
     const w = createWorld();
-    w.buildings.find((b) => b.type === 'warehouse')!.stock.wood = 300;
+    w.buildings.find((b) => b.type === 'warehouse')!.stock.wood = 30;
     placeBuilding(w, 2087.5, 'intersection', { instant: true });
     for (let i = 0; i < 3; i++) placeBuilding(w, streetRange(w, 1).max, 'road', { instant: true });
     placeBuilding(w, streetRange(w, 1).min, 'road', { instant: true });

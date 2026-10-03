@@ -1,8 +1,8 @@
 // Laying road. A road piece (the `road` building, world.ts roadEnd) is
 // ROAD_PIECE parcels of road past a street's end, laid one parcel at a time:
-// a builder fetches the wood and puts it down in a heap at the end of the
-// road, then lays the first parcel of grass into road, walks on to the next
-// and lays that, and so on. Each parcel is part of the street as soon as it
+// builders fetch the wood, a log each, and put it down in a heap at the end
+// of the road; one of them lays the first parcel of grass into road with what
+// lies there, walks on to the next and lays that, and so on. Each parcel is part of the street as soon as it
 // is laid (world.ts syncRoads): the road, and the rider, go on along it while
 // the rest is still being laid.
 
@@ -44,13 +44,13 @@ export function roadWorkplace(world: World, b: Building, buildSpeed: number): Wo
   return {
     ...base,
     nextJob(w, taken: JobTicket[]) {
+      // one parcel at a time, in order, by one builder, with what lies on the heap
       const k = parcelsLaid(b);
-      if (heap() > 1e-9) {
-        // one parcel at a time, in order
-        if (k >= ROAD_PIECE || taken.some((j) => j.action === 'build')) return null;
-        return { job: { action: 'build', target: k }, dx: parcelDx(b, k), y: ON_ROAD };
-      }
-      return base.nextJob(w, taken);
+      const laying = taken.some((j) => j.action === 'build');
+      if (heap() > 1e-9 && !laying && k < ROAD_PIECE) return { job: { action: 'build', target: k }, dx: parcelDx(b, k), y: ON_ROAD };
+      // the others fetch the wood still needed, a log each (never building at the heap themselves)
+      const next = base.nextJob(w, [...taken, { action: 'build', target: 0 }]);
+      return next && next.job.action !== 'build' ? next : null;
     },
     begin(job) {
       if (job.action === 'build') return heap() > 1e-9 && job.target === parcelsLaid(b) ? def.buildTime / ROAD_PIECE / buildSpeed : null;

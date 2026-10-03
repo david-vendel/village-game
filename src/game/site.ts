@@ -39,8 +39,8 @@ import type { Building, World } from './world';
 export const BUILDERS_PER_SITE = 5;
 /** Most builders pulling a building down at once. */
 export const DEMOLITION_CREW = 3;
-/** How much one builder carries per trip. */
-export const LOAD_SIZE = 10;
+/** How much one builder carries per trip: a log or a block of stone. */
+export const LOAD_SIZE = 1;
 /** Seconds of labour per build job; a building needs its buildTime of labour in all. */
 export const BUILD_CHUNK = 2;
 /** Seconds to load up at a warehouse or hut. */
@@ -181,8 +181,7 @@ export function builderPositions(world: World, b: Building): number {
   const need = stillNeeded(world, b);
   const x = b.x;
   for (const r of RESOURCES) if (need[r] && (materialSource(world, r, x) || nearestPile(world, r, x))) waiting += loads(need[r]);
-  // a road is laid parcel by parcel, by one builder
-  return Math.min(b.type === 'road' ? 1 : BUILDERS_PER_SITE, busy.length + waiting);
+  return Math.min(BUILDERS_PER_SITE, busy.length + waiting);
 }
 
 /** Materials lying on the site's pile, for display. */

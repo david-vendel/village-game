@@ -78,7 +78,7 @@ describe('placement', () => {
 describe('build menu', () => {
   it('builds at an empty plot, and offers what can be done to a building', () => {
     const w = emptyWorld();
-    placeBuilding(w, 2912.5, 'warehouse', { instant: true, free: true })!.stock = stockOf({ wood: 300, stone: 300 });
+    placeBuilding(w, 2912.5, 'warehouse', { instant: true, free: true })!.stock = stockOf({ wood: 30, stone: 30 });
     w.rider.x = plotOf(w, 0, 8).x - 25; // a cell 3n + 1, where a building starts
     expect(openMenu(w)).toBe(true);
     moveMenu(w, 2);
@@ -229,7 +229,7 @@ function layRoadTo(w: World, i: number, k: number): void {
 describe('streets', () => {
   it('a road piece lays its street nine parcels further, only at an end and never onto another road', () => {
     const w = createWorld();
-    w.buildings.find((b) => b.type === 'warehouse')!.stock.wood = 300;
+    w.buildings.find((b) => b.type === 'warehouse')!.stock.wood = 30;
     placeBuilding(w, 2087.5, 'intersection', { instant: true });
     const s = w.streets[1];
     // a new street runs a block past its crossroads each way, no more
@@ -279,7 +279,7 @@ describe('streets', () => {
 
   it('the main street is laid on both ways, west into negative x', () => {
     const w = createWorld();
-    w.buildings.find((b) => b.type === 'warehouse')!.stock.wood = 300;
+    w.buildings.find((b) => b.type === 'warehouse')!.stock.wood = 30;
     const { min, max } = streetRange(w, 0);
     expect(placeBuilding(w, max, 'road', { instant: true })).not.toBeNull();
     for (let i = 0; i < 4; i++) expect(placeBuilding(w, streetRange(w, 0).min, 'road', { instant: true })).not.toBeNull();
@@ -294,7 +294,7 @@ describe('streets', () => {
 
   it('builders reach a site two streets away, turning at each crossroads only once', () => {
     const w = createWorld();
-    w.buildings.find((b) => b.type === 'warehouse')!.stock.wood = 300;
+    w.buildings.find((b) => b.type === 'warehouse')!.stock.wood = 30;
     placeBuilding(w, 2087.5, 'intersection', { instant: true }); // cell 83, on the road grid
     layRoadTo(w, 1, 48);
     placeBuilding(w, plotX(1, 47), 'intersection', { instant: true }); // 27 cells up the new street

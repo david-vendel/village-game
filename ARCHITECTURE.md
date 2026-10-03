@@ -177,7 +177,7 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
 - Every building type says where its door is (`BuildingDef.door`, or null for none): the 2D art draws it
   there, a 3D model's and a sprite's `door` point must match it (tests/doors.test.ts, the asset
   validator), and people go in and out there (workplaces, a new house's villagers).
-- `streets.ts`: the street network. A crossroads (the `intersection` building, 10 wood) opens a
+- `streets.ts`: the street network. A crossroads (the `intersection` building, 1 wood) opens a
   new street across its own at right angles. Crossroads go only where their road runs down a line
   of the road grid (`ROAD_GRID` in `layout.ts`, `onRoadGrid` in `grid.ts`): squares 27 cells
   (nine blocks) across, with roads down the columns 27n + 2 (the block starting at cell 27n + 1

@@ -71,7 +71,7 @@
   #1  house×2  s0:37-42  done
   #3  tavern  s0:43-51  done
   #4  well  s0:52-54  done
-  #5  warehouse×2  s0:64-69  done  [wood=250 stone=200]  staff: serf, serf
+  #5  warehouse×2  s0:64-69  done  [wood=25 stone=20]  staff: serf, serf
   #7  house  s0:76-78  done
   #8  farm  s0:94-99  done  fields=24 (grass 0, fallow 0, growing 19, ripe 5)  staff: farmer
   #9  chapel  s0:124-129  done
@@ -81,7 +81,7 @@
   #79  tavern  s0:148-156  done
   #80  house  s0:157-159  done
   #81  well  s0:160-162  done
-  #82  woodcutter  s0:193-198  done  [wood=10]  staff: woodcutter
+  #82  woodcutter  s0:193-198  done  [wood=1]  staff: woodcutter
   #83  stonecutter  s0:199-204  done  staff: stonecutter
   #84  blacksmith  s0:205-210  done
   #85  chapel  s0:211-216  done
@@ -89,7 +89,7 @@
   #87  watchtower  s0:226-228  done
   #88  market  s0:229-234  done
   #89  farm  s0:235-240  done  fields=24 (grass 0, fallow 0, growing 24, ripe 0)  staff: farmer
-  #90  warehouse  s0:241-243  done  [wood=30 stone=30]
+  #90  warehouse  s0:241-243  done  [wood=3 stone=3]
   #92  house  s0:166-168  done
   #93  tavern  s0:178-186  done
   #94  stonecutter  s0:247-252  done  staff: stonecutter

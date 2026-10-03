@@ -104,10 +104,10 @@ describe('land grid', () => {
     const yard = placeBuilding(w, 2150, 'warehouse', { instant: true, free: true })!;
     placeBuilding(w, 2225, 'warehouse', { instant: true, free: true });
     expect(yard.size).toBe(2);
-    yard.stock.wood = 200;
+    yard.stock.wood = 20;
     demolishSection(w, yard, 2225);
     expect(yard.size).toBeUndefined();
-    expect(yard.stock.wood).toBeCloseTo(100);
+    expect(yard.stock.wood).toBeCloseTo(10);
   });
 
   it('a field keeps its crop when the fields around it are re-laid', () => {

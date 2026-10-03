@@ -70,7 +70,7 @@
   #1  house×2  s0:37-42  done
   #3  tavern  s0:43-51  done
   #4  well  s0:52-54  done
-  #5  warehouse×2  s0:64-69  done  [wood=250 stone=200]
+  #5  warehouse×2  s0:64-69  done  [wood=25 stone=20]
   #7  house  s0:76-78  done
   #8  farm  s0:94-99  done  fields=24 (grass 10, fallow 1, growing 13, ripe 0)  staff: farmer
   #9  chapel  s0:124-129  done
