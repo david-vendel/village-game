@@ -204,6 +204,8 @@ export function installTuning(world: World, sound: Sound, screen: Screen): Displ
     k.set(k.def);
     const fromUrl = Number(params.get(k.param) ?? NaN);
     if (Number.isFinite(fromUrl)) k.set(Math.min(k.max, Math.max(k.min, fromUrl)));
+    // a setting at its default needn't be in the address
+    if (params.has(k.param) && (!Number.isFinite(fromUrl) || k.get() === k.def)) setUrlParam(k.param, null);
 
     const label = document.createElement('div');
     const input = document.createElement('input');
@@ -233,10 +235,14 @@ export function installTuning(world: World, sound: Sound, screen: Screen): Displ
         input.value = String(v);
         label.textContent = k.render(v);
         clearTimeout(urlTimer);
-        urlTimer = window.setTimeout(() => setUrlParam('zoom', chosen ? v : null), 250);
+        urlTimer = window.setTimeout(() => setUrlParam('zoom', chosen && v !== DEFAULT_ZOOM ? v : null), 250);
       };
     }
   }
+
+  // the toggles at their defaults (grid off, frame rate on) needn't be in the address either
+  if (params.get('grid') === '0') setUrlParam('grid', null);
+  if (params.get('fps') === '1') setUrlParam('fps', null);
 
   const toggle = document.createElement('label');
   toggle.style.cssText = 'display:flex;gap:6px;justify-content:flex-end;align-items:center;margin-top:6px;cursor:pointer';
