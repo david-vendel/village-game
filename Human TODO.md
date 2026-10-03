@@ -11,11 +11,9 @@ Things only you can do or decide, so agents work faster. Tick them off or delete
 - [ ] **Write `docs/DESIGN.md`**: the buildings you plan, the production chains (logs → planks,
   grain → flour → bread, what comes next), rough costs and how fast a village should grow. With a
   target list an agent can build several buildings in one round without asking.
-- [ ] **Check the plank costs** an agent picked for the sawmill round, in `src/game/buildings.ts`:
-  house 2 wood, 2 planks, 1 stone; farm 3/2/2; mill 3/4/6; bakery 2/2/5; blacksmith 2/2/8;
-  market 2/4/2; chapel 2/2/15; tavern 4/4/4; watchtower 4/2/6. Huts, the sawmill (5 wood,
-  2 stone), yards, the well, roads and crossroads take logs only. A new village starts with
-  10 planks.
+- [ ] **Balance the game** in `src/game/balance.ts`: every building's cost, the farm's upgrade
+  and the starting stock are there. New buildings come in at 2 wood, 2 stone. The plank costs
+  an agent picked in the sawmill round are a first guess.
 - [ ] **Decide who makes 3D models for new buildings.** Today mechanics work adds 2D only (the
   sawmill has no 3D model yet, and planks don't show in the 3D yard). Either say in CLAUDE.md
   that mechanics work adds a basic 3D model too, or leave these to the `graphics` branch.

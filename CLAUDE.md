@@ -30,6 +30,12 @@ Shared by both (edit with care, and keep changes small): `src/render/scene.ts`,
 The repo is public: never commit `public/showroom/` or `.art-raw/`. Both are gitignored, and some
 of that art comes from screenshots of other games.
 
+## Balance
+
+Every building's cost, upgrade costs and the starting stock live in `src/game/balance.ts`, nowhere
+else. A new building costs `NEW_BUILDING_COST` (2 wood, 2 stone): don't tune it. The human
+balances the game later.
+
 ## Committing
 
 When a piece of work is done and `npm test` and `npm run typecheck` pass, commit it to `main`

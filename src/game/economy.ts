@@ -5,6 +5,7 @@
 // that make or use them (transport.ts). Every store keeps each item in its
 // own place (storeSlot), where it is picked up from and put down.
 
+import { START_STOCK } from './balance';
 import { BUILDINGS, type BuildingType, storageOf } from './buildings';
 import { BAKERY_SLOTS, BASKET, MILL_SLOTS, SACK, SAWMILL_SLOTS, STONECUTTER_SLOTS, TAVERN_SLOTS, SHEAF_SLOTS, STAND_Y, PILE_UNIT, warehouseSlot, WOODCUTTER_SLOTS, type Slot, type Spot } from './layout';
 import { room, RESOURCES, shortfall, stockOf, type Amounts, type Load, type Resource, type Stock } from './resources';
@@ -15,7 +16,7 @@ import { delivering } from './worker';
 import type { Building, World } from './world';
 
 /** What the starting village's warehouse holds. */
-export const WAREHOUSE_START: Stock = stockOf({ wood: 25, stone: 20, planks: 10 });
+export const WAREHOUSE_START: Stock = stockOf(START_STOCK);
 
 const xOf = (_world: World, b: Building) => b.x;
 /** How far building b is from world x, along the streets. */

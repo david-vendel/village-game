@@ -70,7 +70,8 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
 | Change the HUD, menu, labels, captions, button positions | `render/ui.ts` (tap areas follow automatically) |
 | Change draw order or camera framing | `render/scene.ts` |
 | Change what advanced graphics (the Menu switch: 3D buildings, showroom) draws, or add to it | `app/graphics.ts` (the switch and its Menu rows), `render/scene3d.ts` (its part of each frame); see CLAUDE.md |
-| Add a building type | `game/buildings.ts` (gameplay data: cost, storage, jobs) **and** `render/buildings.ts` (art) |
+| Change what buildings cost, or the starting stock | `game/balance.ts` |
+| Add a building type | `game/buildings.ts` (gameplay data: storage, jobs), its cost in `game/balance.ts` **and** `render/buildings.ts` (art) |
 | Give a building workers | its `jobs` in `game/buildings.ts`, a `Workplace` for it (like `farmWorkplace`) returned by `workplaceOf` in `game/world.ts`, and a look for the worker in `render/` |
 | Change timings, speeds, rules (build times, grow time, store size, rider speed) | `game/buildings.ts`, `game/world.ts`, `game/farm.ts` |
 | Change the working day (lunch, sleep, doors) | `game/worker.ts` |
@@ -88,10 +89,12 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
 ## Files
 
 ### `src/game`: logic
-- `buildings.ts`: building registry: name, purpose, footprint width, build time, **cost** (wood,
-  planks, stone: rough work, the woodcutter's and stonecutter's huts, the sawmill, yards, roads and
-  crossroads, takes logs only; finished buildings take planks too), **storage** (what its own store holds, and how much) and **jobs** (roles and how many).
+- `buildings.ts`: building registry: name, purpose, footprint width, build time, **cost** (from
+  `balance.ts`), **storage** (what its own store holds, and how much) and **jobs** (roles and how many).
   Behaviour of one kind of building lives in its own module (a farm's fields in `farm.ts`).
+- `balance.ts`: game balance in one place: every building's cost (`COSTS`) and upgrade cost, and
+  what a new village starts with. A new building type costs `NEW_BUILDING_COST` (2 wood, 2 stone)
+  until it is balanced.
 - `world.ts`: world state and `update()`: plots, buildings (each with its own `stock` store),
   people and animals, the village `stock`pile, rider physics, build menu, construction progress
   and stages, the construction toggle, events. `workplaceOf` says what work a building gives its
