@@ -73,7 +73,7 @@ export function horizonShift(): number {
  * they come lower down the screen. The land beyond is behind the hills (plane.ts draws nothing
  * further off).
  */
-export const BACKDROP_BEHIND = 1250;
+export const BACKDROP_BEHIND = 2450;
 let backdropBehind = BACKDROP_BEHIND;
 
 /** The panel's "horizon": how far off (map px behind the road) the backdrop stands; nearer brings it down the screen. */

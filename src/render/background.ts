@@ -12,7 +12,8 @@ import { circle, type Ctx, ellipse, hash, mix, poly, rect, shade, smoke, VIEW_H 
 const HAZE = '#dcc9ad';
 
 /** The panel's "blue hills": how far the far blue mountains are raised (+) or lowered (-) behind the castle's hills (world units). */
-let mountainLift = 0;
+export const MOUNTAIN_LIFT = -48;
+let mountainLift = MOUNTAIN_LIFT;
 export function setMountainLift(v: number): void {
   mountainLift = v;
 }

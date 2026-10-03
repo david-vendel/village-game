@@ -3,7 +3,7 @@
 // so a setting survives a reload and can be sent as a link. Same pattern as
 // ../hollow.
 
-import { BACKDROP_BEHIND, GAME_EYE_HEIGHT, setBackdropBehind, setCameraDistance, setCameraHeight, setMountainLift } from '../render';
+import { BACKDROP_BEHIND, GAME_EYE_HEIGHT, setBackdropBehind, setCameraDistance, setCameraHeight, MOUNTAIN_LIFT, setMountainLift } from '../render';
 import { EYE_DIST } from '../game/layout';
 import { dayMinutes } from '../game/daynight';
 import { DEFAULT_PARAMS, type World, type WorldParams } from '../game/world';
@@ -77,7 +77,7 @@ export function installTuning(world: World, sound: Sound, screen: Screen): Displ
   let cameraNow = CAMERA_DEFAULT;
   let heightNow = HEIGHT_DEFAULT;
   let horizonNow = BACKDROP_BEHIND;
-  let mountainsNow = 0;
+  let mountainsNow = MOUNTAIN_LIFT;
   const params = new URLSearchParams(window.location.search);
   const display: DisplayOptions = { grid: params.get('grid') === '1', fps: params.get('fps') !== '0', viewBottom: VIEW_BOTTOM_DEFAULT };
   const knobs: Knob[] = [
@@ -155,7 +155,7 @@ export function installTuning(world: World, sound: Sound, screen: Screen): Displ
       min: -120,
       max: 120,
       step: 2,
-      def: 0,
+      def: MOUNTAIN_LIFT,
       get: () => mountainsNow,
       set: (v) => {
         mountainsNow = v;
