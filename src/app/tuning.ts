@@ -8,7 +8,9 @@ import { EYE_DIST } from '../game/layout';
 import { dayMinutes } from '../game/daynight';
 import { DEFAULT_PARAMS, type World, type WorldParams } from '../game/world';
 import { makeCollapsible } from './panel';
+import type { Screen } from './screen';
 import type { Sound } from './sound';
+import { DEFAULT_ZOOM, ZOOM_MAX } from './viewport';
 
 interface Knob {
   /** URL query name. */
@@ -67,7 +69,7 @@ const CAMERA_DEFAULT = 600;
 /** Ground at the bottom of the screen to start with: just past the fence along the near edge of the fields in front of the road. */
 const VIEW_BOTTOM_DEFAULT = 92;
 
-export function installTuning(world: World, sound: Sound): DisplayOptions {
+export function installTuning(world: World, sound: Sound, screen: Screen): DisplayOptions {
   let cameraNow = CAMERA_DEFAULT;
   let heightNow = GAME_EYE_HEIGHT;
   const params = new URLSearchParams(window.location.search);
@@ -127,6 +129,21 @@ export function installTuning(world: World, sound: Sound): DisplayOptions {
       render: (v) => `screen bottom ${(v / 20).toFixed(1)} m before road`,
     },
     {
+      // the street view's zoom (also - + keys, the wheel, pinching; 0 goes back to the default).
+      // Narrow screens start further out (viewport.ts) and clamp to what fits
+      param: 'zoom',
+      min: 0.3,
+      max: ZOOM_MAX,
+      step: 0.05,
+      def: DEFAULT_ZOOM,
+      get: () => +screen.vp.zoom.toFixed(2),
+      set: (v) => {
+        if (v === DEFAULT_ZOOM) screen.resetZoom();
+        else screen.setZoom(v);
+      },
+      render: (v) => `zoom ${v.toFixed(2)}×  (- + keys, 0 resets)`,
+    },
+    {
       param: 'vol',
       min: 0,
       max: 100,
@@ -172,6 +189,18 @@ export function installTuning(world: World, sound: Sound): DisplayOptions {
     // hand the arrow keys back to the horse once the drag ends
     input.addEventListener('change', () => input.blur());
     content.append(label, input);
+    if (k.param === 'zoom') {
+      // zooming from the keys, wheel, pinch or buttons moves the slider and the URL too
+      // (the URL a moment after the last step: browsers limit how often it may change)
+      let urlTimer = 0;
+      screen.onZoom = (z, chosen) => {
+        const v = +z.toFixed(2);
+        input.value = String(v);
+        label.textContent = k.render(v);
+        clearTimeout(urlTimer);
+        urlTimer = window.setTimeout(() => setUrlParam('zoom', chosen ? v : null), 250);
+      };
+    }
   }
 
   const toggle = document.createElement('label');

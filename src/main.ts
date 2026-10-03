@@ -48,7 +48,7 @@ async function play(): Promise<void> {
   const controls = installControls(world, screen, actions, () => {
     if (window.confirm('Start a new village? Your saved village will be lost.')) void autosave.newGame();
   });
-  const display = installTuning(world, sound);
+  const display = installTuning(world, sound, screen);
   installWorkersPanel(world);
   installVersionsPanel(null);
   if (restored) notify('Welcome back to your village');

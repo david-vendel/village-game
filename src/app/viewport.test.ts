@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import { VIEW_H } from '../game/layout';
-import { computeViewport, defaultZoom, zoomRange, ZOOM_MAX } from './viewport';
+import { computeViewport, DEFAULT_ZOOM, defaultZoom, zoomRange, ZOOM_MAX } from './viewport';
 
 describe('viewport', () => {
-  it('landscape desktop starts at zoom 1 with the ground at the bottom', () => {
-    const v = computeViewport(1920, 1080, defaultZoom(1920, 1080));
-    expect(v.zoom).toBe(1);
+  it('landscape desktop starts a little zoomed in, with the ground at the bottom', () => {
+    expect(defaultZoom(1920, 1080)).toBe(DEFAULT_ZOOM);
+    const v = computeViewport(1920, 1080, 1);
     expect(v.top).toBeCloseTo(0);
     expect(v.viewW).toBeCloseTo(1920 / (1080 / VIEW_H));
   });
