@@ -30,7 +30,7 @@
 // last one built).
 
 import { BUILDING_TYPES, BUILDINGS, type BuildingType } from '../game/buildings';
-import { DAY_LENGTH } from '../game/daynight';
+import { DAY_LENGTH, dayMinutes } from '../game/daynight';
 import { buildShortfall, warehouses } from '../game/economy';
 import { footprintOf } from '../game/grid';
 import { CELL_W } from '../game/layout';
@@ -182,7 +182,7 @@ export function runScenario(script: string, opts: ScenarioOptions = {}): Scenari
   const seconds = (word: string | undefined): number => {
     const m = /^([\d.]+)(s|m|h|d)?$/.exec(word ?? '');
     if (!m) return fail(`not a time: "${word}" (30s, 5m, 2h, 1d)`);
-    const k = { s: 1, m: 60, h: DAY_LENGTH / 24 / world.params.timeSpeed, d: DAY_LENGTH / world.params.timeSpeed }[m[2] ?? 's']!;
+    const k = { s: 1, m: 60, h: DAY_LENGTH / 24 / world.params.timeSpeed, d: dayMinutes(world.params.timeSpeed, world.params.nightHours) * 60 }[m[2] ?? 's']!;
     return +m[1] * k;
   };
 

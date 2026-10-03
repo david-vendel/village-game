@@ -5,7 +5,7 @@
 
 import { GAME_EYE_HEIGHT, setCameraDistance, setCameraHeight } from '../render';
 import { EYE_DIST } from '../game/layout';
-import { DAY_LENGTH } from '../game/daynight';
+import { dayMinutes } from '../game/daynight';
 import { DEFAULT_PARAMS, type World, type WorldParams } from '../game/world';
 import { makeCollapsible } from './panel';
 import type { Sound } from './sound';
@@ -36,7 +36,8 @@ const WORLD_KNOBS: WorldKnob[] = [
     min: 0.25,
     max: 20,
     step: 0.25,
-    render: (v) => `time speed ${v}× (day ${+(DAY_LENGTH / v / 60).toFixed(1)} min)`,
+    // night runs NIGHT_SPEED times faster (daynight.ts): a whole day with the default night
+    render: (v) => `time speed ${v}× (day ${+dayMinutes(v, DEFAULT_PARAMS.nightHours).toFixed(1)} min)`,
   },
   { key: 'nightHours', param: 'night', min: 0, max: 12, step: 0.5, render: (v) => `night ${v} h` },
   // work time scales with plot width; the label shows a typical 3-cell plot
@@ -205,7 +206,7 @@ export function installTuning(world: World, sound: Sound): DisplayOptions {
   fpsToggle.append('frame rate', fpsBox);
   content.append(fpsToggle);
 
-  makeCollapsible(root, content, 'right', 'village-game:tuning-open');
+  makeCollapsible(root, content, 'right', 'village-game:tuning-open', true, 'Settings');
   document.body.appendChild(root);
   return display;
 }

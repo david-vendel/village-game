@@ -1,7 +1,8 @@
-// Collapsible side panels (the workers list on the left, tuning on the right).
-// Collapsed, a panel is just a small round expand button at its edge of the
-// screen (shaped like a Mac window's full-screen button);
-// whether each is open is remembered in this browser.
+// Collapsible side panels (the workers list and versions on the left, tuning on
+// the right). They are opened from the HUD's Menu (menu.ts); an open panel has
+// a small round button at its top to fold it away again (shaped like a Mac
+// window's full-screen button). Whether each is open is remembered in this
+// browser.
 
 /** The round button: arrows out to the corners to expand, in to the middle to collapse. */
 const ARROWS = { expand: '4,4 8.3,4 4,8.3 M10,10 5.7,10 10,5.7', collapse: '6.6,6.6 2.9,6.6 6.6,2.9 M7.4,7.4 11.1,7.4 7.4,11.1' };
@@ -26,11 +27,23 @@ const remember = (key: string, open: boolean) => {
   }
 };
 
+/** A panel the Menu can open and close. */
+export interface MenuPanel {
+  title: string;
+  isOpen(): boolean;
+  setOpen(open: boolean): void;
+}
+
+/** The panels in the Menu, in the order they were made. */
+export const menuPanels: MenuPanel[] = [];
+
 /**
  * Make a fixed side panel collapsible. `root` is the positioned panel, `content`
- * everything inside it; the toggle button goes at the top of `root`.
+ * everything inside it; the fold-away button goes at the top of `root`. In the
+ * Menu (`title`), a folded panel is hidden altogether and opened from there;
+ * without one (no Menu: an old version showing) it folds to its round button.
  */
-export function makeCollapsible(root: HTMLElement, content: HTMLElement, side: 'left' | 'right', key: string, startOpen = true): void {
+export function makeCollapsible(root: HTMLElement, content: HTMLElement, side: 'left' | 'right', key: string, startOpen = true, title?: string): void {
   const expanded = root.style.cssText;
   const button = document.createElement('button');
   button.style.cssText =
@@ -40,20 +53,23 @@ export function makeCollapsible(root: HTMLElement, content: HTMLElement, side: '
   root.prepend(button);
   root.append(content);
 
-  const set = (open: boolean) => {
+  let open = false;
+  const set = (o: boolean) => {
+    open = o;
     content.style.display = open ? '' : 'none';
     button.innerHTML = icon(open ? ARROWS.collapse : ARROWS.expand);
     button.title = open ? 'collapse' : 'expand';
     root.style.cssText = expanded;
-    // collapsed: nothing but the button
-    if (!open) Object.assign(root.style, { padding: '0', background: 'none', border: 'none' });
+    // folded: nothing but the button, or nothing at all when the Menu opens it
+    if (!open) Object.assign(root.style, title ? { display: 'none' } : { padding: '0', background: 'none', border: 'none' });
     remember(key, open);
   };
   button.addEventListener('click', () => {
-    set(content.style.display === 'none');
+    set(!open);
     button.blur(); // hand the keys back to the game
   });
   set(remembered(key) ?? startOpen);
+  if (title) menuPanels.push({ title, isOpen: () => open, setOpen: set });
 }
 
 let buttonPx = 0;

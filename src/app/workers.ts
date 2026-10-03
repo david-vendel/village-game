@@ -122,7 +122,7 @@ export function installWorkersPanel(world: World): void {
     'border-radius:8px;padding:8px 12px 10px;user-select:none;pointer-events:none';
   const table = document.createElement('table');
   table.style.cssText = 'border-collapse:collapse';
-  makeCollapsible(root, table, 'left', 'village-game:workers-open');
+  makeCollapsible(root, table, 'left', 'village-game:workers-open', true, 'Workers');
   document.body.appendChild(root);
 
   const render = () => {

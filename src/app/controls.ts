@@ -8,6 +8,7 @@ import { streetOf } from '../game/streets';
 import type { MoveInput, World } from '../game/world';
 import { buildingMenuLayout, hit, hudLayout, menuLayout } from '../render';
 import type { Actions } from './actions';
+import { installMenu } from './menu';
 import type { Screen } from './screen';
 
 export interface Controls {
@@ -63,6 +64,12 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
   const toggleView3d = () => {
     view3d = !view3d;
     store(VIEW3D_KEY, view3d ? '3d' : '2d');
+  };
+  const menu = installMenu([{ title: '3D buildings', isOn: () => view3d, toggle: toggleView3d }]);
+  /** Open the Menu under its HUD button (UI units to CSS px). */
+  const toggleMenu = (r: { x: number; y: number; w: number; h: number }) => {
+    const s = screen.vp.uiScale / screen.dpr;
+    menu.toggle({ right: window.innerWidth - (r.x + r.w) * s, top: (r.y + r.h) * s + 4 });
   };
   let topZoom = Number(stored(TOP_ZOOM_KEY)) || 1;
   const setTopView = (on: boolean) => {
@@ -202,7 +209,7 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
       const dir = screen.touch ? dirAt(ux, uy) : null;
       if (hit(L.zoomOut, ux, uy)) zoomBy(1 / ZOOM_STEP);
       else if (hit(L.newVillage, ux, uy)) newVillage();
-      else if (hit(L.view3d, ux, uy)) toggleView3d();
+      else if (hit(L.menu, ux, uy)) toggleMenu(L.menu);
       else if (hit(L.map, ux, uy)) setTopView(!topView);
       else if (hit(L.zoomIn, ux, uy)) zoomBy(ZOOM_STEP);
       else if (dir) role = dir;

@@ -159,8 +159,8 @@ export interface HudLayout {
   zoomIn: Rect;
   /** Start a new village: left of the zoom keys. */
   newVillage: Rect;
-  /** Switch buildings between 2D art and real-time 3D: left of New village. */
-  view3d: Rect;
+  /** The Menu (app/menu.ts: 2D / 3D, the side panels): left of New village. */
+  menu: Rect;
   left: Rect;
   right: Rect;
   build: Rect;
@@ -183,7 +183,7 @@ export function hudLayout(uiW: number, uiH: number): HudLayout {
     zoomOut: { x: uiW - 12 - z * 2 - 4, y: 12, w: z, h: z },
     zoomIn: { x: uiW - 12 - z, y: 12, w: z, h: z },
     newVillage: { x: uiW - 12 - z * 2 - 4 - 6 - 64, y: 12, w: 64, h: z },
-    view3d: { x: uiW - 12 - z * 2 - 4 - 6 - 64 - 6 - 44, y: 12, w: 44, h: z },
+    menu: { x: uiW - 12 - z * 2 - 4 - 6 - 64 - 6 - 44, y: 12, w: 44, h: z },
     left: { x: 16, y: uiH - 16 - b, w: b, h: b },
     right: { x: 16 + b + 14, y: uiH - 16 - b, w: b, h: b },
     build,
@@ -203,8 +203,6 @@ export interface HudState {
   canTurn: boolean;
   /** The village is shown from above: no small map. */
   topView: boolean;
-  /** Buildings are drawn in 3D (else as 2D art). */
-  view3d: boolean;
 }
 
 export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: HudState): void {
@@ -239,12 +237,8 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
   button(ctx, L.zoomIn, false);
   plusMinusIcon(ctx, L.zoomIn, true);
   text(ctx, 'New village', L.newVillage.x + L.newVillage.w / 2, L.newVillage.y + L.newVillage.h - 3.5, 9, GOLD, 'center', true);
-  // 2D · 3D: just the words, like New village; the one showing bright
-  const v = L.view3d;
-  const ty = v.y + v.h - 3.5;
-  text(ctx, '2D', v.x + v.w * 0.27, ty, 9, st.view3d ? 'rgba(232,200,114,0.4)' : GOLD, 'center', true);
-  text(ctx, '·', v.x + v.w / 2, ty, 9, 'rgba(232,200,114,0.5)', 'center', true);
-  text(ctx, '3D', v.x + v.w * 0.73, ty, 9, st.view3d ? GOLD : 'rgba(232,200,114,0.4)', 'center', true);
+  // Menu: just the word, like New village
+  text(ctx, 'Menu', L.menu.x + L.menu.w / 2, L.menu.y + L.menu.h - 3.5, 9, GOLD, 'center', true);
 
   if (st.touch && !world.menu) {
     button(ctx, L.left, st.leftHeld);

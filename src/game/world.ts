@@ -12,7 +12,7 @@
 // someone's arms, from the place they lie to the place they will lie.
 
 import { BUILDINGS, BUILDING_TYPES, doorOf, type BuildingType, type Role } from './buildings';
-import { timeOfDay } from './daynight';
+import { clockRate, timeOfDay } from './daynight';
 import { buildShortfall, putAway, takeFromWarehouses, upgradeShortfall, WAREHOUSE_START } from './economy';
 import { createFarm, DEFAULT_WORK, farmWorkplace, updateCrops, type FarmState } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
@@ -932,7 +932,7 @@ export function closeMenu(world: World): void {
 export function update(world: World, dt: number, input: MoveInput): void {
   world.time += dt;
   const clockBefore = world.dayClock;
-  world.dayClock += dt * world.params.timeSpeed;
+  world.dayClock += dt * clockRate(world);
   eatAtTaverns(world, clockBefore);
   updateRider(world, dt, world.menu ? { left: false, right: false } : input);
   arrive(world, dt);

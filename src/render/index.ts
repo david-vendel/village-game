@@ -88,7 +88,6 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
     canBuild: here ? canDemolish(here) : roomToBuild(world, world.rider.x),
     canTurn: !world.menu && !!crossroadAt(world),
     topView: v.topView,
-    view3d: v.view3d,
   });
   drawToasts(ctx, v.toasts, world.time, v.uiW);
   drawBuildMenu(ctx, world, v.uiW, v.uiH);

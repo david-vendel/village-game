@@ -1,6 +1,7 @@
 // Day and night. The time of day runs on its own clock, world.dayClock, which
 // advances with the `timeSpeed` knob (so the day can be sped up without
-// speeding up everything else). Phase 0 is midnight, 0.5 noon.
+// speeding up everything else), and NIGHT_SPEED times faster while the sun is
+// down: the night passes quicker. Phase 0 is midnight, 0.5 noon.
 //
 // The `nightHours` knob sets how long the sun stays below the horizon: 12 is
 // an equinox, less is like a summer far north, 0 is the midnight sun (it just
@@ -13,6 +14,8 @@ import type { World } from './world';
 export const DAY_LENGTH = 300;
 /** Seconds of dayClock per game hour. */
 export const GAME_HOUR = DAY_LENGTH / 24;
+/** How much faster the clock runs while the sun is down. */
+export const NIGHT_SPEED = 2;
 /** Phase at dayClock 0: a new village starts early in the morning. */
 const START_PHASE = 0.28;
 /**
@@ -35,6 +38,24 @@ export function sunAltitude(phase: number, nightHours: number): number {
   // lift the plain cosine so it spends nightHours/24 of the day below 0
   const lift = Math.cos((Math.PI * Math.min(12, Math.max(0, nightHours))) / 24);
   return (-Math.cos(phase * Math.PI * 2) + lift) / (1 + lift);
+}
+
+/** Whether the sun is down at this phase (game hours outside sunrise..sunset). */
+function nightAt(phase: number, nightHours: number): boolean {
+  const hour = phase * 24;
+  const { rise, set } = sunHours(nightHours);
+  return hour < rise || hour > set;
+}
+
+/** Seconds of dayClock that pass per second of simulation now: the time speed, NIGHT_SPEED times that at night. */
+export function clockRate(world: World): number {
+  return world.params.timeSpeed * (nightAt(dayPhase(world), world.params.nightHours) ? NIGHT_SPEED : 1);
+}
+
+/** Real minutes a whole day and night take at time speed `timeSpeed` with this many hours of night. */
+export function dayMinutes(timeSpeed: number, nightHours: number): number {
+  const n = Math.min(12, Math.max(0, nightHours));
+  return ((DAY_LENGTH / timeSpeed) * (24 - n + n / NIGHT_SPEED)) / 24 / 60;
 }
 
 /** Sunrise and sunset (game hours) with this many hours of night, centred on midnight. */
@@ -95,6 +116,6 @@ export function timeOfDay(world: World): TimeOfDay {
     daylight: isWorkTime(world),
     day: clock(world).day,
     hour: dayPhase(world) * 24,
-    hoursPerSecond: (24 / DAY_LENGTH) * world.params.timeSpeed,
+    hoursPerSecond: (24 / DAY_LENGTH) * clockRate(world),
   };
 }

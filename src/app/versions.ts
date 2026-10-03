@@ -68,8 +68,9 @@ export function installVersionsPanel(current: Version | null): void {
     note.textContent = `${current.title}: ${current.note} (keeps its own saves)`;
     content.append(note);
   }
-  // starts folded: a menu to open when wanted, not over the game
-  makeCollapsible(root, content, 'left', 'village-game:versions-open', false);
+  // starts folded: a list to open when wanted, not over the game. In the game it is opened from
+  // the Menu; over an old version (no Menu) it keeps its own round button
+  makeCollapsible(root, content, 'left', 'village-game:versions-open', false, current ? undefined : 'Versions');
   document.body.appendChild(root);
 }
 
