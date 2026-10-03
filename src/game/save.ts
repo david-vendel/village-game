@@ -3,7 +3,7 @@
 //
 // What is saved is the simulation's own state: time, buildings (with their
 // stores and farm fields), what lies on the ground (piles), people (with their jobs and where they are in their
-// working day), animals, the village stockpile, rider, RNG and id counter, and
+// working day), animals, the village stockpile, the errands waiting for serfs, rider, RNG and id counter, and
 // which crossroads opened which street, in order (the streets' places and plots follow from it).
 // What is not:
 // - things derived from the rules: plots and their building links, field layout
@@ -20,7 +20,7 @@ import { createFarm, repairFarm, type FarmState, type FieldPlot } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
 import { FIELD_ROWS, type FieldZone } from './layout';
 import { BUILDERS_PER_SITE, createSite, workSpots, type Site } from './site';
-import { transportHub } from './transport';
+import { transportHub, type ErrandBoard } from './transport';
 import { employees, openings, type Animal, type Job, type Person, type Stroll } from './people';
 import type { Castle } from './castle';
 import { RESOURCES, stockOf, type Load, type Resource, type Stock } from './resources';
@@ -31,7 +31,7 @@ import { cellKey, cellName, cellsOf, footprintOf } from './grid';
 import { lowestPlot, streetOf, type Street } from './streets';
 import { createWorld, goneStreet, layStreet, MERGES, PLOT_LAST, setStreetEnds, type Building, type Rider, type World } from './world';
 
-export const SAVE_VERSION = 33;
+export const SAVE_VERSION = 34;
 
 
 /** The persisted part of the world. */
@@ -47,6 +47,7 @@ export type SavedWorld = Pick<
   | 'animals'
   | 'trees'
   | 'piles'
+  | 'errands'
   | 'constructionEnabled'
   | 'lastSelection'
   | 'nextId'
@@ -78,6 +79,7 @@ export function saveWorld(world: World): SaveData {
     animals: world.animals,
     trees: world.trees,
     piles: world.piles,
+    errands: world.errands,
     constructionEnabled: world.constructionEnabled,
     lastSelection: world.lastSelection,
     nextId: world.nextId,
@@ -268,6 +270,7 @@ function savedWorld(v: unknown): SavedWorld {
     animals: arr(w.animals, 'animals').map((x, i) => animal(x, `animals[${i}]`)),
     trees: arr(w.trees, 'trees').map((x, i) => tree(x, `trees[${i}]`)),
     piles: arr(w.piles, 'piles').map((x, i) => pile(x, `piles[${i}]`)),
+    errands: errandBoard(w.errands, 'errands'),
     constructionEnabled: bool(w.constructionEnabled, 'constructionEnabled'),
     lastSelection: oneOf(w.lastSelection, BUILDING_TYPES.map((_, i) => i), 'lastSelection'),
     nextId: int(w.nextId, 'nextId'),
@@ -438,6 +441,11 @@ function worker(v: unknown, path: string): Worker {
 function load(v: unknown, path: string): Load {
   const l = obj(v, path);
   return { resource: oneOf<Resource>(l.resource, RESOURCES, `${path}.resource`), amount: Math.max(0, num(l.amount, `${path}.amount`)) };
+}
+
+function errandBoard(v: unknown, path: string): ErrandBoard {
+  const b = obj(v, path);
+  return { at: num(b.at, `${path}.at`), jobs: arr(b.jobs, `${path}.jobs`).map((x, i) => ticket(x, `${path}.jobs[${i}]`)) };
 }
 
 /** A job ticket; whether its target still exists is checked by the workplace on load (repairFarm). */

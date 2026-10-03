@@ -27,7 +27,7 @@ import { RESOURCES, stockOf, type Resource, type Stock } from './resources';
 import { CROSS_PLOT, fromStreet, groundPoint, mainStreet, newStreet, plotPoint, lowestPlot, plotX, PLOT_FIRST, PLOT_LAST, PLOTS_PER_STREET, rideRange, STREET_END_RUN, streetOf, streetRange, streetsAt, streetStart, turnFacing, type Junction, type Street, type Vec } from './streets';
 import { findPath, terrainSpeed } from './paths';
 import { eatAtTaverns } from './tavern';
-import { serfPositions, transportHub, transportWorkplace } from './transport';
+import { serfPositions, transportHub, transportWorkplace, unplannedBoard, type ErrandBoard } from './transport';
 import { createWorker, currentJob, offDuty, updateWorker, type Nav, type Worker, type Workplace } from './worker';
 import { workshopWorkplace } from './workshop';
 import { HOUSE_RESIDENTS } from './balance';
@@ -183,6 +183,8 @@ export interface World {
   trees: Tree[];
   /** Things lying on the ground by the road, waiting to be carried off (piles.ts). */
   piles: Pile[];
+  /** Errands waiting for serfs (transport.ts). */
+  errands: ErrandBoard;
   constructionEnabled: boolean;
   params: WorldParams;
   menu: BuildMenu | null;
@@ -261,6 +263,7 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
     animals: [],
     trees: [],
     piles: [],
+    errands: unplannedBoard(),
     constructionEnabled: true,
     params: { ...DEFAULT_PARAMS },
     menu: null,
@@ -308,6 +311,8 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
     }
     staff(world);
     plantWoods(world, 0, () => rand(world));
+    // the errands are planned afresh on the first frame, with whatever is set up before it
+    world.errands = unplannedBoard();
   }
   return world;
 }

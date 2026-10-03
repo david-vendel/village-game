@@ -10,8 +10,7 @@
 //   place that has it: a building that makes it (a farm's store) or a
 //   warehouse; at equal distance, straight from the maker.
 // Errands are run by serfs, and by a workshop's own worker when they have
-// nothing else to do and none of what they need (workshop.ts). Everyone
-// running errands is counted, so no two people go for the same load.
+// nothing else to do and none of what they need (workshop.ts).
 //
 // - collect: what lies on the ground by the road (piles.ts) is picked up, a
 //   load at a time, and taken where it is needed, else to a warehouse.
@@ -19,6 +18,20 @@
 //   water). Whoever comes for water and finds no bucket waiting draws one
 //   (WELL_DRAW_SECONDS) and takes it; a serf with no errand to run fills the
 //   store of a well close by (WELL_REACH), bucket by bucket.
+//
+// What someone is on their way to pick up is theirs (reserved): an errand
+// runner's load, and a builder's (site.ts), at a store or on a pile. Nobody
+// else plans to take it (Free), and room at a store is held for loads on
+// their way there. Reservations are not kept anywhere: they are read off the
+// tickets of those on their way, so one ends with its errand. Spoilage and
+// spending at once (an upgrade's cost with construction off) take what is
+// there regardless; whoever then comes finds nothing and goes on to the next.
+//
+// Errands are planned onto a board (World.errands, saved), and planned anew
+// once it is BOARD_SECONDS old, or when it has run empty (at most every
+// BOARD_RETRY seconds). A serf takes the nearest one waiting; one taken by
+// someone, or gone stale in the meantime (its load gone, the room filled),
+// comes off.
 //
 // Serfs are the village's out-of-work people (Person.seeker), hired by the
 // transport hub (the oldest warehouse) for as long as there are errands:
@@ -38,6 +51,7 @@ import { streetDist } from './streets';
 import { currentJob, delivering, type JobTicket, type Workplace } from './worker';
 import type { Building, World } from './world';
 import { CART_LOAD, carts } from './carts';
+import { builderFetch, LOAD_SIZE } from './site';
 import { stillAsked } from './castle';
 import { marketWants } from './market';
 
@@ -47,6 +61,10 @@ export const SERFS_MAX = 5;
 const PICK_UP_TIME = 0.25;
 /** How far (px along the streets) a serf with nothing to do goes to fill a well. */
 export const WELL_REACH = 300;
+/** Seconds the errand board is used before it is planned anew. */
+export const BOARD_SECONDS = 1;
+/** Seconds an empty board waits before it is planned anew. */
+const BOARD_RETRY = 0.25;
 
 /** Where an errand picks its load up: a building's store, or a pile on the ground. */
 type Source = Building | Pile;
@@ -105,25 +123,34 @@ export function transportHub(world: World): Building | null {
   return warehouses(world).find((b) => b.type === 'warehouse') ?? null;
 }
 
-/** An errand someone is on: on the way to pick up (amount: what they'll likely take), or carrying it (what they hold). */
+/** An errand (or a builder's fetch) someone is on: r from a source to a building, the amount on its way, and whether it is still to be picked up there. */
 interface Underway {
-  job: JobTicket;
+  r: Resource;
+  from: number;
+  to?: number;
   amount: number;
-  carrying: boolean;
+  /** On the way to pick it up (not to draw it): it is reserved at the source. */
+  claims: boolean;
 }
 
-/** Errands being run by anyone (serfs, workshop workers). */
+/** Errands being run by anyone (serfs, workshop workers), and builders on their way to fetch. */
 function underway(world: World): Underway[] {
   const out: Underway[] = [];
   for (const p of world.people) {
     const w = p.job?.worker;
     if (!w) continue;
     const pending = currentJob(w);
+    const fetching = pending && builderFetch(pending.action);
+    if (pending && fetching) {
+      out.push({ r: fetching, from: pending.target, amount: LOAD_SIZE, claims: true });
+      continue;
+    }
     const r = pending && errandResource(pending.action);
     const from = pending && sourceOf(world, pending);
-    if (pending && r && from) out.push({ job: pending, amount: loadAt(from, r) * (pending.cart ? CART_LOAD : 1), carrying: false });
+    if (pending && r && from) out.push({ r, from: from.id, to: pending.to, amount: loadAt(from, r) * (pending.cart ? CART_LOAD : 1), claims: !isDraw(pending.action) });
     const carried = delivering(w);
-    if (carried && w.carrying && errandResource(carried.action)) out.push({ job: carried, amount: w.carrying.amount, carrying: true });
+    const cr = carried && errandResource(carried.action);
+    if (carried && cr && w.carrying) out.push({ r: cr, from: carried.target, to: carried.to, amount: w.carrying.amount, claims: false });
   }
   return out;
 }
@@ -135,8 +162,8 @@ const roomLeft = (runs: Runs, b: Building, r: Resource) => room(b.stock, storage
 
 /**
  * The errands underway, tallied once: how much of each thing at each place is
- * already claimed by someone on their way to pick it up (drawing claims none),
- * and how much is on its way to each place; and what each building wants, as
+ * reserved by someone on their way to pick it up (drawing reserves none), and
+ * how much is on its way to each place; and what each building wants, as
  * asked once. Planning an errand adds to it (note).
  */
 interface Runs {
@@ -152,11 +179,17 @@ function tally(world: World): Runs {
 }
 
 function note(runs: Runs, u: Underway): void {
-  const r = errandResource(u.job.action);
-  if (!r) return;
   const add = (m: Map<string, number>, k: string) => m.set(k, (m.get(k) ?? 0) + u.amount);
-  if (!u.carrying && !isDraw(u.job.action)) add(runs.claimed, `${u.job.target}|${r}`);
-  if (u.job.to !== undefined) add(runs.coming, `${u.job.to}|${r}`);
+  if (u.claims) add(runs.claimed, `${u.from}|${u.r}`);
+  if (u.to !== undefined) add(runs.coming, `${u.to}|${u.r}`);
+}
+
+/** How much of r at a store or pile nobody is on their way to pick up: free for anyone else to take. */
+export type Free = (s: Source, r: Resource) => number;
+/** What is free at each store and pile now (see Free), tallied once: ask it of as many as needed. */
+export function freeNow(world: World): Free {
+  const runs = tally(world);
+  return (s, r) => Math.max(0, unclaimed(runs, s, r));
 }
 
 /** What b wants, asked once for the whole plan. */
@@ -231,14 +264,15 @@ function shipTo(world: World, runs: Runs, b: Source, r: Resource): Building | nu
   return byDistance(users) ?? byDistance(warehouses(world).filter((w) => roomLeft(runs, w, r) > 1e-9));
 }
 
-/** Errands waiting for someone to run them, nearest first to x. */
-export function errands(world: World, x = 0): Errand[] {
+/** Errands waiting for someone to run them, planned from scratch. */
+function planErrands(world: World): Errand[] {
   const runs = tally(world);
   const out: Errand[] = [];
   // each errand planned claims its load and the room it fills, like one being run
   const plan = (e: Errand) => {
     out.push(e);
-    note(runs, { job: e.job, amount: Math.min(loadAt(e.from, e.r), unclaimed(runs, e.from, e.r)), carrying: false });
+    const draw = isDraw(e.job.action);
+    note(runs, { r: e.r, from: e.from.id, to: e.job.to, amount: draw ? loadAt(e.from, e.r) : Math.min(loadAt(e.from, e.r), unclaimed(runs, e.from, e.r)), claims: !draw });
   };
   const finished = world.buildings.filter((b) => b.status === 'done');
   // what makers have goes out first, so it is matched with who needs it
@@ -264,7 +298,55 @@ export function errands(world: World, x = 0): Errand[] {
       if (e) plan(e);
     }
   }
-  return out.sort((a, b) => streetDist(world, x, xOf(world, a.from)) - streetDist(world, x, xOf(world, b.from)));
+  return out;
+}
+
+/** The errand board (World.errands): errands planned at world time `at` and not yet taken, as tickets. */
+export interface ErrandBoard {
+  at: number;
+  jobs: JobTicket[];
+}
+
+/** A board that has never been planned: it is planned the first time it is looked at. */
+export const unplannedBoard = (): ErrandBoard => ({ at: -BOARD_SECONDS, jobs: [] });
+
+/** The board's tickets, planned anew if it is old (or empty for a while). */
+function board(world: World): ErrandBoard {
+  const b = world.errands;
+  const age = world.time - b.at;
+  if (age >= 0 && age < BOARD_SECONDS && (b.jobs.length > 0 || age < BOARD_RETRY)) return b;
+  world.errands = { at: world.time, jobs: planErrands(world).map((e) => e.job) };
+  return world.errands;
+}
+
+/**
+ * The errands on the board still waiting, given those being run now: each
+ * one's load still free to take (counting the ones before it), and room for
+ * it where it goes. The rest (taken by someone, or gone stale) come off.
+ */
+function waiting(world: World): Errand[] {
+  const b = board(world);
+  const runs = tally(world);
+  const out: Errand[] = [];
+  b.jobs = b.jobs.filter((job) => {
+    const r = errandResource(job.action);
+    const from = sourceOf(world, job);
+    const to = done(world, job.to);
+    const draw = isDraw(job.action);
+    if (!r || !from || !to || (!draw && unclaimed(runs, from, r) <= 1e-9) || roomLeft(runs, to, r) <= 1e-9) return false;
+    note(runs, { r, from: from.id, to: to.id, amount: draw ? loadAt(from, r) : Math.min(loadAt(from, r), unclaimed(runs, from, r)), claims: !draw });
+    out.push({ job, from, r });
+    return true;
+  });
+  return out;
+}
+
+/** The waiting errand nearest x (a serf takes it by setting off: their ticket reserves its load). */
+function nearestErrand(world: World, x: number): Errand | null {
+  const far = (e: Errand) => streetDist(world, x, xOf(world, e.from));
+  let best: Errand | null = null;
+  for (const e of waiting(world)) if (!best || far(e) < far(best)) best = e;
+  return best;
 }
 
 /** Serf jobs the hub offers now: one per errand serfs are running or that is waiting, up to SERFS_MAX. */
@@ -272,7 +354,7 @@ export function serfPositions(world: World): number {
   const hub = transportHub(world);
   const serfs = hub ? employees(world, hub).map((p) => p.job!.worker) : [];
   const running = serfs.filter((w) => currentJob(w) || delivering(w)).length;
-  return Math.min(SERFS_MAX, running + errands(world).length);
+  return Math.min(SERFS_MAX, running + waiting(world).length);
 }
 
 /**
@@ -345,7 +427,7 @@ export function transportWorkplace(world: World, hub: Building): Workplace {
     door: { dx: 0, y: STAND_Y },
     nextJob(w) {
       // an errand if there is one; with none, fill a well close by
-      const next = errands(world, x + w.dx)[0] ?? wellToFill(world, x + w.dx);
+      const next = nearestErrand(world, x + w.dx) ?? wellToFill(world, x + w.dx);
       if (!next) return null;
       // a cart for it if one is free in a stable (carts.ts), not for drawing water
       const job = !isDraw(next.job.action) && cartsInUse(world) < carts(world) ? { ...next.job, cart: true as const } : next.job;

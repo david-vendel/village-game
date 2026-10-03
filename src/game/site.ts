@@ -32,6 +32,7 @@ import { heapDx } from './roadwork';
 import { pileById, pileSpot as groundSpot, takeFromPile } from './piles';
 import { streetDist } from './streets';
 import { RESOURCES, stockOf, total, type Amounts, type Load, type Resource, type Stock } from './resources';
+import { freeNow } from './transport';
 import { currentJob, delivering, type JobTicket, type Workplace } from './worker';
 import type { Building, World } from './world';
 
@@ -87,7 +88,9 @@ const fetchAction = (r: Resource) => `fetch-${r}`;
 const gatherAction = (r: Resource) => `gather-${r}`;
 const takeAction = (r: Resource) => `take-${r}`;
 /** The resource a fetch (from a store or off the ground) brings. */
-const fetchedResource = (action: string) => RESOURCES.find((r) => action === fetchAction(r) || action === gatherAction(r)) ?? null;
+const fetchedResource = (action: string): Resource | null => RESOURCES.find((r) => action === fetchAction(r) || action === gatherAction(r)) ?? null;
+/** The resource a builder on this job is on their way to fetch, from a store or off a pile (reserved there: transport.ts). */
+export const builderFetch = fetchedResource;
 const gathering = (action: string) => action.startsWith('gather-');
 const takenResource = (action: string) => MATERIALS.find((r) => action === takeAction(r)) ?? null;
 
@@ -180,7 +183,8 @@ export function builderPositions(world: World, b: Building): number {
   for (const r of MATERIALS) waiting += loads(site.pile[r] - taken.filter((j) => j.action === takeAction(r)).length * LOAD_SIZE);
   const need = stillNeeded(world, b);
   const x = b.x;
-  for (const r of RESOURCES) if (need[r] && (materialSource(world, r, x) || nearestPile(world, r, x))) waiting += loads(need[r]);
+  const free = freeNow(world);
+  for (const r of RESOURCES) if (need[r] && (materialSource(world, r, x, free) || nearestPile(world, r, x, free))) waiting += loads(need[r]);
   return Math.min(BUILDERS_PER_SITE, busy.length + waiting);
 }
 
@@ -244,11 +248,13 @@ export function siteWorkplace(world: World, b: Building, buildSpeed: number): Wo
         if (left > 1e-9) return { job: { action: takeAction(r), target: 0, slot: target() }, ...pileSpot(b, r, pileItems(left) - 1) };
       }
       const need = stillNeeded(world, b);
+      const free = freeNow(world);
       for (const r of RESOURCES) {
         if (!need[r]) continue;
         const at = x + w.dx;
-        const from = materialSource(world, r, at);
-        const pile = nearestPile(world, r, at);
+        // what nobody else is on their way to pick up
+        const from = materialSource(world, r, at, free);
+        const pile = nearestPile(world, r, at, free);
         // off the ground if that is nearer (or there is nowhere else)
         if (pile && (!from || streetDist(world, at, pile.x) <= streetDist(world, at, from.x))) {
           return { job: { action: gatherAction(r), target: pile.id, slot: target() }, ...groundSpot(pile, x) };

@@ -13,6 +13,7 @@ import { room, RESOURCES, shortfall, stockOf, type Amounts, type Load, type Reso
 import { takeFromPile, type Pile } from './piles';
 import { owed } from './site';
 import { streetDist } from './streets';
+import type { Free } from './transport';
 import { delivering } from './worker';
 import type { Building, World } from './world';
 
@@ -90,21 +91,21 @@ export function upgradeShortfall(world: World, b: Building): Amounts {
  * makes r (a woodcutter's hut for wood) with some in its store; at equal
  * distance the warehouse.
  */
-export function materialSource(world: World, r: Resource, x: number): Building | null {
+export function materialSource(world: World, r: Resource, x: number, free: Free): Building | null {
   let best: Building | null = null;
   for (const b of world.buildings) {
-    if (b.stock[r] <= 0 || !holdsFor(b, r)) continue;
+    if (!holdsFor(b, r) || free(b, r) <= 1e-9) continue;
     const d = away(world, b, x);
     if (!best || d < away(world, best, x) || (d === away(world, best, x) && isStore(b) && !isStore(best))) best = b;
   }
   return best;
 }
 
-/** The nearest pile of r on the ground to x, if any. */
-export function nearestPile(world: World, r: Resource, x: number): Pile | null {
+/** The nearest pile of r on the ground to x with some free to take, if any. */
+export function nearestPile(world: World, r: Resource, x: number, free: Free): Pile | null {
   let best: Pile | null = null;
   for (const p of world.piles) {
-    if (p.resource !== r || p.amount <= 1e-9) continue;
+    if (p.resource !== r || free(p, r) <= 1e-9) continue;
     if (!best || streetDist(world, x, p.x) < streetDist(world, x, best.x)) best = p;
   }
   return best;

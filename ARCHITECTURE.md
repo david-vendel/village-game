@@ -112,8 +112,11 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   the nearest building that `needs` it and has room (the mill's flour to the bakery), and only
   otherwise to the nearest warehouse with room; what it `needs` comes from the nearest place that has it, a
   building that makes it (a farm's store, the mill's flour) or a warehouse, and at equal distance
-  straight from the maker. Everyone on an errand is counted, so no two people go for the same
-  load. `errandWork` is how anyone runs one. Water is drawn by hand at a well (`BuildingDef.drawn`,
+  straight from the maker. What someone is on their way to pick up is reserved for them: errand
+  runners and builders alike plan only with what is free (`freeNow`), read off the tickets of those
+  on their way, so nothing is ever left reserved. Errands are planned onto a board
+  (`World.errands`, saved) and planned anew every `BOARD_SECONDS`, or soon after it runs empty; a
+  serf takes the nearest one still good. `errandWork` is how anyone runs one. Water is drawn by hand at a well (`BuildingDef.drawn`,
   `WELL_DRAW_SECONDS` in `balance.ts`): whoever comes for it (a serf, or the baker fetching their
   own) and finds no bucket waiting draws one (`draw-water`); a serf with no errand fills a well
   within `WELL_REACH`, two buckets each side (`WELL_SLOTS`). The well's windlass turns only while
