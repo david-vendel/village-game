@@ -30,7 +30,7 @@ import { cellKey, cellName, cellsOf, footprintOf } from './grid';
 import { lowestPlot, streetOf, type Street } from './streets';
 import { createWorld, goneStreet, layStreet, MERGES, PLOT_LAST, setStreetEnds, type Building, type Rider, type World } from './world';
 
-export const SAVE_VERSION = 24;
+export const SAVE_VERSION = 25;
 
 
 /** The persisted part of the world. */
