@@ -18,7 +18,7 @@ export interface Menu {
   isOpen(): boolean;
 }
 
-export function installMenu(toggles: MenuToggle[]): Menu {
+export function installMenu(toggles: () => MenuToggle[]): Menu {
   const root = document.createElement('div');
   root.style.cssText =
     'position:fixed;z-index:20;display:none;min-width:150px;color:#f3ead8;' +
@@ -29,7 +29,7 @@ export function installMenu(toggles: MenuToggle[]): Menu {
   // the click that opened it must not close it again on its way up to the document
   let justToggled = false;
 
-  const rows = (): MenuToggle[] => [...toggles, ...menuPanels.map((p) => ({ title: p.title, isOn: p.isOpen, toggle: () => p.setOpen(!p.isOpen()) }))];
+  const rows = (): MenuToggle[] => [...toggles(), ...menuPanels.map((p) => ({ title: p.title, isOn: p.isOpen, toggle: () => p.setOpen(!p.isOpen()) }))];
 
   const render = () => {
     root.replaceChildren();

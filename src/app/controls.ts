@@ -6,8 +6,9 @@
 import { canChoose } from '../game/world';
 import { streetOf } from '../game/streets';
 import type { MoveInput, World } from '../game/world';
-import { buildingMenuLayout, DEFAULT_STYLE_3D, hit, hudLayout, menuLayout, setShowroom, setStyle3d, STYLES_3D } from '../render';
+import { buildingMenuLayout, hit, hudLayout, menuLayout } from '../render';
 import type { Actions } from './actions';
+import { installGraphics } from './graphics';
 import { installMenu } from './menu';
 import type { Screen } from './screen';
 
@@ -20,7 +21,7 @@ export interface Controls {
   topView(): boolean;
   /** The view from above has its own zoom, apart from the street view's. */
   topZoom(): number;
-  /** Buildings in real-time 3D (true) or as 2D art: the 2D · 3D button, V, or ?3d=0 / ?3d=1. */
+  /** Buildings in real-time 3D (true) or as 2D art: advanced graphics (app/graphics.ts). */
   view3d(): boolean;
   /** Where the mouse is over the canvas (canvas px), if it is. */
   hover(): { x: number; y: number } | null;
@@ -35,8 +36,6 @@ type Role = 'left' | 'right' | 'pinch' | 'none';
 const DOUBLE_TAP_MS = 300;
 const VIEW_KEY = 'village-game:view';
 const TOP_ZOOM_KEY = 'village-game:top-zoom';
-const VIEW3D_KEY = 'village-game:view3d';
-const STYLE_KEY = 'village-game:style3d';
 const stored = (key: string): string | null => {
   try {
     return localStorage.getItem(key);
@@ -60,42 +59,9 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
   // the view from above is a preference, not game state (game/save.ts leaves UI out), so the browser keeps it;
   // ?view=top opens on it (a link)
   let topView = new URLSearchParams(location.search).get('view') === 'top' || stored(VIEW_KEY) === 'top';
-  // 2D or 3D buildings: a preference the browser keeps; the address can set it for a link
-  const view3dParam = new URLSearchParams(location.search).get('3d');
-  let view3d = view3dParam === '0' ? false : view3dParam === '1' ? true : stored(VIEW3D_KEY) !== '2d';
-  const toggleView3d = () => {
-    view3d = !view3d;
-    store(VIEW3D_KEY, view3d ? '3d' : '2d');
-  };
-  // how the 3D buildings are painted and lit: a preference; ?style=<name> sets it for a link
-  const styleParam = new URLSearchParams(location.search).get('style');
-  let style = styleParam && STYLES_3D[styleParam] ? styleParam : (stored(STYLE_KEY) ?? DEFAULT_STYLE_3D);
-  if (!STYLES_3D[style]) style = DEFAULT_STYLE_3D;
-  setStyle3d(style);
-  const styleItems = Object.values(STYLES_3D).map((s) => ({
-    title: `  ${s.label}`,
-    isOn: () => view3d && style === s.name,
-    toggle: () => {
-      style = s.name;
-      setStyle3d(style);
-      store(STYLE_KEY, style);
-      if (!view3d) toggleView3d();
-    },
-  }));
-  // the showroom of art experiments along the main street (render/showroom.ts): on in the dev build; ?showroom=0/1
-  const showroomParam = new URLSearchParams(location.search).get('showroom');
-  let showroom = showroomParam ? showroomParam === '1' : import.meta.env.DEV && stored('village-game:showroom') !== '0';
-  setShowroom(showroom);
-  const showroomItem = {
-    title: 'Showroom (art tests)',
-    isOn: () => showroom,
-    toggle: () => {
-      showroom = !showroom;
-      setShowroom(showroom);
-      store('village-game:showroom', showroom ? '1' : '0');
-    },
-  };
-  const menu = installMenu([{ title: '3D buildings', isOn: () => view3d, toggle: toggleView3d }, ...styleItems, showroomItem]);
+  // the Menu's own rows: advanced graphics (app/graphics.ts); the side panels add theirs (menu.ts)
+  const graphics = installGraphics();
+  const menu = installMenu(graphics.menuItems);
   /** Open the Menu under its HUD button (UI units to CSS px). */
   const toggleMenu = (r: { x: number; y: number; w: number; h: number }) => {
     const s = screen.vp.uiScale / screen.dpr;
@@ -144,7 +110,6 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
       return;
     }
     if (key === 'c') return actions.toggleConstruction();
-    if (key === 'v') return toggleView3d();
     if (key === 'm') return actions.toggleSound();
     if (key === '-' || key === '_') return zoomBy(1 / ZOOM_STEP);
     if (key === '=' || key === '+') return zoomBy(ZOOM_STEP);
@@ -320,6 +285,6 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
     topView: () => topView,
     topZoom: () => topZoom,
     hover: () => hover,
-    view3d: () => view3d,
+    view3d: graphics.view3d,
   };
 }

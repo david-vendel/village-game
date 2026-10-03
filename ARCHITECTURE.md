@@ -69,6 +69,7 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
 | Replace art with sprite assets | put them in `public/assets/` per `docs/art/ASSET_SPEC.md`; check with `npm run assets:check`, look at `?art=preview` |
 | Change the HUD, menu, labels, captions, button positions | `render/ui.ts` (tap areas follow automatically) |
 | Change draw order or camera framing | `render/scene.ts` |
+| Change what advanced graphics (the Menu switch: 3D buildings, showroom) draws, or add to it | `app/graphics.ts` (the switch and its Menu rows), `render/scene3d.ts` (its part of each frame); see CLAUDE.md |
 | Add a building type | `game/buildings.ts` (gameplay data: cost, storage, jobs) **and** `render/buildings.ts` (art) |
 | Give a building workers | its `jobs` in `game/buildings.ts`, a `Workplace` for it (like `farmWorkplace`) returned by `workplaceOf` in `game/world.ts`, and a look for the worker in `render/` |
 | Change timings, speeds, rules (build times, grow time, store size, rider speed) | `game/buildings.ts`, `game/world.ts`, `game/farm.ts` |
