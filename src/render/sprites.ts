@@ -98,8 +98,54 @@ export function drawBuildingIcon(ctx: Ctx, type: BuildingType, x: number, base: 
   ctx.restore();
 }
 
-/** Greyed-out building pictures, drawn once each (per type, size and resolution) and kept. */
-const greyIcons = new Map<string, HTMLCanvasElement>();
+/** Building pictures drawn once each (per type, size, resolution and colour) and kept. */
+const iconImages = new Map<string, HTMLCanvasElement>();
+
+/**
+ * A building's showpiece picture as an image, drawn once at `k` canvas px per unit: in colour, or
+ * without colour (`grey`). Null while its sprite is still loading (the picture would be the
+ * procedural stand-in, kept for good).
+ */
+function iconImage(ctx: Ctx, type: BuildingType, k: number, grey: boolean): { img: HTMLCanvasElement; W: number; H: number; foot: number } | null {
+  const key = `${type}:${k.toFixed(3)}:${grey ? 'g' : 'c'}`;
+  const W = Math.ceil(320 * k);
+  const H = Math.ceil((BUILDING_ART[type].height + 70) * k);
+  const foot = Math.ceil(30 * k);
+  let img = iconImages.get(key);
+  if (!img) {
+    const sprite = spriteFor(type, { seed: 7, x: 0, base: 0, time: 0 }, 'street');
+    if (sprite && !ready(ctx, sprite.img)) return null;
+    // zooming and a growing village keep asking for new sizes: start over now and then
+    if (iconImages.size > 300) iconImages.clear();
+    img = document.createElement('canvas');
+    img.width = W;
+    img.height = H;
+    const g = img.getContext('2d')!;
+    drawBuildingIcon(g, type, W / 2, H - foot, k, 0);
+    if (grey) {
+      const data = g.getImageData(0, 0, W, H);
+      const p = data.data;
+      for (let i = 0; i < p.length; i += 4) {
+        const l = 0.3 * p[i] + 0.59 * p[i + 1] + 0.11 * p[i + 2];
+        p[i] = p[i + 1] = p[i + 2] = l;
+      }
+      g.putImageData(data, 0, 0);
+    }
+    iconImages.set(key, img);
+  }
+  return { img, W, H, foot };
+}
+
+/**
+ * A small building icon (the minimap's) from a picture drawn once: the full art is far too
+ * much to draw for every building every frame, and at this size its motion doesn't show.
+ */
+export function drawBuildingIconCached(ctx: Ctx, type: BuildingType, x: number, base: number, scale: number, time: number): void {
+  const f = Math.max(1, Math.abs(ctx.getTransform().a));
+  const icon = iconImage(ctx, type, scale * f, false);
+  if (!icon) return drawBuildingIcon(ctx, type, x, base, scale, time);
+  ctx.drawImage(icon.img, x - icon.W / 2 / f, base - (icon.H - icon.foot) / f, icon.W / f, icon.H / f);
+}
 
 /**
  * A building's menu picture without colour and faded: one that can't be
@@ -109,29 +155,10 @@ const greyIcons = new Map<string, HTMLCanvasElement>();
  */
 export function drawBuildingIconGrey(ctx: Ctx, type: BuildingType, x: number, base: number, scale: number, alpha = 0.35): void {
   const f = Math.max(1, Math.abs(ctx.getTransform().a));
-  const k = scale * f;
-  const key = `${type}:${k.toFixed(3)}`;
-  const W = Math.ceil(320 * k);
-  const H = Math.ceil((BUILDING_ART[type].height + 70) * k);
-  const foot = Math.ceil(30 * k);
-  let img = greyIcons.get(key);
-  if (!img) {
-    img = document.createElement('canvas');
-    img.width = W;
-    img.height = H;
-    const g = img.getContext('2d')!;
-    drawBuildingIcon(g, type, W / 2, H - foot, k, 0);
-    const data = g.getImageData(0, 0, W, H);
-    const p = data.data;
-    for (let i = 0; i < p.length; i += 4) {
-      const l = 0.3 * p[i] + 0.59 * p[i + 1] + 0.11 * p[i + 2];
-      p[i] = p[i + 1] = p[i + 2] = l;
-    }
-    g.putImageData(data, 0, 0);
-    greyIcons.set(key, img);
-  }
+  const icon = iconImage(ctx, type, scale * f, true);
+  if (!icon) return;
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.drawImage(img, x - W / 2 / f, base - (H - foot) / f, W / f, H / f);
+  ctx.drawImage(icon.img, x - icon.W / 2 / f, base - (icon.H - icon.foot) / f, icon.W / f, icon.H / f);
   ctx.restore();
 }

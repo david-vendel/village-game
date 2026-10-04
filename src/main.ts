@@ -58,8 +58,15 @@ async function play(): Promise<void> {
   const frameTimes: number[] = [];
   let fps: { fps: number; worstMs: number } | undefined;
   let last = performance.now();
+  // no more than 60 frames a second: a 120 or 144 Hz screen would otherwise draw everything twice as often
+  // (the slack lets a 60 Hz screen's frames, which come a hair early now and then, all through)
+  const MIN_FRAME_MS = 1000 / 60 - 2;
 
   function frame(now: number): void {
+    if (now - last < MIN_FRAME_MS) {
+      requestAnimationFrame(frame);
+      return;
+    }
     if (display.fps) {
       frameTimes.push(now - last);
       let sum = frameTimes.reduce((s, t) => s + t, 0);

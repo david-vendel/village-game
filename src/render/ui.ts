@@ -26,7 +26,7 @@ import { householdOf, isHome, lacking, residentsOf, roomIn } from '../game/house
 import { backOf, mapPoint, streetOf, streetRange } from '../game/streets';
 import { constructionStage, demolitionYield, getBuilding, streetFrom, whyNotBuild, whyNotDemolish, type Building, type BuildingOption, type ConstructionStage, type World } from '../game/world';
 import { BUILDING_ART } from './buildings';
-import { drawBuildingIcon, drawBuildingIconGrey } from './sprites';
+import { drawBuildingIcon, drawBuildingIconCached, drawBuildingIconGrey } from './sprites';
 import type { Ctx } from './util';
 
 const SERIF = 'Georgia, "Times New Roman", serif';
@@ -355,7 +355,7 @@ function drawMiniMap(ctx: Ctx, world: World, r: Rect): void {
     .sort((a, b) => a.y - b.y);
   for (const { b, x, y } of lots) {
     ctx.globalAlpha = b.status === 'done' ? 1 : 0.45;
-    drawBuildingIcon(ctx, b.type, x, y + 3, iconScale, world.time);
+    drawBuildingIconCached(ctx, b.type, x, y + 3, iconScale, world.time);
   }
   ctx.globalAlpha = 1;
 
