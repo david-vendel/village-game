@@ -384,6 +384,12 @@ renderer draws, so a layout that is right in text is right on screen.
   the camera, smaller and nearer the horizon with distance. A building on a street running away from
   the camera stands beside that road. Things further off than this street's woods are drawn before
   them, nearer ones in among this street's people by screen depth.
+- `turned.ts`: the view turned around on the street (R, or the touch button above the ride arrows;
+  `app/controls.ts` keeps it, as a way of looking, not game state, until the rider leaves the street
+  or opens the build menu). The eye (plane.ts `eyeOf(…, turned)`) stands as far behind the street and
+  looks the other way: the street's ground is drawn mirrored (`alongStreet` in background.ts), and
+  the rider, this street's people and everything beyond the road are projected like any other street;
+  nothing standing nearer than the road is drawn. Left/right and ↑/↓ at a crossroads swap with it.
 - `buildings.ts`: the signpost where a crossroads can be built (`drawCrossroadsSign`, drawn on
   this street by `scene.ts`, on the others by `plane.ts`, from above by `topview.ts`), and
   "2D picture of a 3D building" primitives (front face, shaded side face, gable

@@ -25,9 +25,12 @@ export interface Controls {
   view3d(): boolean;
   /** Where the mouse is over the canvas (canvas px), if it is. */
   hover(): { x: number; y: number } | null;
+  /** Turned around on the street (R, or the touch button), looking away from its buildings; and when (world time) the view last turned around. */
+  turned(): boolean;
+  turnedAt(): number | undefined;
 }
 
-const GAME_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'Enter', 'Escape', 'Tab', 'w', 'a', 's', 'd']);
+const GAME_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'Enter', 'Escape', 'Tab', 'w', 'a', 's', 'd', 'r']);
 const ZOOM_STEP = 1.1;
 
 type Role = 'left' | 'right' | 'pinch' | 'none';
@@ -82,6 +85,25 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
   };
   const zoomBy = (f: number) => setZoom(zoomNow() * f);
 
+  // turned around on the street: a way of looking, not game state. It lasts while the rider stays on
+  // the street; turned, what is left and right on screen, and away and towards, are the other way round
+  let turned = false;
+  let turnedAt: number | undefined;
+  let turnedOn = -1;
+  const turnAround = (on = !turned) => {
+    if (on === turned) return;
+    turned = on;
+    turnedOn = streetOf(world.rider.x);
+    turnedAt = world.time;
+  };
+  /** Up (away from the viewer) or down, as the game means it: the other way when turned around. */
+  const facing = (way: 'up' | 'down'): 'up' | 'down' => (!turned ? way : way === 'up' ? 'down' : 'up');
+  /** Build, upgrade or pull down: that is done facing the street's buildings. */
+  const openBuildMenu = () => {
+    turnAround(false);
+    actions.openBuildMenu();
+  };
+
   // --- Keyboard -----------------------------------------------------------------
 
   /** The last tap of left or right, and which of them is being sprinted (tapped twice and held). */
@@ -110,6 +132,7 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
       return;
     }
     if (key === 'c') return actions.toggleConstruction();
+    if (key === 'r' && !world.menu && !topView) return turnAround();
     if (key === 'm') return actions.toggleSound();
     if (key === '-' || key === '_') return zoomBy(1 / ZOOM_STEP);
     if (key === '=' || key === '+') return zoomBy(ZOOM_STEP);
@@ -132,9 +155,9 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
     // from above the arrows point on the map (see move), so ↓ rides rather than builds
     if (topView && (key === 'ArrowUp' || key === 'w' || key === 'ArrowDown' || key === 's')) return;
     // at a crossroads up and down turn onto the crossing street
-    if (actions.atCrossroads() && (key === 'ArrowUp' || key === 'w')) return actions.turn('up');
-    if (actions.atCrossroads() && (key === 'ArrowDown' || key === 's')) return actions.turn('down');
-    if (key === 'ArrowDown' || key === 's' || key === ' ' || key === 'Enter' || key === 'b') actions.openBuildMenu();
+    if (actions.atCrossroads() && (key === 'ArrowUp' || key === 'w')) return actions.turn(facing('up'));
+    if (actions.atCrossroads() && (key === 'ArrowDown' || key === 's')) return actions.turn(facing('down'));
+    if (key === 'ArrowDown' || key === 's' || key === ' ' || key === 'Enter' || key === 'b') openBuildMenu();
   });
   window.addEventListener('keyup', (e) => {
     keys.delete(keyOf(e));
@@ -208,9 +231,10 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
       else if (hit(L.map, ux, uy)) setTopView(!topView);
       else if (hit(L.zoomIn, ux, uy)) zoomBy(ZOOM_STEP);
       else if (dir) role = dir;
-      else if (screen.touch && actions.atCrossroads() && hit(L.turnUp, ux, uy)) actions.turn('up');
-      else if (screen.touch && actions.atCrossroads() && hit(L.turnDown, ux, uy)) actions.turn('down');
-      else if (screen.touch && hit(L.build, ux, uy)) actions.openBuildMenu();
+      else if (screen.touch && !topView && hit(L.turnAround, ux, uy)) turnAround();
+      else if (screen.touch && actions.atCrossroads() && hit(L.turnUp, ux, uy)) actions.turn(facing('up'));
+      else if (screen.touch && actions.atCrossroads() && hit(L.turnDown, ux, uy)) actions.turn(facing('down'));
+      else if (screen.touch && hit(L.build, ux, uy)) openBuildMenu();
       else role = 'pinch';
     }
     pointers.set(e.pointerId, { role, x: e.clientX, y: e.clientY });
@@ -278,13 +302,20 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
 
   return {
     move: () => {
+      // a new street (turned at a crossroads) is looked at from the front again
+      if (turned && streetOf(world.rider.x) !== turnedOn) turned = false;
       const m = topView && !world.menu ? moveOnMap() : { left: keyLeft() || held('left'), right: keyRight() || held('right') };
-      return { ...m, sprint: sprinting !== null && m[sprinting] };
+      const sprint = sprinting !== null && m[sprinting];
+      // turned around, the arrow pointing left on screen rides the other way along the street
+      if (turned && !topView && !world.menu) return { left: m.right, right: m.left, sprint };
+      return { ...m, sprint };
     },
     touchHeld: () => ({ left: held('left'), right: held('right') }),
     topView: () => topView,
     topZoom: () => topZoom,
     hover: () => hover,
+    turned: () => turned && !topView,
+    turnedAt: () => turnedAt,
     view3d: graphics.view3d,
   };
 }

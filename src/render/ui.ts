@@ -148,6 +148,25 @@ function arrowIcon(ctx: Ctx, r: Rect, dir: -1 | 1): void {
   ctx.fill();
 }
 
+/** A half circle with an arrowhead: turn around. */
+function turnAroundIcon(ctx: Ctx, r: Rect): void {
+  const cx = r.x + r.w / 2;
+  const cy = r.y + r.h / 2 + 2;
+  const s = r.h * 0.26;
+  ctx.strokeStyle = GOLD;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.arc(cx, cy, s, Math.PI, 0);
+  ctx.stroke();
+  ctx.fillStyle = GOLD;
+  ctx.beginPath();
+  ctx.moveTo(cx + s - 6, cy);
+  ctx.lineTo(cx + s + 6, cy);
+  ctx.lineTo(cx + s, cy + 8);
+  ctx.closePath();
+  ctx.fill();
+}
+
 function hammerIcon(ctx: Ctx, cx: number, cy: number, s: number): void {
   ctx.save();
   ctx.translate(cx, cy);
@@ -184,6 +203,8 @@ export interface HudLayout {
   /** Touch buttons to turn at a crossroads: onto the road away from the viewer, and towards them. */
   turnUp: Rect;
   turnDown: Rect;
+  /** Touch button to turn around on the street: above the ride arrows. */
+  turnAround: Rect;
   /** The village map, top right. */
   map: Rect;
 }
@@ -206,6 +227,7 @@ export function hudLayout(uiW: number, uiH: number): HudLayout {
     build,
     turnUp: { x: build.x - 14 - 64, y: build.y, w: 64, h: 40 },
     turnDown: { x: build.x - 14 - 64, y: build.y + 46, w: 64, h: 40 },
+    turnAround: { x: 16, y: uiH - 16 - b - 14 - 40, w: 64, h: 40 },
     map: { x: uiW - 12 - mapW, y: 12 + z + 8, w: mapW, h: Math.round(mapW * 0.72) },
   };
 }
@@ -220,14 +242,16 @@ export interface HudState {
   canTurn: boolean;
   /** The village is shown from above: no small map. */
   topView: boolean;
+  /** Turned around on the street, looking away from its buildings. */
+  turned: boolean;
 }
 
 export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: HudState): void {
   const L = hudLayout(uiW, uiH);
   text(ctx, 'Village Crown', 16, 34, 24, GOLD, 'left', true);
   const lines = st.touch
-    ? ['Hold the arrows to ride, hammer to build, upgrade or destroy', 'Pinch or tap - + to zoom']
-    : ['A D / ← → ride   S / ↓ / Space build, upgrade or destroy   W / S turn at a crossroads   Tab view from above   G grid   C construction   M sound', 'In the menu: WASD choose, Space confirm, Esc / Q close   - + zoom'];
+    ? ['Hold the arrows to ride, hammer to build, upgrade or destroy, ↻ to turn around', 'Pinch or tap - + to zoom']
+    : ['A D / ← → ride   S / ↓ / Space build, upgrade or destroy   W / S turn at a crossroads   R turn around   Tab view from above   G grid   C construction   M sound', 'In the menu: WASD choose, Space confirm, Esc / Q close   - + zoom'];
   const maxW = L.map.x - 28;
   let y = 54;
   for (const s of lines) {
@@ -272,6 +296,8 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
     arrowIcon(ctx, L.left, -1);
     button(ctx, L.right, st.rightHeld);
     arrowIcon(ctx, L.right, 1);
+    button(ctx, L.turnAround, st.turned);
+    turnAroundIcon(ctx, L.turnAround);
     ctx.globalAlpha = st.canBuild ? 1 : 0.4;
     button(ctx, L.build, false, true);
     hammerIcon(ctx, L.build.x + L.build.w / 2, L.build.y + L.build.h / 2, L.build.w * 0.5);
@@ -381,9 +407,10 @@ function drawMiniMap(ctx: Ctx, world: World, r: Rect): void {
 }
 
 /** Just after turning at a crossroads the view comes up out of a short fade. */
-export function drawTurnFade(ctx: Ctx, world: World, uiW: number, uiH: number): void {
-  const t = world.rider.turnedAt;
-  if (t === undefined) return;
+export function drawTurnFade(ctx: Ctx, world: World, uiW: number, uiH: number, turnedAround?: number): void {
+  // a turn at a crossroads, or turning around on the street, whichever was last
+  const t = Math.max(world.rider.turnedAt ?? -Infinity, turnedAround ?? -Infinity);
+  if (t === -Infinity) return;
   const age = world.time - t;
   if (age < 0 || age > 0.45) return;
   ctx.fillStyle = `rgba(20,14,8,${(1 - age / 0.45) * 0.9})`;
