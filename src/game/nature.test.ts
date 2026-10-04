@@ -99,6 +99,19 @@ describe("trees on a farm's fields", () => {
 });
 
 describe('woodcutter', () => {
+  it("'s hut is started with no wood in the village: its builders fell trees for it", () => {
+    const w = createWorld();
+    for (const b of w.buildings) b.stock.wood = 0;
+    w.piles = w.piles.filter((p) => p.resource !== 'wood');
+    const stumps = () => w.trees.filter((t) => t.state === 'stump').length;
+    const before = stumps();
+    const hut = placeBuilding(w, 2500, 'woodcutter')!;
+    expect(hut).not.toBeNull();
+    runFor(w, 400, () => hut.status === 'done');
+    expect(hut.status).toBe('done');
+    expect(stumps()).toBeGreaterThan(before);
+  });
+
   it('with nothing to fell, walks out and plants saplings round about', () => {
     const w = createWorld({ village: false });
     setConstructionEnabled(w, false);

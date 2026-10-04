@@ -240,6 +240,20 @@ export function clearingFields(world: World, b: Building, farm: Workplace, block
 export const chopSpot = (t: Tree, x: number) => ({ dx: t.x + CHOP_SPOT.dx - x, y: yAt(behindRoad(t.y) - 5) });
 
 /**
+ * The grown tree nearest world x (the walk out to it, along the streets then
+ * across) within WOOD_REACH, not one of `skip`; null if none stands.
+ */
+export function nearestTree(world: World, x: number, skip: Set<number>): Tree | null {
+  const walk = (t: Tree) => streetDist(world, x, t.x) + Math.abs(behindRoad(t.y) - behindRoad(STAND_Y));
+  let best: Tree | null = null;
+  for (const t of world.trees) {
+    if (t.state !== 'grown' || skip.has(t.id) || walk(t) > WOOD_REACH) continue;
+    if (!best || walk(t) < walk(best)) best = t;
+  }
+  return best;
+}
+
+/**
  * Fell grown tree `id`, leaving a stump, or (`uproot`: clearing land to build
  * on) nothing. Its log, or null if it no longer stands.
  */

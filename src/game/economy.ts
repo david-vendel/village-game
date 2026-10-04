@@ -11,9 +11,9 @@ import { DRINK_SLOTS, woodpileSlot, FARM_HORSE, marketSlot, reeveSlot, SMITHY_SL
 import { goodsOf } from './livestock';
 import { room, RESOURCES, shortfall, stockOf, type Amounts, type Load, type Resource, type Stock } from './resources';
 import { takeFromPile, type Pile } from './piles';
-import { owed } from './site';
+import { fellsForWood, owed } from './site';
 import { streetDist } from './streets';
-import type { Free } from './transport';
+import { errandResource, type Free } from './transport';
 import { delivering } from './worker';
 import type { Building, World } from './world';
 
@@ -61,7 +61,8 @@ const holdsFor = (b: Building, r: Resource) => b.status === 'done' && (isStore(b
 /**
  * What the village can still spend on a new building: in the warehouses, the
  * huts' stores and the piles on the ground (builders fetch from all three),
- * plus what serfs are carrying off the ground, and not yet promised.
+ * plus what serfs are carrying off the ground or into a warehouse, and not
+ * yet promised.
  */
 export function available(world: World): Stock {
   const have = stockOf();
@@ -69,16 +70,25 @@ export function available(world: World): Stock {
   for (const p of world.piles) have[p.resource] += p.amount;
   for (const p of world.people) {
     const w = p.job?.worker;
-    if (w?.carrying && delivering(w)?.action.startsWith('collect-')) have[w.carrying.resource] += w.carrying.amount;
+    const job = w && delivering(w);
+    if (!w?.carrying || !job || !errandResource(job.action)) continue;
+    // off the ground, or on its way into a warehouse (out of a hut's store)
+    if (job.action.startsWith('collect-') || world.buildings.some((o) => o.id === job.to && isStore(o))) have[w.carrying.resource] += w.carrying.amount;
   }
   const promised = committed(world);
   for (const r of RESOURCES) have[r] = Math.max(0, have[r] - promised[r]);
   return have;
 }
 
-/** What the village still lacks to start this building (empty when it can). */
+/**
+ * What the village still lacks to start this building (empty when it can). A
+ * woodcutter's hut never lacks wood: its builders fell trees for what there is
+ * none of (site.ts fellsForWood).
+ */
 export function buildShortfall(world: World, type: BuildingType): Amounts {
-  return shortfall(available(world), BUILDINGS[type].cost);
+  const lack = shortfall(available(world), BUILDINGS[type].cost);
+  if (fellsForWood({ type, status: 'constructing' })) delete lack.wood;
+  return lack;
 }
 
 /** What the village still lacks to upgrade this building (empty when it can). */

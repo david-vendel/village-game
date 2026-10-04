@@ -201,8 +201,9 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   there and build with what lies at their spot in `BUILD_CHUNK`s of labour (`buildTime` in all,
   scaled by the build-speed slider), using it up. A site's starting materials (a free
   building's) lie on a pile at its side and are carried to a spot first. Progress is the share
-  of the cost built in (`Site`: delivered, pile, laid). With construction off,
-  buildings are finished at once from the warehouses' stock.
+  of the cost built in (`Site`: delivered, pile, laid). A woodcutter's hut can be placed with
+  no wood in the village: its builders fell trees round about for the wood they find none of
+  (`fellsForWood`). With construction off, buildings are finished at once from the warehouses' stock.
 - `people.ts`: every villager is a `Person` with an id number, a name, a look and a `job` (a
   building and role, plus their `Worker` state) or none. The unemployed stroll the street on
   their lane (`laneY`: odd ids the far side, even the near side);
