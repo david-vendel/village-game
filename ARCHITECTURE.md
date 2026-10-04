@@ -358,6 +358,9 @@ renderer draws, so a layout that is right in text is right on screen.
   panning with the camera and turning with it at a crossroads; the land plane from the horizon down;
   the haze of distance; the street being looked at and the foreground grass; where a street ends
   short; and (`drawSideRoad`) the road of a crossroads still being built.
+- `layercache.ts`: `drawPanned`, for a backdrop layer that only slides as the view pans (the
+  ridges): drawn once into an image wider than the screen and slid, drawn again only when it has slid
+  too far or the zoom or screen size changes. Anything in it that moves (flags, smoke) is drawn live instead.
 - `plane.ts`: the village as a plane seen in perspective. The camera stands in front of the street
   the rider is on, looking across it (`Eye`); everything on every other street is projected from its
   map position (streets.ts): roads and farm fields as shapes on the ground (clipped near the

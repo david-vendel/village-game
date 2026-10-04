@@ -9,6 +9,9 @@ export interface Screen {
   /** Current viewport (recomputed on resize, zoom or touch-mode change). */
   vp: Viewport;
   dpr: number;
+  /** Draw at the screen's own resolution (up to 2 canvas px per CSS px); off, 1 per CSS px: a quarter of the pixels to fill on a high-DPI screen. */
+  fullRes: boolean;
+  setFullRes(on: boolean): void;
   touch: boolean;
   setZoom(z: number): void;
   zoomBy(factor: number): void;
@@ -31,6 +34,11 @@ export function createScreen(canvas: HTMLCanvasElement): Screen {
     canvas,
     vp: computeViewport(960, 540, 1),
     dpr: 1,
+    fullRes: true,
+    setFullRes(on) {
+      s.fullRes = on;
+      s.resize();
+    },
     touch: window.matchMedia?.('(pointer: coarse)').matches ?? false,
     onZoom: null,
     setZoom(z) {
@@ -52,7 +60,7 @@ export function createScreen(canvas: HTMLCanvasElement): Screen {
       refresh();
     },
     resize() {
-      s.dpr = Math.min(window.devicePixelRatio || 1, 2);
+      s.dpr = Math.min(window.devicePixelRatio || 1, s.fullRes ? 2 : 1);
       canvas.width = Math.round(window.innerWidth * s.dpr);
       canvas.height = Math.round(window.innerHeight * s.dpr);
       if (userZoom !== null) userZoom = clampZoom(userZoom, canvas.width, canvas.height, s.touch, frameBottom);

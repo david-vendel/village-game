@@ -276,6 +276,32 @@ export function installTuning(world: World, sound: Sound, screen: Screen): Displ
   fpsToggle.append('frame rate', fpsBox);
   content.append(fpsToggle);
 
+  // full resolution off: far fewer pixels to draw on a high-DPI screen, a little softer (kept for next time)
+  const resToggle = document.createElement('label');
+  resToggle.style.cssText = toggle.style.cssText;
+  const resBox = document.createElement('input');
+  resBox.type = 'checkbox';
+  resBox.style.cssText = box.style.cssText;
+  const RES_KEY = 'village-game:low-res';
+  try {
+    if (localStorage.getItem(RES_KEY) === '1') screen.setFullRes(false);
+  } catch {
+    // no storage: full resolution
+  }
+  resBox.checked = screen.fullRes;
+  resBox.addEventListener('change', () => {
+    screen.setFullRes(resBox.checked);
+    try {
+      if (resBox.checked) localStorage.removeItem(RES_KEY);
+      else localStorage.setItem(RES_KEY, '1');
+    } catch {
+      // no storage: just for now
+    }
+    resBox.blur();
+  });
+  resToggle.append('full resolution', resBox);
+  content.append(resToggle);
+
   makeCollapsible(root, content, 'right', 'village-game:tuning-open', false, 'Settings');
   document.body.appendChild(root);
   return display;

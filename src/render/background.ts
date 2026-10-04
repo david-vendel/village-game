@@ -7,6 +7,7 @@
 import { LANE_YS, ROAD_FAR_Y, ROAD_NEAR_Y } from '../game/layout';
 import { SIDE_ROAD_HALF } from '../game/streets';
 import { backdropShift, depthScale, groundTiles, groundX, HORIZON_Y, unviewY, viewY } from './ground';
+import { drawPanned } from './layercache';
 import { circle, type Ctx, ellipse, hash, mix, poly, rect, shade, smoke, VIEW_H } from './util';
 
 const HAZE = '#dcc9ad';
@@ -65,18 +66,18 @@ function ridge(x: number, seed: number, amp: number): number {
   );
 }
 
-function fillRidge(ctx: Ctx, v: View, factor: number, baseY: number, seed: number, amp: number, fill: string | CanvasGradient, bump?: (lx: number) => number): void {
-  const off = pan(v, factor);
+/** A ridge panned by `off`, across local x 0..width. */
+function fillRidge(ctx: Ctx, off: number, width: number, baseY: number, seed: number, amp: number, fill: string | CanvasGradient, bump?: (lx: number) => number): void {
   // closed just below the horizon, not at the screen's bottom: the land plane is drawn over
   // everything below it, and at high resolutions filling the hidden part cost half the frame rate
   const foot = HORIZON_Y + 80;
   ctx.beginPath();
   ctx.moveTo(-10, foot);
-  for (let sx = -10; sx <= v.width + 10; sx += 6) {
+  for (let sx = -10; sx <= width + 10; sx += 6) {
     const lx = sx + off;
     ctx.lineTo(sx, baseY - ridge(lx, seed, amp) - (bump ? bump(lx) : 0));
   }
-  ctx.lineTo(v.width + 10, foot);
+  ctx.lineTo(width + 10, foot);
   ctx.closePath();
   ctx.fillStyle = fill;
   ctx.fill();
@@ -85,14 +86,16 @@ function fillRidge(ctx: Ctx, v: View, factor: number, baseY: number, seed: numbe
 function drawMountains(ctx: Ctx, v: View): void {
   ctx.save();
   ctx.translate(0, -mountainLift);
-  const g = ctx.createLinearGradient(0, 180, 0, 330);
-  g.addColorStop(0, '#9aa6c2');
-  g.addColorStop(1, '#c3bdbf');
-  fillRidge(ctx, v, 0.05, HORIZON_Y - 10, 1.3, 45, g, (x) => Math.max(0, Math.sin(x * 0.0009 + 0.4)) * 40);
-  // snow-lit ridge highlight
-  ctx.globalAlpha = 0.35;
-  fillRidge(ctx, v, 0.05, HORIZON_Y + 5, 4.1, 30, '#b4b8cc');
-  ctx.globalAlpha = 1;
+  drawPanned(ctx, 'mountains', pan(v, 0.05), v.width, HORIZON_Y - 140, HORIZON_Y + 81, (g, off, width) => {
+    const grad = g.createLinearGradient(0, 180, 0, 330);
+    grad.addColorStop(0, '#9aa6c2');
+    grad.addColorStop(1, '#c3bdbf');
+    fillRidge(g, off, width, HORIZON_Y - 10, 1.3, 45, grad, (x) => Math.max(0, Math.sin(x * 0.0009 + 0.4)) * 40);
+    // snow-lit ridge highlight
+    g.globalAlpha = 0.35;
+    fillRidge(g, off, width, HORIZON_Y + 5, 4.1, 30, '#b4b8cc');
+    g.globalAlpha = 1;
+  });
   ctx.restore();
 }
 
@@ -103,11 +106,13 @@ function castleBump(lx: number): number {
 }
 
 function drawCastleHills(ctx: Ctx, v: View): void {
-  const g = ctx.createLinearGradient(0, HORIZON_Y - 90, 0, HORIZON_Y);
-  g.addColorStop(0, '#9aa886');
-  g.addColorStop(1, '#b7b596');
   const base = HORIZON_Y + 16;
-  fillRidge(ctx, v, CASTLE_FACTOR, base, 2.2, 22, g, castleBump);
+  drawPanned(ctx, 'castle hills', pan(v, CASTLE_FACTOR), v.width, HORIZON_Y - 100, HORIZON_Y + 81, (g, off, width) => {
+    const grad = g.createLinearGradient(0, HORIZON_Y - 90, 0, HORIZON_Y);
+    grad.addColorStop(0, '#9aa886');
+    grad.addColorStop(1, '#b7b596');
+    fillRidge(g, off, width, base, 2.2, 22, grad, castleBump);
+  });
 
   const cx = CASTLE_LAYER_X - pan(v, CASTLE_FACTOR);
   if (cx > -300 && cx < v.width + 300) {
@@ -123,24 +128,24 @@ function drawCastleHills(ctx: Ctx, v: View): void {
 
 /** Low wooded hills along the horizon. */
 function drawFarHills(ctx: Ctx, v: View): void {
-  const factor = 0.24;
   const base = HORIZON_Y + 6;
-  const g = ctx.createLinearGradient(0, HORIZON_Y - 30, 0, HORIZON_Y);
-  g.addColorStop(0, mix('#8e9e6a', HAZE, 0.45));
-  g.addColorStop(1, mix('#a7a574', HAZE, 0.45));
-  fillRidge(ctx, v, factor, base, 5.5, 10, g);
-  // forest clumps along the ridge
-  const off = pan(v, factor);
-  const T = 50;
-  const i0 = Math.floor(off / T) - 1;
-  for (let i = i0; i < i0 + v.width / T + 3; i++) {
-    if (hash(i, 50) < 0.45) continue;
-    const lx = i * T + hash(i, 51) * 30;
-    const sx = lx - off;
-    const y = base - ridge(lx, 5.5, 10) + 2;
-    const r = 4 + hash(i, 52) * 5;
-    ellipse(ctx, sx, y - r * 0.6, r, r * 0.9, mix('#6f7f55', HAZE, 0.4));
-  }
+  drawPanned(ctx, 'far hills', pan(v, 0.24), v.width, HORIZON_Y - 40, HORIZON_Y + 81, (g, off, width) => {
+    const grad = g.createLinearGradient(0, HORIZON_Y - 30, 0, HORIZON_Y);
+    grad.addColorStop(0, mix('#8e9e6a', HAZE, 0.45));
+    grad.addColorStop(1, mix('#a7a574', HAZE, 0.45));
+    fillRidge(g, off, width, base, 5.5, 10, grad);
+    // forest clumps along the ridge
+    const T = 50;
+    const i0 = Math.floor(off / T) - 1;
+    for (let i = i0; i < i0 + width / T + 3; i++) {
+      if (hash(i, 50) < 0.45) continue;
+      const lx = i * T + hash(i, 51) * 30;
+      const sx = lx - off;
+      const y = base - ridge(lx, 5.5, 10) + 2;
+      const r = 4 + hash(i, 52) * 5;
+      ellipse(g, sx, y - r * 0.6, r, r * 0.9, mix('#6f7f55', HAZE, 0.4));
+    }
+  });
 }
 
 function drawBirds(ctx: Ctx, v: View): void {
