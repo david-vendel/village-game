@@ -7,7 +7,7 @@
 // horse farms share land by distance: a cell is the nearer one's.
 
 import { cellKey, footprintOf, keptLand, landUse, onRoadLine, streetCell, type Land } from './grid';
-import { streetOf } from './streets';
+import { streetOf, streetAt } from './streets';
 import type { Building, World } from './world';
 
 /** Pasture cells a horse keeps (livestock.ts herdRoom). */
@@ -39,7 +39,7 @@ function pastures(world: World, land: Land): Map<number, string[]> {
   const farms = world.buildings.filter((b) => b.type === 'horsefarm' && b.status === 'done');
   for (const b of farms) {
     const f = footprintOf(b);
-    const s = world.streets[streetOf(b.x)];
+    const s = streetAt(world, streetOf(b.x));
     if (!f || !s) continue;
     // out from the row of cells behind the farm, nearest first
     const queue: Array<{ c: number; r: number; d: number }> = [];

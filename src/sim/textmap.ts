@@ -16,7 +16,7 @@ import { treePoint } from '../game/nature';
 import { RESOURCES } from '../game/resources';
 import { pastureCells } from '../game/pasture';
 import { residentsOf, roomIn } from '../game/households';
-import { groundPoint, mapPoint, streetOf, streetRange, streetStart } from '../game/streets';
+import { groundPoint, isTwin, mapPoint, roadOf, streetOf, streetRange, streetStart, streetAt } from '../game/streets';
 import { MERGES, type Building, type World } from '../game/world';
 
 /** One letter per building type: upper case when standing, lower case while being built or pulled down. */
@@ -60,8 +60,11 @@ const FIELD_GLYPH = { grass: ',', fallow: '_', growing: '"', ripe: '*' } as cons
 /** A building's place in text: its type, id and the street cells it takes (s0:37-45). */
 export function where(world: World, b: Building): string {
   const f = footprintAt(world, b);
-  return f ? `s${f.street}:${f.i0}-${f.i1}` : `s${streetOf(b.x)}:${alongOf(b.x)}`;
+  return f ? `${streetName(f.street)}:${f.i0}-${f.i1}` : `${streetName(streetOf(b.x))}:${alongOf(b.x)}`;
 }
+
+/** A street's name: s<i>, and s<i>' for its twin (the street seen from across its road, streets.ts). */
+export const streetName = (i: number) => (isTwin(i) ? `s${roadOf(i)}'` : `s${i}`);
 
 const alongOf = (x: number) => Math.floor((x - streetStart(streetOf(x))) / CELL_W + 1e-6);
 
@@ -240,7 +243,7 @@ export function summary(world: World): string {
     `day ${t.day} ${String(t.hours).padStart(2, '0')}:${String(t.minutes).padStart(2, '0')} (t=${world.time.toFixed(1)}s)  construction ${world.constructionEnabled ? 'on' : 'off'}`,
     `warehouses: ${RESOURCES.map((r) => `${r}=${Math.round(s[r])}`).join(' ')}`,
     `people: ${[...jobs].map(([k, n]) => `${n} ${k}`).join(', ') || 'none'}`,
-    `rider: s${streetOf(world.rider.x)}:${alongOf(world.rider.x)} facing ${world.rider.facing > 0 ? '+' : '-'}`,
+    `rider: ${streetName(streetOf(world.rider.x))}:${alongOf(world.rider.x)} facing ${world.rider.facing > 0 ? '+' : '-'}`,
   ].join('\n');
 }
 
@@ -367,7 +370,7 @@ export function checkInvariants(world: World): string[] {
   for (const p of world.people) {
     if (p.job && !ids.has(p.job.buildingId)) bad.push(`${p.name} works at #${p.job.buildingId}, which is not there`);
     const x = p.job ? world.buildings.find((b) => b.id === p.job!.buildingId)!.x + p.job.worker.dx : p.stroll.x;
-    const s = world.streets[streetOf(x)];
+    const s = streetAt(world, streetOf(x));
     if (!s || s.gone) bad.push(`${p.name} is on a street that is not there (x=${x.toFixed(0)})`);
   }
   if (!Number.isFinite(groundPoint(world, world.rider.x, 474).x)) bad.push('the rider is nowhere');

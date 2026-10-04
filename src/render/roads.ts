@@ -5,10 +5,15 @@
 
 import { PLOT_SPACING } from '../game/layout';
 import { builders } from '../game/site';
-import { streetOf, streetRange } from '../game/streets';
+import { acrossX, isTwin, roadOf, streetOf, streetRange } from '../game/streets';
 import type { World } from '../game/world';
 
 export function roadShown(world: World, street: number): { min: number; max: number } {
+  // a twin's road is its street's, seen from across it: running the other way
+  if (isTwin(street)) {
+    const r = roadShown(world, roadOf(street));
+    return { min: acrossX(r.max), max: acrossX(r.min) };
+  }
   const { min, max } = streetRange(world, street);
   let [lo, hi] = [min, max];
   for (const b of world.buildings) {

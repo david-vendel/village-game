@@ -3,6 +3,7 @@
 // decided in src/render. Rendering only reads game state, never changes it.
 
 import { buildingAt, canDemolish, crossroadAt, roomToBuild, type World } from '../game/world';
+import { isTwin, streetOf } from '../game/streets';
 import { drawScene } from './scene';
 import { set3d } from './world3d';
 import { drawTopView } from './topview';
@@ -49,9 +50,6 @@ export interface FrameView {
   hover?: { x: number; y: number } | null;
   /** Buildings in real-time 3D (else 2D art); the HUD's 2D · 3D button shows which. */
   view3d: boolean;
-  /** Turned around on the street, looking away from its buildings, and when (world time) the view last turned around. */
-  turned: boolean;
-  turnedAt?: number;
   /** Frames per second and the slowest frame (ms) lately, shown when given (the panel's "frame rate"). */
   fps?: { fps: number; worstMs: number };
 }
@@ -79,7 +77,6 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
     turnLabel: v.touch ? 'Tap ▲ or ▼ to turn onto the crossing street' : 'Press W / ↑ or S / ↓ to turn onto the crossing street',
     showGrid: v.showGrid,
     // touch screens have no hover: undefined shows the info box of the building at the rider instead
-    turned: v.turned,
     hover: v.touch ? undefined : v.hover ? { x: v.hover.x / v.worldScale, y: (v.hover.y - v.offsetY) / v.worldScale } : null,
   });
   }
@@ -87,7 +84,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
   // screen UI, unaffected by zoom
   ctx.setTransform(v.uiScale, 0, 0, v.uiScale, 0, 0);
   // from above a turn is just a turn: the map doesn't change, so no fade
-  if (!v.topView) drawTurnFade(ctx, world, v.uiW, v.uiH, v.turnedAt);
+  if (!v.topView) drawTurnFade(ctx, world, v.uiW, v.uiH);
   const here = buildingAt(world, world.rider.x);
   drawHud(ctx, world, v.uiW, v.uiH, {
     touch: v.touch,
@@ -96,7 +93,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
     canBuild: here ? canDemolish(here) : roomToBuild(world, world.rider.x),
     canTurn: !world.menu && !!crossroadAt(world),
     topView: v.topView,
-    turned: v.turned,
+    across: isTwin(streetOf(world.rider.x)),
   });
   drawToasts(ctx, v.toasts, world.time, v.uiW);
   drawBuildMenu(ctx, world, v.uiW, v.uiH);

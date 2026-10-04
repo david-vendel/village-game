@@ -16,7 +16,7 @@ import { backdropDistance, unviewY, viewY } from './ground';
 /** Screen y of ground d map px behind the street line, and back: the game's depths through the drawing camera. */
 const yAt = (d: number) => viewY(yAtGame(d));
 const behindRoad = (screenY: number) => behindRoadGame(unviewY(screenY));
-import { streetOf, streetStart } from '../game/streets';
+import { streetOf, streetStart, streetAt } from '../game/streets';
 import { constructionStage, placeAt, whyNotBuild, type Building, type World } from '../game/world';
 import { depthScale, groundX } from './ground';
 import type { Ctx } from './util';
@@ -73,7 +73,7 @@ function block(ctx: Ctx, street: number, i0: number, i1: number, j0: number, j1:
  * what takes a cell tinted; and the name of the cell under the mouse.
  */
 export function drawLandGrid(ctx: Ctx, world: World, camX: number, viewW: number, hover: { x: number; y: number } | null): void {
-  const street = world.streets[streetOf(camX + viewW / 2)];
+  const street = streetAt(world, streetOf(camX + viewW / 2));
   if (!street) return;
   const land = landUse(world);
   const vpX = viewW / 2;

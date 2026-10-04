@@ -11,7 +11,7 @@ import { LINE_ALPHA, lineLevel, showLevel } from './grid';
 import { treeGrowth } from '../game/nature';
 import { GROUND_PILE_Y } from '../game/piles';
 import type { Load } from '../game/resources';
-import { backOf, groundPoint, mapPoint, streetOf, streetPoint, streetStart, type Vec } from '../game/streets';
+import { backOf, groundPoint, mapPoint, streetOf, streetPoint, streetStart, type Vec, streetAt } from '../game/streets';
 import { getBuilding, type World } from '../game/world';
 import { outdoors } from '../game/people';
 import { doorProgress } from './farm';
@@ -73,7 +73,7 @@ export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zo
   };
   /** A point d map px behind the road of street x's street, at world x. */
   const lot = (x: number, d: number): Vec => {
-    const s = world.streets[streetOf(x)] ?? world.streets[0];
+    const s = streetAt(world, streetOf(x)) ?? world.streets[0];
     const p = mapPoint(world, x);
     const b = backOf(s.dir);
     return { x: p.x + b.x * d, y: p.y + b.y * d };
@@ -164,7 +164,7 @@ export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zo
   const tops: Top3d[] = [];
   for (const b of world.buildings) {
     if (b.type === 'intersection' || !has3d(b.type)) continue;
-    const s = world.streets[streetOf(b.x)];
+    const s = streetAt(world, streetOf(b.x));
     if (!s) continue;
     const o = lot(b.x, behindRoad(BASE_Y));
     if (Math.abs(sx(o) - uiW / 2) > uiW / 2 + 300 * S || Math.abs(sy(o) - uiH / 2) > uiH / 2 + 300 * S) continue;
@@ -281,7 +281,7 @@ export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zo
   };
   /** Screen heading of something facing `facing` along the street at world x. */
   const headingAt = (x: number, facing: number) => {
-    const d = (world.streets[streetOf(x)] ?? world.streets[0]).dir;
+    const d = (streetAt(world, streetOf(x)) ?? world.streets[0]).dir;
     return Math.atan2(-d.y * facing, d.x * facing);
   };
   // what lies on the ground by the road: a little heap, bigger the more there is

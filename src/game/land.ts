@@ -12,7 +12,7 @@ import { setFieldSpots, type FieldSpot } from './farm';
 import { baseLand, cellKey, footprintOf, keptLand, streetCell } from './grid';
 import { employees } from './people';
 import { CELL_W, FIELD_ROW_J, type FieldZone } from './layout';
-import { streetOf } from './streets';
+import { streetOf, streetAt } from './streets';
 import type { Building, World } from './world';
 
 /** How many cells either side of the farmstead its fields may lie. */
@@ -30,7 +30,7 @@ function allFields(world: World): Map<number, FieldSpot[]> {
   const claims = new Map<string, { farm: Building; spot: FieldSpot; d: number }>();
   for (const farm of farms) {
     const f = footprintOf(farm);
-    const s = world.streets[streetOf(farm.x)];
+    const s = streetAt(world, streetOf(farm.x));
     if (!f || !s) continue;
     const mid = { i: (f.i0 + f.i1 + 1) / 2, j: (f.j0 + f.j1 + 1) / 2 };
     for (const zone of ['back', 'front'] as FieldZone[]) {

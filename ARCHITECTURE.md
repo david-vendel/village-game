@@ -304,11 +304,24 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   across) and ends one plot short otherwise, and it ends one plot short of a street along the same
   line. A road runs on past a street's last plot, so a street ends as many plots shorter again as
   keeps that end off any road it doesn't meet, with a cell of grass between (`planStreet`); a
-  crossroads whose road can't keep off one that way can't be built. Plots past a street's ends are `off`. So streets close into loops. `Junction`s are where
+  crossroads whose road can't keep off one that way can't be built. Plots past a street's ends are `off`. A road piece laid on
+  across a street that crosses its way at a crossroads place of that street runs across it, and the
+  two meet at a crossroads made there as the parcel is laid (`joinRoads`, also run on loading a save);
+  so road laid on from one street closes a square of the grid. A crossroads whose new street would
+  run along a line another street already runs along within a square can't be built: that street is
+  laid on instead (two streets never meet end to end). So streets close into loops. `Junction`s are where
   streets meet; `route` is the shortest way between two x's through them (to the corner, then on
   from the same spot on the next street) and `streetDist` the distance
   every "nearest" is measured by (people themselves walk the land: `paths.ts`). Each street is seen from its right-hand side, so its lots lie to
-  its left (`backOf`) and a new street runs off into what lay behind the old one. The rider turns at
+  its left (`backOf`) and a new street runs off into what lay behind the old one. The land in front
+  of a street is built on from its **twin** (street `TWIN` + i, `twinOf`; named s0' in scenarios): the
+  same road running the other way, so its lots are that land. Twins aren't in `World.streets`:
+  `streetAt` makes one from its street (always look streets up through it), its ends follow the
+  street's, and it has no road, crossroads, plots or woods of its own (`roadOf`: whose road it is;
+  `acrossX`: the same place seen from across the road; `streetDist` measures from there). The rider
+  turns around onto it (`turnAround` in `world.ts`, R or the touch button), and from there the
+  street is drawn like any other: a building across the road is an ordinary building on the twin.
+  Roads and crossroads are only built from the street's own side. The rider turns at
   a crossroads (`turnAtCrossroads`): ↑ onto the road away from the viewer, ↓ towards them. A new
   street gets its own woods; trees are cut where roads run off, and no field is sown across one.
 - `grid.ts`: the land grid, tested by `land.test.ts`. The whole plane is cut into 25 px cells,
@@ -355,8 +368,8 @@ renderer draws, so a layout that is right in text is right on screen.
   merged; roads cross only at a crossroads; every job at a building that is there).
 - `scenario.ts`: `runScenario`, a script played one command a line through the game's own
   functions (`build farm at s0:40`, `build house next`, `ride #last`, `turn up`, `build farm
-  here` through the build menu as the player does, `run until built`, `map ids`, `expect …`).
-  Places are `s<street>:<cell along it>`. The rules are checked after every command and every
+  here` through the build menu as the player does, `turn around`, `reload` (save and load), `run until built`, `map ids`, `expect …`).
+  Places are `s<street>:<cell along it>` (`s<street>':<cell>` across its road). The rules are checked after every command and every
   few simulated seconds while running. `tools/sim.ts` is the command line (`npm run sim`).
   `tests/scenarios.test.ts` plays every `tests/scenarios/*.scn`: no failure allowed, and the
   output must match its `.out` snapshot (update with `npx vitest run tests/scenarios.test.ts -u`).
@@ -383,13 +396,9 @@ renderer draws, so a layout that is right in text is right on screen.
   camera), buildings, sites, fingerposts, trees, quarries and people as pictures that always face
   the camera, smaller and nearer the horizon with distance. A building on a street running away from
   the camera stands beside that road. Things further off than this street's woods are drawn before
-  them, nearer ones in among this street's people by screen depth.
-- `turned.ts`: the view turned around on the street (R, or the touch button above the ride arrows;
-  `app/controls.ts` keeps it, as a way of looking, not game state, until the rider leaves the street
-  or opens the build menu). The eye (plane.ts `eyeOf(…, turned)`) stands as far behind the street and
-  looks the other way: the street's ground is drawn mirrored (`alongStreet` in background.ts), and
-  the rider, this street's people and everything beyond the road are projected like any other street;
-  nothing standing nearer than the road is drawn. Left/right and ↑/↓ at a crossroads swap with it.
+  them, nearer ones in among this street's people by screen depth. What stands on the lots across the
+  road from the street being looked at (its twin's, or turned around, the street's own) is between the
+  camera and the road, and isn't drawn (`behindCamera`); the road both sides share is drawn once.
 - `buildings.ts`: the signpost where a crossroads can be built (`drawCrossroadsSign`, drawn on
   this street by `scene.ts`, on the others by `plane.ts`, from above by `topview.ts`), and
   "2D picture of a 3D building" primitives (front face, shaded side face, gable

@@ -24,7 +24,7 @@ import { builderPositions, builders, createSite, siteWork, siteWorkplace, upgrad
 import { demolitionWork, demolitionWorkplace, dropAll, materialsIn, tearDown, type Demolition } from './demolition';
 import { dropOnGround, type Pile } from './piles';
 import { RESOURCES, stockOf, type Resource, type Stock } from './resources';
-import { CROSS_PLOT, fromStreet, groundPoint, mainStreet, newStreet, plotPoint, lowestPlot, plotX, PLOT_FIRST, PLOT_LAST, PLOTS_PER_STREET, rideRange, STREET_END_RUN, streetOf, streetRange, streetsAt, streetStart, turnFacing, type Junction, type Street, type Vec } from './streets';
+import { CROSS_PLOT, fromStreet, groundPoint, mainStreet, newStreet, plotPoint, lowestPlot, plotX, PLOT_FIRST, PLOT_LAST, PLOTS_PER_STREET, acrossX, isTwin, onRoadX, rideRange, roadOf, STREET_END_RUN, streetOf, streetRange, streetsAt, streetStart, turnFacing, type Junction, type Street, type Vec, streetAt } from './streets';
 import { findPath, terrainSpeed } from './paths';
 import { mealsOf, sendToEat, updateHunger, updateVisits } from './hunger';
 import { serfPositions, transportHub, transportWorkplace, unplannedBoard, type ErrandBoard } from './transport';
@@ -366,7 +366,7 @@ export { ROAD_PIECE };
  * end). Nothing but a road piece is built there (whyNotBuild).
  */
 export function roadEnd(world: World, x: number): { street: Street; step: 1 | -1; k: number; x: number } | null {
-  const s = world.streets[streetOf(x)];
+  const s = streetAt(world, streetOf(x));
   if (!s || s.gone) return null;
   const ride = rideRange(world, s.index);
   const toMax = ride.max - x;
@@ -389,6 +389,19 @@ function whyNoRoad(world: World, end: { street: Street; step: 1 | -1; k: number;
   const { street: s, step, k } = end;
   if (k < lowestPlot(s.index) || k > PLOT_LAST) return 'The road can go no further';
   if (world.buildings.some((b) => b.type === 'road' && b.x === end.x)) return 'The road is being laid here already';
+  // parcel by parcel: a street crossing its way at a free crossroads place of it is met there (joinRoads),
+  // its road crossed; anywhere else another road is in the way
+  const crossed = new Set<string>();
+  for (let n = 1; n <= ROAD_PIECE; n++) {
+    const kn = step > 0 ? s.hi + n : s.lo - n;
+    const meet = streetsAt(world, s.dir, plotPoint(s, kn), s.index);
+    if (meet.along || meet.blocked) return 'Another road is in the way';
+    if (!meet.crossing) continue;
+    const there = getBuilding(world, plotOf(world, meet.crossing.street, meet.crossing.k).buildingId);
+    if (there && !there.junction) return 'A crossroads is in the way';
+    const a0 = alongCell(plotX(s.index, kn)) - 1;
+    for (let a = a0; a < a0 + 3; a++) crossed.add(`${a}:${meet.crossing.street}`);
+  }
   const land = baseLand(world);
   const f = footprintAt('road', end.x);
   // its cells, and one of grass past them
@@ -399,7 +412,7 @@ function whyNoRoad(world: World, end: { street: Street; step: 1 | -1; k: number;
       const use = land.get(cellKey(cell.c, cell.r));
       if (!use) continue;
       if (use.kind === 'quarry') return 'The rocks are in the way';
-      if (use.kind === 'road' && use.street !== s.index) return 'Another road is in the way';
+      if (use.kind === 'road' && use.street !== s.index && !crossed.has(`${a}:${use.street}`)) return 'Another road is in the way';
       if (use.kind === 'building') {
         const b = getBuilding(world, use.buildingId);
         return b?.type === 'intersection' ? 'A crossroads is in the way' : `The ${BUILDINGS[b?.type ?? 'house'].name} is in the way`;
@@ -425,13 +438,14 @@ export function setStreetEnds(world: World, s: Street, lo: number, hi: number): 
  * (roadwork.ts): each is road as soon as it is done.
  */
 function roadSoFar(world: World, b: Building): void {
-  const s = world.streets[streetOf(b.x)];
+  const s = streetAt(world, streetOf(b.x));
   if (!s || s.gone || !b.road) return;
   const laid = b.status === 'done' ? ROAD_PIECE : parcelsLaid(b);
   const end = b.road.from + b.road.step * laid;
   const [lo, hi] = b.road.step > 0 ? [s.lo, Math.min(PLOT_LAST, Math.max(s.hi, end))] : [Math.max(lowestPlot(s.index), Math.min(s.lo, end)), s.hi];
   if (lo === s.lo && hi === s.hi) return;
   setStreetEnds(world, s, lo, hi);
+  joinRoads(world, s);
   // the new road is cut through the woods, and fields give way to it
   clearLand(world);
   syncFarmFields(world);
@@ -452,6 +466,8 @@ function layRoad(world: World, b: Building): void {
 /** Why a building of this type can't be built where the rider wants it (world x), or null if it can. */
 export function whyNotBuild(world: World, type: BuildingType, x: number): string | null {
   if (closing(world, streetOf(x))) return 'This street is being closed';
+  // across the road (a twin street) only buildings: roads and crossroads are laid from the street's own side
+  if (isTwin(streetOf(x)) && (type === 'road' || type === 'intersection')) return 'Turn around to build that';
   const end = roadEnd(world, x);
   if (type === 'road') return end ? whyNoRoad(world, end) : 'Roads go only at the end of a road';
   // the end of a road is kept for the road to go on
@@ -463,7 +479,16 @@ export function whyNotBuild(world: World, type: BuildingType, x: number): string
   const why = whyNotHere(world, type, at);
   if (why || type !== 'intersection') return why;
   // its road would run onto another road, and not meet it at a crossroads
-  return planStreet(world, -1, at).clear ? null : 'Another road is too close';
+  const { street, clear } = planStreet(world, -1, at);
+  if (!clear) return 'Another road is too close';
+  // a street already runs along this line within a square of the grid: it is laid on to here instead, and
+  // meets this street at a crossroads of its own (joinRoads); two streets never run into each other end to end
+  for (const step of [-1, 1]) {
+    for (let n = 1; n <= ROAD_GRID / BLOCK; n++) {
+      if (streetsAt(world, street.dir, plotPoint(street, CROSS_PLOT + step * n)).along) return 'A street runs along this line already: lay its road on to here';
+    }
+  }
+  return null;
 }
 
 export function placeBuilding(
@@ -586,7 +611,7 @@ export function whyNotDemolish(world: World, b: Building): string | null {
   if (!canDemolish(b)) return 'It cannot be pulled down';
   const street = streetFrom(world, b);
   if (!street) return null;
-  if (world.buildings.some((o) => o.type !== 'intersection' && streetOf(o.x) === street.index)) return 'Its street has buildings on it';
+  if (world.buildings.some((o) => o.type !== 'intersection' && roadOf(streetOf(o.x)) === street.index)) return 'Its street has buildings on it';
   const crossroads = world.plots.filter((p) => p.street === street.index && p.buildingId !== null && p.buildingId !== b.id).map((p) => getBuilding(world, p.buildingId));
   if (crossroads.some((o) => o && !o.junction)) return 'Another street branches off its street';
   return null;
@@ -594,7 +619,7 @@ export function whyNotDemolish(world: World, b: Building): string | null {
 
 /** Whether street i is closing: the crossroads that opened it is being pulled down (nothing new is built on it). */
 const closing = (world: World, i: number) => {
-  const from = world.streets[i]?.from;
+  const from = streetAt(world, i)?.from;
   return from != null && getBuilding(world, from)?.status === 'demolishing';
 };
 
@@ -657,7 +682,8 @@ function pulledDown(world: World, b: Building): void {
 function closeStreet(world: World, b: Building, street: Street): void {
   const own = world.junctions.find((j) => j.buildingId === b.id);
   const here = own ? (streetOf(own.a) === street.index ? own.b : own.a) : b.x;
-  const on = (x: number) => streetOf(x) === street.index;
+  // (and across its road, on its twin)
+  const on = (x: number) => roadOf(streetOf(x)) === street.index;
   const gone = world.junctions.filter((j) => on(j.a) || on(j.b));
   world.junctions = world.junctions.filter((j) => !gone.includes(j));
   for (const j of gone) {
@@ -985,6 +1011,26 @@ export function layStreet(world: World, b: Building): Street {
   return street;
 }
 
+/**
+ * Where street s's road now crosses another street's, at a crossroads place of
+ * that one (a road piece laid on across it: whyNoRoad), a crossroads is made,
+ * so the streets meet there. Loading a save finds them again this way.
+ */
+export function joinRoads(world: World, s: Street): void {
+  for (let k = s.lo; k <= s.hi; k++) {
+    const mine = plotOf(world, s.index, k);
+    if (mine.buildingId !== null) continue;
+    const meet = streetsAt(world, s.dir, plotPoint(s, k), s.index);
+    if (!meet.crossing) continue;
+    const plot = plotOf(world, meet.crossing.street, meet.crossing.k);
+    const there = getBuilding(world, plot.buildingId);
+    if (there && !there.junction) continue;
+    const j = there ?? makeJunction(world, plot);
+    mine.buildingId = j.id;
+    world.junctions.push({ buildingId: j.id, a: plot.x, b: plotX(s.index, k) });
+  }
+}
+
 /** A crossroads where a new street met an old one at a free plot of it. */
 function makeJunction(world: World, plot: Plot): Building {
   const b: Building = { id: world.nextId++, type: 'intersection', x: plot.x, progress: 1, status: 'done', completedAt: world.time, stock: stockOf(), junction: true };
@@ -1006,7 +1052,8 @@ function openStreet(world: World, b: Building): void {
  * spot's x on that street.
  */
 export function crossroadAt(world: World): { building: Building; street: number; x: number } | null {
-  const plot = plotAt(world, world.rider.x);
+  // turned around, the same crossroads
+  const plot = plotAt(world, onRoadX(world.rider.x));
   const b = getBuilding(world, plot?.buildingId ?? null);
   // (one being pulled down can still be turned at until it is down)
   if (!plot || !b || b.type !== 'intersection' || b.status === 'constructing') return null;
@@ -1024,7 +1071,25 @@ export function crossroadAt(world: World): { building: Building; street: number;
 export function turnAtCrossroads(world: World, way: 'up' | 'down'): boolean {
   const c = world.menu ? null : crossroadAt(world);
   if (!c) return false;
-  return turnOnto(world, c, turnFacing(world, streetOf(world.rider.x), c.street, way));
+  // turned around, away from the viewer is the other way
+  const here = streetOf(world.rider.x);
+  const flip = isTwin(here) ? (way === 'up' ? 'down' : 'up') : way;
+  return turnOnto(world, c, turnFacing(world, roadOf(here), c.street, flip));
+}
+
+/**
+ * Turn around on the street: look at it from across the road (its twin,
+ * streets.ts), where the land in front of it can be built on, or back.
+ * Returns whether the rider turned.
+ */
+export function turnAround(world: World): boolean {
+  if (world.menu) return false;
+  const r = world.rider;
+  r.x = acrossX(r.x);
+  r.facing = r.facing > 0 ? -1 : 1;
+  r.vx = -r.vx;
+  r.turnedAt = world.time;
+  return true;
 }
 
 /**
@@ -1035,9 +1100,9 @@ export function turnAtCrossroads(world: World, way: 'up' | 'down'): boolean {
 export function turnToward(world: World, v: Vec): boolean {
   const c = world.menu ? null : crossroadAt(world);
   if (!c) return false;
-  const d = world.streets[c.street].dir;
+  const d = streetAt(world, c.street).dir;
   const along = d.x * v.x + d.y * v.y;
-  const here = world.streets[streetOf(world.rider.x)].dir;
+  const here = streetAt(world, streetOf(world.rider.x)).dir;
   // only when v points more along the crossing street than this one
   if (Math.abs(along) <= Math.abs(here.x * v.x + here.y * v.y)) return false;
   return turnOnto(world, c, along > 0 ? 1 : -1);
@@ -1220,7 +1285,7 @@ function navFrom(world: World, x: number): Nav {
     fromMap(p, nearDx) {
       // seen from the street they are on, unless another runs nearer (or this one can't see it)
       const seen = (i: number) => {
-        const s = world.streets[i];
+        const s = streetAt(world, i);
         if (!s || s.gone) return null;
         const r = fromStreet(world, i, p);
         // (a little way past its ends too: builders laying more road work there)
@@ -1307,7 +1372,7 @@ function updateRider(world: World, dt: number, input: MoveInput): void {
     r.vx = Math.abs(r.vx) <= dv ? 0 : r.vx - Math.sign(r.vx) * dv;
   }
   // a street that isn't there (a broken save): back to the main street
-  if (!world.streets[streetOf(r.x)]) r.x = world.plots[0].x;
+  if (!streetAt(world, streetOf(r.x))) r.x = world.plots[0].x;
   // (from the middle of the street's first parcel to the middle of its last)
   const { min, max } = rideRange(world, streetOf(r.x));
   r.x += r.vx * dt;

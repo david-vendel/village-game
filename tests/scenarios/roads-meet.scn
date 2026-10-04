@@ -1,6 +1,7 @@
 # Crossroads go every 27 cells, so the streets make a grid of squares. A road
 # laid on towards another road never runs onto it, nor ends at a crossroads:
-# it stops with a cell of grass between.
+# it stops with a cell of grass between. Only where it crosses a street at a
+# crossroads place of that street does it run across, and they meet there.
 new empty
 free on
 construction off
@@ -19,8 +20,8 @@ lay road 1
 build crossroads at s0:28
 ride #last
 turn up
-# nine parcels on would come within a cell of the road along row AB
+# nine parcels on cross the road along row AB at its crossroads place: the square closes
 ride end
-expect cannot build road at s3:134 another road is in the way
+lay road 1
 streets
 map AE22:-C64

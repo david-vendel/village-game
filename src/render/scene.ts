@@ -38,7 +38,6 @@ import { drawGroundPile } from './piles';
 import { drawBuildingLabel, drawCompletionEffect, drawDemolitionLabel, drawPlotPrompt, drawProgress } from './ui';
 import { type Ctx, GROUND_Y, ROAD_Y, VIEW_H } from './util';
 import { height3dOf, scene3d } from './scene3d';
-import { drawTurnedScene } from './turned';
 
 const BASE = GROUND_Y + 4;
 
@@ -73,12 +72,9 @@ export interface SceneView {
    * under it. Undefined on touch screens (no hover): the building at the rider shows its box.
    */
   hover?: { x: number; y: number } | null;
-  /** Turned around on the street, looking away from its buildings (turned.ts). */
-  turned?: boolean;
 }
 
 export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
-  if (sv.turned) return drawTurnedScene(ctx, world, sv);
   const { camX, width: viewW, labelScale: k } = sv;
   // the camera, in front of the street being looked at (plane.ts)
   const eye = eyeOf(world, camX, viewW);
@@ -290,7 +286,7 @@ function buildingUnder(world: World, camX: number, p: { x: number; y: number }):
 }
 
 /** Warm colour grade + soft vignette for a painterly finish. */
-export function drawGrade(ctx: Ctx, viewW: number, top: number, bottom: number): void {
+function drawGrade(ctx: Ctx, viewW: number, top: number, bottom: number): void {
   const h = Math.max(VIEW_H, bottom) - top;
   const cy = top + h * 0.5;
   const g = ctx.createRadialGradient(viewW * 0.4, cy - h * 0.05, h * 0.3, viewW * 0.5, cy, Math.max(viewW, h) * 0.85);

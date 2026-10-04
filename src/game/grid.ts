@@ -21,7 +21,7 @@
 import { BUILDINGS, type BuildingType } from './buildings';
 import { BLOCK, CELL_W, FIELD_ROW_J, LOT_ROW, QUARRIES, quarryLand, ROAD_GRID, ROAD_GRID_COL, ROAD_GRID_ROW } from './layout';
 import { parcelsLaid } from './roadwork';
-import { backOf, mapPoint, streetOf, streetRange, streetStart, type Street, type Vec } from './streets';
+import { backOf, mapPoint, streetOf, streetRange, streetStart, type Street, type Vec, streetAt } from './streets';
 import type { Building, World } from './world';
 
 export type LandUse =
@@ -127,7 +127,7 @@ export function siteX(type: BuildingType, x: number): number {
 
 /** Every cell of a block seen from a street. */
 export function cellsOf(world: World, f: Footprint): Cell[] {
-  const s = world.streets[f.street];
+  const s = streetAt(world, f.street);
   if (!s) return [];
   const out: Cell[] = [];
   for (let i = f.i0; i <= f.i1; i++) for (let j = f.j0; j <= f.j1; j++) out.push(streetCell(s, i, j));
@@ -143,7 +143,7 @@ export function roadCells(world: World, s: Street): Cell[] {
 
 /** Where a field of a farm lies on the grid. */
 export function fieldCell(world: World, farm: Building, p: { zone: 'back' | 'front'; row: number; dx: number }): Cell | null {
-  const s = world.streets[streetOf(farm.x)];
+  const s = streetAt(world, streetOf(farm.x));
   const j = FIELD_ROW_J[p.zone][p.row];
   return s && j !== undefined ? streetCell(s, alongCell(farm.x + p.dx), j) : null;
 }
@@ -223,7 +223,7 @@ export function landUse(world: World): Land {
  * through.
  */
 export function whyNotHere(world: World, type: BuildingType, x: number): string | null {
-  const s = world.streets[streetOf(x)];
+  const s = streetAt(world, streetOf(x));
   if (!s || s.gone) return 'There is no street here';
   const f = footprintAt(type, x);
   const { min, max } = streetRange(world, s.index);
@@ -317,7 +317,7 @@ const onLine = (n: number, at: number) => (((n - at) % ROAD_GRID) + ROAD_GRID) %
  * a row 27n for one running east–west.
  */
 export function onRoadGrid(world: World, x: number): boolean {
-  const s = world.streets[streetOf(x)];
+  const s = streetAt(world, streetOf(x));
   if (!s) return false;
   const c = cellOf(mapPoint(world, x));
   const across = backOf(s.dir);

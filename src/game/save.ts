@@ -28,8 +28,8 @@ import type { Worker, WorkerTask } from './worker';
 import { clearLand, type Tree } from './nature';
 import type { Pile } from './piles';
 import { cellKey, cellName, cellsOf, footprintOf } from './grid';
-import { lowestPlot, streetOf, type Street } from './streets';
-import { createWorld, goneStreet, layStreet, MERGES, PLOT_LAST, setStreetEnds, type Building, type Rider, type World } from './world';
+import { lowestPlot, streetOf, type Street, streetAt } from './streets';
+import { createWorld, goneStreet, joinRoads, layStreet, MERGES, PLOT_LAST, setStreetEnds, type Building, type Rider, type World } from './world';
 
 export const SAVE_VERSION = 38;
 
@@ -146,6 +146,9 @@ function build(saved: SavedWorld): World {
   for (const b of world.buildings) {
     if (b.type === 'intersection' && b.status !== 'constructing' && !b.junction && !world.streets.some((st) => st.from === b.id)) layBranch(b);
   }
+  // and where road laid on later crossed another street, they meet at a crossroads there
+  seat();
+  for (const s of world.streets) if (!s.gone) joinRoads(world, s);
   // a crossroads made where streets met, that no street met after all, is just a plot again
   world.buildings = world.buildings.filter((b) => !b.junction || world.junctions.some((j) => j.buildingId === b.id));
   for (const p of world.plots) p.buildingId = null;
@@ -158,7 +161,7 @@ function build(saved: SavedWorld): World {
   const ids = new Set<number>();
   const taken = new Set<string>();
   for (const b of world.buildings) {
-    const street = world.streets[streetOf(b.x)];
+    const street = streetAt(world, streetOf(b.x));
     if (!street || street.gone) throw new SaveError(`building ${b.id}: no street at ${b.x}`);
     if (ids.has(b.id)) throw new SaveError(`duplicate building id ${b.id}`);
     ids.add(b.id);
@@ -174,7 +177,7 @@ function build(saved: SavedWorld): World {
     plot.buildingId = b.id;
   }
   // what lies on the ground lies on a street that is there
-  world.piles = world.piles.filter((p) => p.amount > 1e-9 && !!world.streets[streetOf(p.x)] && !world.streets[streetOf(p.x)].gone);
+  world.piles = world.piles.filter((p) => p.amount > 1e-9 && !!streetAt(world, streetOf(p.x)) && !streetAt(world, streetOf(p.x)).gone);
   const maxId = Math.max(0, ...[...world.buildings, ...world.people, ...world.animals, ...world.trees, ...world.piles].map((x) => x.id));
   world.nextId = Math.max(world.nextId, maxId + 1);
   // a construction site record belongs to buildings under construction, or

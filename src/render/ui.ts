@@ -23,7 +23,7 @@ import { RESOURCES, type Amounts } from '../game/resources';
 import { herdRoom, isAdult, type AnimalKind, type Beast } from '../game/livestock';
 import { pastureCells, PASTURE_CELLS_PER_HORSE } from '../game/pasture';
 import { householdOf, isHome, lacking, residentsOf, roomIn } from '../game/households';
-import { backOf, mapPoint, streetOf, streetRange } from '../game/streets';
+import { backOf, mapPoint, streetOf, streetRange, streetAt } from '../game/streets';
 import { constructionStage, demolitionYield, getBuilding, streetFrom, whyNotBuild, whyNotDemolish, type Building, type BuildingOption, type ConstructionStage, type World } from '../game/world';
 import { BUILDING_ART } from './buildings';
 import { drawBuildingIcon, drawBuildingIconCached, drawBuildingIconGrey } from './sprites';
@@ -203,7 +203,7 @@ export interface HudLayout {
   /** Touch buttons to turn at a crossroads: onto the road away from the viewer, and towards them. */
   turnUp: Rect;
   turnDown: Rect;
-  /** Touch button to turn around on the street: above the ride arrows. */
+  /** Touch button to turn around on the street, to the land across the road: above the ride arrows. */
   turnAround: Rect;
   /** The village map, top right. */
   map: Rect;
@@ -242,16 +242,16 @@ export interface HudState {
   canTurn: boolean;
   /** The village is shown from above: no small map. */
   topView: boolean;
-  /** Turned around on the street, looking away from its buildings. */
-  turned: boolean;
+  /** Turned around on the street, looking across the road. */
+  across: boolean;
 }
 
 export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: HudState): void {
   const L = hudLayout(uiW, uiH);
   text(ctx, 'Village Crown', 16, 34, 24, GOLD, 'left', true);
   const lines = st.touch
-    ? ['Hold the arrows to ride, hammer to build, upgrade or destroy, ↻ to turn around', 'Pinch or tap - + to zoom']
-    : ['A D / ← → ride   S / ↓ / Space build, upgrade or destroy   W / S turn at a crossroads   R turn around   Tab view from above   G grid   C construction   M sound', 'In the menu: WASD choose, Space confirm, Esc / Q close   - + zoom'];
+    ? ['Hold the arrows to ride, hammer to build, upgrade or destroy, ↻ to turn around and build across the road', 'Pinch or tap - + to zoom']
+    : ['A D / ← → ride   S / ↓ / Space build, upgrade or destroy   W / S turn at a crossroads   R turn around (build across the road)   Tab view from above   G grid   C construction   M sound', 'In the menu: WASD choose, Space confirm, Esc / Q close   - + zoom'];
   const maxW = L.map.x - 28;
   let y = 54;
   for (const s of lines) {
@@ -296,7 +296,7 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
     arrowIcon(ctx, L.left, -1);
     button(ctx, L.right, st.rightHeld);
     arrowIcon(ctx, L.right, 1);
-    button(ctx, L.turnAround, st.turned);
+    button(ctx, L.turnAround, st.across);
     turnAroundIcon(ctx, L.turnAround);
     ctx.globalAlpha = st.canBuild ? 1 : 0.4;
     button(ctx, L.build, false, true);
@@ -374,7 +374,7 @@ function drawMiniMap(ctx: Ctx, world: World, r: Rect): void {
     .map((b) => {
       const x = b.x;
       const p = mapPoint(world, x);
-      const back = backOf(world.streets[streetOf(x)]?.dir ?? { x: 1, y: 0 });
+      const back = backOf(streetAt(world, streetOf(x))?.dir ?? { x: 1, y: 0 });
       return { b, x: sx(p.x + back.x * MAP_LOT), y: sy(p.y + back.y * MAP_LOT) };
     })
     .filter((l) => l.x > r.x - 20 && l.x < r.x + r.w + 20 && l.y > r.y - 20 && l.y < r.y + r.h + 30)
@@ -387,7 +387,7 @@ function drawMiniMap(ctx: Ctx, world: World, r: Rect): void {
   ctx.globalAlpha = 1;
 
   // the rider: an arrow the way they are heading
-  const street = world.streets[streetOf(world.rider.x)] ?? world.streets[0];
+  const street = streetAt(world, streetOf(world.rider.x)) ?? world.streets[0];
   const hx = street.dir.x * world.rider.facing;
   const hy = -street.dir.y * world.rider.facing;
   const px = sx(me.x);
@@ -407,10 +407,9 @@ function drawMiniMap(ctx: Ctx, world: World, r: Rect): void {
 }
 
 /** Just after turning at a crossroads the view comes up out of a short fade. */
-export function drawTurnFade(ctx: Ctx, world: World, uiW: number, uiH: number, turnedAround?: number): void {
-  // a turn at a crossroads, or turning around on the street, whichever was last
-  const t = Math.max(world.rider.turnedAt ?? -Infinity, turnedAround ?? -Infinity);
-  if (t === -Infinity) return;
+export function drawTurnFade(ctx: Ctx, world: World, uiW: number, uiH: number): void {
+  const t = world.rider.turnedAt;
+  if (t === undefined) return;
   const age = world.time - t;
   if (age < 0 || age > 0.45) return;
   ctx.fillStyle = `rgba(20,14,8,${(1 - age / 0.45) * 0.9})`;

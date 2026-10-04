@@ -30,7 +30,7 @@ import { behindRoad, CELL_W, CHOP_SPOT, QUARRIES, QUARRY_SPOTS, QUARRY_Y, STAND_
 import { dropOnGround, GROUND_PILE_Y } from './piles';
 import { room, type Load } from './resources';
 import { cellKey, landUse, type LandUse } from './grid';
-import { groundPoint, streetDist, streetOf, streetPoint, streetRange, type Vec } from './streets';
+import { groundPoint, streetDist, streetOf, streetPoint, streetRange, type Vec, streetAt } from './streets';
 import type { JobTicket, Workplace } from './worker';
 import type { Building, World } from './world';
 
@@ -279,7 +279,7 @@ const WOODS = { behind: [140, 900], front: [-320, -200] } as const;
 function sprout(world: World, x: number, d: number, grown: boolean, rand: () => number): boolean {
   const s = streetOf(x);
   const { min, max } = streetRange(world, s);
-  if (x < min || x > max || !world.streets[s] || world.streets[s].gone) return false;
+  if (x < min || x > max || !streetAt(world, s) || streetAt(world, s).gone) return false;
   if (d < WOODS.front[0]) return false;
   const p = streetPoint(world, x, d);
   if (!treeRoom(world, p)) return false;
@@ -393,7 +393,7 @@ export function gatherWorkplace(world: World, b: Building & { type: GatherHut },
       const tx = Math.round(x + (rand() * 2 - 1) * (near ? PLANT_NEAR.along : WOOD_REACH));
       const band = near ? (rand() < 0.75 ? PLANT_NEAR.behind : WOODS.front) : rand() < 0.75 ? WOODS.behind : WOODS.front;
       const d = Math.round(band[0] + rand() * (band[1] - band[0]));
-      const street = world.streets[streetOf(tx)];
+      const street = streetAt(world, streetOf(tx));
       const { min, max } = streetRange(world, streetOf(tx));
       if (!street || street.gone || tx < min || tx > max || walk(x, tx, d) > WOOD_REACH) continue;
       const p = streetPoint(world, tx, d);

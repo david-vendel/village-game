@@ -28,8 +28,6 @@ export interface View {
   /** Where the camera is along the way it looks across (map px), and which way it looks (quarter turns): the backdrop pans with both. */
   along: number;
   turn: number;
-  /** Turned around on the street (render/turned.ts): what lies along it runs the other way across the screen. */
-  turned?: boolean;
   width: number;
   /** World y at the top of the screen; below 0 when zoomed out. */
   top: number;
@@ -49,17 +47,7 @@ export function drawBackground(ctx: Ctx, v: View): void {
   drawBirds(ctx, v);
   drawPlane(ctx, v);
   ctx.restore();
-  alongStreet(ctx, v, () => drawStreetGround(ctx, v));
-}
-
-/** Draw something laid along the street being looked at, mirrored when the view is turned around. */
-export function alongStreet(ctx: Ctx, v: View, draw: () => void): void {
-  if (!v.turned) return draw();
-  ctx.save();
-  ctx.translate(v.width, 0);
-  ctx.scale(-1, 1);
-  draw();
-  ctx.restore();
+  drawStreetGround(ctx, v);
 }
 
 /** Screen px a quarter turn of the view pans the horizon by. */

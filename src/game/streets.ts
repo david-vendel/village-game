@@ -26,6 +26,15 @@
 // Each street is seen from its right-hand side, so the lots behind it, where
 // the buildings stand, lie to its left (`backOf`), and a new street runs off
 // into what lay behind the old one.
+//
+// Across the road, the land in front of a street is built on too, seen from
+// the other side: every street i has a twin, street TWIN + i (`twinOf`), the
+// same road running the other way, so its lots are the land in front of street
+// i. A twin isn't in World.streets: `streetAt` makes it from its street (its
+// ends follow the street's), and it has no road, crossroads or plots of its
+// own (`roadOf`: whose road it is). Riding a twin is the street seen turned
+// around (world.ts turnAround); a building across the road is a building on
+// the twin, and stands, works and is drawn like any other.
 
 import { behindRoad, CELL_W, ROAD_HALF, FIRST_PLOT_X, PLOT_SPACING, STREET_BAND_HALF, STREET_LENGTH } from './layout';
 import type { World } from './world';
@@ -41,6 +50,17 @@ export const MAIN_PLOTS = Math.ceil((STREET_LENGTH - 200 - FIRST_PLOT_X) / PLOT_
  */
 export const PLOT_FIRST = -60;
 export const PLOT_LAST = 120;
+/** Street TWIN + i is street i's twin, seen from across its road; there are never this many streets. */
+export const TWIN = 500;
+/** World x where the twins' stretches start, and the distance between them (the main street's twin runs longest: PLOT_LAST - PLOT_FIRST plots). */
+const TWIN_X = TWIN * STREET_STRIDE;
+const TWIN_STRIDE = 2 * STREET_STRIDE;
+/**
+ * A twin's plot k is its street's plot TWIN_PLOT − k (the same place on the road), and its x along
+ * it TWIN_RUN − the street's: so its cells and blocks of three lie on the street's own.
+ */
+const TWIN_PLOT = PLOT_LAST;
+const TWIN_RUN = 2 * FIRST_PLOT_X + TWIN_PLOT * PLOT_SPACING;
 /** Places for plots each street has in World.plots (plot k of street i is plots[i × PLOTS_PER_STREET + k − PLOT_FIRST]). */
 export const PLOTS_PER_STREET = PLOT_LAST - PLOT_FIRST + 1;
 /** The first plot street i can ever reach. */
@@ -85,13 +105,53 @@ export function mainStreet(): Street {
 }
 
 /** World x where street i starts. */
-export const streetStart = (i: number) => i * STREET_STRIDE;
+export const streetStart = (i: number) => (i >= TWIN ? TWIN_X + (i - TWIN) * TWIN_STRIDE : i * STREET_STRIDE);
+
+/** Whether street i is a twin: a street seen from across its road. */
+export const isTwin = (i: number) => i >= TWIN;
+/** The street whose road street i runs along: itself, or a twin's street. */
+export const roadOf = (i: number) => (i >= TWIN ? i - TWIN : i);
+/** The street across the road from street i: its twin, or a twin's street. */
+export const twinOf = (i: number) => (i >= TWIN ? i - TWIN : i + TWIN);
+
+/** The same place on the road as world x, seen from across it (on the twin street; from a twin, on its street). */
+export function acrossX(x: number): number {
+  const i = streetOf(x);
+  return streetStart(twinOf(i)) + TWIN_RUN - (x - streetStart(i));
+}
+
+/** World x as seen from the street whose road it is on (a twin's x on its street). */
+export const onRoadX = (x: number) => (isTwin(streetOf(x)) ? acrossX(x) : x);
+
+const twins = new WeakMap<Street, Street>();
+
+/** Street i: one of World.streets, or a twin made from its street. */
+export function streetAt(world: World, i: number): Street {
+  if (i < TWIN) return world.streets[i];
+  const s = world.streets[i - TWIN];
+  if (!s) return s;
+  let t = twins.get(s);
+  if (!t || t.lo !== TWIN_PLOT - s.hi || t.hi !== TWIN_PLOT - s.lo || !!t.gone !== !!s.gone) {
+    t = {
+      index: i,
+      from: s.from,
+      origin: { x: s.origin.x + s.dir.x * TWIN_RUN, y: s.origin.y + s.dir.y * TWIN_RUN },
+      dir: { x: -s.dir.x, y: -s.dir.y },
+      lo: TWIN_PLOT - s.hi,
+      hi: TWIN_PLOT - s.lo,
+      ...(s.gone ? { gone: true as const } : {}),
+    };
+    twins.set(s, t);
+  }
+  return t;
+}
 
 /** World x of plot k (lowestPlot(i)..PLOT_LAST) of street i. */
 export const plotX = (i: number, k: number) => streetStart(i) + FIRST_PLOT_X + k * PLOT_SPACING;
 
 /** The street world x is on. */
 export function streetOf(x: number): number {
+  if (x >= TWIN_X) return TWIN + Math.floor((x - TWIN_X) / TWIN_STRIDE);
   return Math.max(0, Math.floor(x / STREET_STRIDE));
 }
 
@@ -106,7 +166,7 @@ function onMap(s: Street, x: number): Vec {
 
 /** Where world x lies on the village map. */
 export function mapPoint(world: World, x: number): Vec {
-  return onMap(world.streets[streetOf(x)] ?? world.streets[0], x);
+  return onMap(streetAt(world, streetOf(x)) ?? world.streets[0], x);
 }
 
 /**
@@ -114,7 +174,7 @@ export function mapPoint(world: World, x: number): Vec {
  * across it (behind the middle of the road for y above STREET_LINE_Y, in front of it below).
  */
 export function groundPoint(world: World, x: number, y: number): Vec {
-  const s = world.streets[streetOf(x)] ?? world.streets[0];
+  const s = streetAt(world, streetOf(x)) ?? world.streets[0];
   const p = onMap(s, x);
   const b = backOf(s.dir);
   const d = behindRoad(y);
@@ -123,7 +183,7 @@ export function groundPoint(world: World, x: number, y: number): Vec {
 
 /** Map point d map px behind the middle of the road at world x (in front for negative d). */
 export function streetPoint(world: World, x: number, d: number): Vec {
-  const s = world.streets[streetOf(x)] ?? world.streets[0];
+  const s = streetAt(world, streetOf(x)) ?? world.streets[0];
   const p = onMap(s, x);
   const b = backOf(s.dir);
   return { x: p.x + b.x * d, y: p.y + b.y * d };
@@ -131,7 +191,7 @@ export function streetPoint(world: World, x: number, d: number): Vec {
 
 /** Map point p seen from street i: the world x along it, and how far behind its road (d). */
 export function fromStreet(world: World, i: number, p: Vec): { x: number; d: number } {
-  const s = world.streets[i];
+  const s = streetAt(world, i);
   const dx = p.x - s.origin.x;
   const dy = p.y - s.origin.y;
   const b = backOf(s.dir);
@@ -146,13 +206,13 @@ export const plotPoint = (s: Street, k: number) => onMap(s, plotX(s.index, k));
 
 /** The stretch of street i that is there (world x): its plots, and a little road past each end. */
 export function streetRange(world: World, i: number): { min: number; max: number } {
-  const s = world.streets[i] ?? world.streets[0];
+  const s = streetAt(world, i) ?? world.streets[0];
   return { min: plotX(s.index, s.lo) - STREET_END, max: plotX(s.index, s.hi) + STREET_END };
 }
 
 /** Where the rider can ride on street i (world x): from the middle of its first parcel to the middle of its last. */
 export function rideRange(world: World, i: number): { min: number; max: number } {
-  const s = world.streets[i] ?? world.streets[0];
+  const s = streetAt(world, i) ?? world.streets[0];
   return { min: plotX(s.index, s.lo), max: plotX(s.index, s.hi) };
 }
 
@@ -162,7 +222,7 @@ export function rideRange(world: World, i: number): { min: number; max: number }
  * (world.ts layStreet lays out the rest).
  */
 export function newStreet(world: World, from: number, at: number): Street {
-  const parent = world.streets[streetOf(at)];
+  const parent = streetAt(world, streetOf(at));
   const index = world.streets.length;
   const dir = backOf(parent.dir);
   const p = onMap(parent, at);
@@ -179,11 +239,11 @@ const near = (a: number, b: number) => Math.abs(a - b) < 1e-6;
  * its way past its last plot, where there is no plot to meet at (`blocked`:
  * it must stop short of that too).
  */
-export function streetsAt(world: World, dir: Vec, p: Vec): { along: boolean; crossing: { street: number; k: number } | null; blocked: boolean } {
+export function streetsAt(world: World, dir: Vec, p: Vec, except = -1): { along: boolean; crossing: { street: number; k: number } | null; blocked: boolean } {
   let crossing: { street: number; k: number } | null = null;
   let blocked = false;
   for (const s of world.streets) {
-    if (s.gone) continue;
+    if (s.gone || s.index === except) continue;
     // how far along s the point is, and whether it is on its line, where its road runs
     const t = (p.x - s.origin.x) * s.dir.x + (p.y - s.origin.y) * s.dir.y;
     const off = (p.x - s.origin.x) * -s.dir.y + (p.y - s.origin.y) * s.dir.x;
@@ -286,6 +346,7 @@ function bestTurn(world: World, from: number, to: number): { end: number; d: num
  * the corner leads to (turnTo).
  */
 export function route(world: World, from: number, to: number): { x: number; turnTo?: number } {
+  if (isTwin(streetOf(from)) || isTwin(streetOf(to))) return route(world, onRoadX(from), onRoadX(to));
   if (streetOf(from) === streetOf(to)) return { x: to };
   const turn = bestTurn(world, from, to);
   if (!turn) return { x: to };
@@ -295,6 +356,9 @@ export function route(world: World, from: number, to: number): { x: number; turn
 
 /** How far it is to walk from world x `from` to `to`, along the streets. */
 export function streetDist(world: World, from: number, to: number): number {
+  // across the road is as far as the same place on it
+  from = onRoadX(from);
+  to = onRoadX(to);
   if (streetOf(from) === streetOf(to)) return Math.abs(to - from);
   return bestTurn(world, from, to)?.d ?? Math.abs(to - from);
 }
@@ -305,8 +369,8 @@ export function streetDist(world: World, from: number, to: number): number {
  * viewer), `down` towards the viewer.
  */
 export function turnFacing(world: World, from: number, to: number, way: 'up' | 'down'): 1 | -1 {
-  const b = backOf(world.streets[from].dir);
-  const d = world.streets[to].dir;
+  const b = backOf(streetAt(world, from).dir);
+  const d = streetAt(world, to).dir;
   const s = d.x * b.x + d.y * b.y >= 0 ? 1 : -1;
   return way === 'up' ? s : (-s as 1 | -1);
 }

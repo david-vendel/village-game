@@ -1,0 +1,19 @@
+# Turned around on the street, the rider looks across the road at the land in
+# front of it, and builds there: on the street's twin (s0'), which runs the
+# other way along the same road, so its lots are the land in front of s0.
+new village
+stock wood=40 stone=40 planks=20
+ride s0:100
+turn around
+expect rider s0'
+build house here
+run until built
+list
+map B90:-H125
+# roads and crossroads are laid from the street's own side
+expect cannot build crossroads at s0':170 turn around
+# and back
+turn around
+expect rider s0
+reload
+expect at s0':292 house done

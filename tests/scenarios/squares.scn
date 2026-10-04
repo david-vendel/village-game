@@ -1,0 +1,28 @@
+# Streets close into a square of the road grid: road laid on towards a street
+# crossing its way runs across it at its crossroads place, and the two meet
+# there at a crossroads of their own.
+new empty
+free on
+construction off
+build crossroads at s0:55
+build crossroads at s0:82
+ride s1:135
+lay road 3
+ride s2:135
+lay road 3
+build crossroads at s1:157
+expect streets 4
+# the other corner of the square is on the line s3 runs along: s3 is laid on to it instead
+expect cannot build crossroads at s2:157 lay its road on to here
+ride s3:131
+lay road 1 start
+streets
+expect streets 4
+map AE40:-C90
+# the corner is a crossroads: the rider turns there onto s2
+ride s3:104
+turn down
+expect rider s2
+# and stays one in a saved game
+reload
+streets

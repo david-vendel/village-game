@@ -1,0 +1,53 @@
+# Turned around on the street, the rider looks across the road at the land in
+# front of it, and builds there: on the street's twin (s0'), which runs the
+# other way along the same road, so its lots are the land in front of s0.
+> new village
+> stock wood=40 stone=40 planks=20
+> ride s0:100
+  rider: s0:100 facing +
+> turn around
+  rider: s0':294 facing -
+> expect rider s0'
+  ok: the rider is on s0'
+> build house here
+  #76 house at s0':292-294, constructing
+> run until built
+  all built after 20.1s
+> list
+  #1  house×2  s0:37-42  done  [water=2 firewood=6]  home: 6/6 content 100%
+  #3  tavern  s0:43-51  done  [firewood=2]
+  #4  well  s0:52-54  done
+  #5  warehouse×2  s0:64-69  done  [wood=40 stone=39 planks=17 bread=8]  staff: serf, serf, serf, serf, serf
+  #7  house  s0:76-78  done  [firewood=3]  home: 3/3 content 100%
+  #8  farm  s0:94-99  done  [firewood=2]  fields=24 (grass 20, fallow 1, growing 3, ripe 0)  staff: farmer
+  #9  chapel  s0:124-129  done  home: 1/4 content 100%
+  #10  house  s0:175-177  done  [firewood=3]  home: 2/3 content 100%
+  #76  house  s0':292-294  done
+> map B90:-H125
+      90        100       110       120
+       |  |  |  |  |  |  |  |  |  |  |  | 
+    B ====================================
+    A ==========@=========================
+   -A ====================================
+   -B ....,,,,,,HHH.......................
+   -C ..........HHH.......................
+   -D ....................................
+   -E ....................................
+   -F ....................................
+   -G ....................................
+   -H ....................................
+  
+    W warehouse  H house  F farm  C chapel  T tavern  U well
+    = | road  + crossing  Y kept for a crossroads  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
+# roads and crossroads are laid from the street's own side
+> expect cannot build crossroads at s0':170 turn around
+  ok: can't build intersection at s0':170: Turn around to build that
+# and back
+> turn around
+  rider: s0:100 facing +
+> expect rider s0
+  ok: the rider is on s0
+> reload
+  saved and loaded
+> expect at s0':292 house done
+  ok: #76 house at s0':292-294, done

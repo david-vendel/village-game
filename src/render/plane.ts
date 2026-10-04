@@ -23,7 +23,7 @@ import { merchantHere } from '../game/market';
 import { HAS_FIRE, upgradesDone } from '../game/buildings';
 import { hearthOf } from '../game/hearth';
 import { laidOut, onSite, upgrading } from '../game/site';
-import { backOf, crossings, groundPoint, mapPoint, SIDE_ROAD_HALF, streetOf, type Street, type Vec } from '../game/streets';
+import { backOf, crossings, groundPoint, mapPoint, roadOf, SIDE_ROAD_HALF, streetOf, type Street, type Vec, streetAt, twinOf } from '../game/streets';
 import { getBuilding, type Building, type World } from '../game/world';
 import { drawCrossroadsSign, type DrawArgs } from './buildings';
 import type { ViewId } from './manifest';
@@ -44,8 +44,6 @@ export const distAt = (y: number) => (EYE_DIST * SPAN) / (y - HORIZON_Y);
 const ROAD_DIST = distAt(STREET_LINE_Y);
 /** Nothing nearer than this is drawn (it is below the bottom of the screen anyway). */
 const NEAR_DRAWN = 150;
-/** Standing things nearer than this aren't drawn: turned around, the road's near edge (this street's lots are behind the camera). */
-const nearStanding = (eye: Eye) => (eye.turned ? ROAD_DIST - ROAD_HALF : NEAR_DRAWN);
 /** The same cut-off in the game's distances (z): the drawing camera may stand further back (ground.ts). */
 const nearZ = () => NEAR_DRAWN - (cameraDistance() - EYE_DIST);
 /** Crops on other streets' fields are drawn while they come out at least this big; smaller, the field's colour stands for them. */
@@ -59,14 +57,9 @@ export const TREE_LINE_DIST = distAt(TREE_Y);
 /** …and further than this behind its buildings. */
 export const BUILDING_LINE_DIST = distAt(BASE_Y - 4);
 
-/**
- * The camera: on the map in front of the middle of the view, looking along `back` of the street.
- * Turned around (`turned`), it stands as far behind the street and looks the other way, at the land
- * in front of it: this street's own lots are then behind it, and the street is projected like any other.
- */
+/** The camera: on the map in front of the middle of the view, looking along `back` of the street. */
 export interface Eye {
   street: number;
-  turned: boolean;
   /** Map point on the road line at the middle of the view. */
   at: Vec;
   dir: Vec;
@@ -76,16 +69,11 @@ export interface Eye {
   viewW: number;
 }
 
-export function eyeOf(world: World, camX: number, viewW: number, turned = false): Eye {
+export function eyeOf(world: World, camX: number, viewW: number): Eye {
   const x = camX + viewW / 2;
-  const s = world.streets[streetOf(x)] ?? world.streets[0];
-  const back = backOf(s.dir);
-  const k = turned ? -1 : 1;
-  return { street: s.index, turned, at: mapPoint(world, x), dir: { x: s.dir.x * k, y: s.dir.y * k }, back: { x: back.x * k, y: back.y * k }, vpX: viewW / 2, viewW };
+  const s = streetAt(world, streetOf(x)) ?? world.streets[0];
+  return { street: s.index, at: mapPoint(world, x), dir: s.dir, back: backOf(s.dir), vpX: viewW / 2, viewW };
 }
-
-/** Whether something at world x is drawn by this projection: everything not on the street being looked at, and all of it when turned around. */
-const projected = (eye: Eye, x: number) => eye.turned || streetOf(x) !== eye.street;
 
 const ground = groundPoint;
 
@@ -136,7 +124,15 @@ function groundShape(ctx: Ctx, eye: Eye, pts: Vec[], fill: string): void {
   ctx.fill();
 }
 
-const others = (world: World, eye: Eye) => world.streets.filter((s) => s.index !== eye.street && !s.gone);
+/** The other streets' roads: not the one being looked along (whichever side of it the camera is on). */
+const others = (world: World, eye: Eye) => world.streets.filter((s) => s.index !== roadOf(eye.street) && !s.gone);
+
+/**
+ * Whether something standing on street x's lots is between the camera and the road: on the lots
+ * across the road from the street being looked at (its twin, streets.ts; or, turned around, the
+ * street's own), seen from right behind. It isn't drawn: it would stand in front of everything.
+ */
+const behindCamera = (eye: Eye, x: number, z: number) => streetOf(x) === twinOf(eye.street) && z < ROAD_DIST - ROAD_HALF;
 
 /** The roads of the other streets, and the fields of the farms along them, on the ground. */
 export function drawOtherGround(ctx: Ctx, world: World, eye: Eye): void {
@@ -153,7 +149,7 @@ export function drawOtherGround(ctx: Ctx, world: World, eye: Eye): void {
   }
   for (const b of world.buildings) {
     const x = b.x;
-    if (!b.farm || !projected(eye, x)) continue;
+    if (!b.farm || streetOf(x) === eye.street) continue;
     for (const p of b.farm.plots) {
       if (!p.tilled) continue;
       const row = FIELD_ROWS[p.zone][p.row];
@@ -202,9 +198,9 @@ export function elsewhere3d(world: World, eye: Eye): Elsewhere3d[] {
   for (const b of world.buildings) {
     if (streetOf(b.x) === eye.street || !in3d(b)) continue;
     const { u, z } = toEye(eye, ground(world, b.x, BASE_Y));
-    if (z < nearStanding(eye) || z > farZ()) continue;
+    if (z < NEAR_DRAWN || z > farZ() || behindCamera(eye, b.x, z)) continue;
     // its front faces its road: away from its lots
-    const back = backOf(world.streets[streetOf(b.x)].dir);
+    const back = backOf(streetAt(world, streetOf(b.x)).dir);
     const fu = -(back.x * eye.dir.x + back.y * eye.dir.y);
     const fz = -(back.x * eye.back.x + back.y * eye.back.y);
     out.push({ b, u, z, rot: Math.atan2(fu, -fz) });
@@ -214,11 +210,27 @@ export function elsewhere3d(world: World, eye: Eye): Elsewhere3d[] {
 
 export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
   const out: Standing[] = [];
-  const add = (p: Vec, width: number, draw: () => void) => {
-    const s = standingAt(ctx, eye, p, width, draw);
-    if (s) out.push(s);
+  /** A picture standing at map point p; `x`: the world x of what stands on its lots (a building, a tree), not people. */
+  const add = (p: Vec, width: number, draw: () => void, x?: number) => {
+    const { u, z } = toEye(eye, p);
+    // standing things keep the game camera's cut-off: what stood behind it shouldn't loom up in front
+    if (z < NEAR_DRAWN || z > farZ() || (x !== undefined && behindCamera(eye, x, z))) return;
+    const q = project(eye, u, z);
+    const half = (width / 2 + 40) * q.s;
+    if (q.x + half < 0 || q.x - half > eye.viewW) return;
+    out.push({
+      z,
+      y: q.y,
+      draw: () => {
+        ctx.save();
+        ctx.translate(q.x, q.y);
+        ctx.scale(q.s, q.s);
+        draw();
+        ctx.restore();
+      },
+    });
   };
-  const elsewhere = (x: number) => projected(eye, x);
+  const elsewhere = (x: number) => streetOf(x) !== eye.street;
   /** Which way to mirror something facing +x along street s, as seen from the camera. */
   const facingOf = (s: Street | undefined) => (s && s.dir.x * eye.dir.x + s.dir.y * eye.dir.y < -0.5 ? -1 : 1);
 
@@ -226,7 +238,7 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
   // seen end-on, so it is moved over beside the road rather than standing across it
   // (seen that way it shows its roadside view: L on the left of the road, its front facing right)
   const lot = (b: Building, x: number): { at: Vec; view: ViewId } => {
-    const s = world.streets[streetOf(x)];
+    const s = streetAt(world, streetOf(x));
     const back = backOf(s.dir);
     const across = Math.abs(back.x * eye.dir.x + back.y * eye.dir.y) > 0.5;
     if (!across) return { at: ground(world, x, BASE_Y), view: 'street' };
@@ -265,7 +277,7 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
       else if (upgrading(b)) drawUpgrade(ctx, b.type, a, b.progress);
       else if (b.status === 'done') drawBuilding(ctx, b.type, a, view);
       else drawConstruction(ctx, b.type, a, b.progress);
-    });
+    }, x);
   }
   // the crops on other streets' fields, row by row, among everything else by distance
   for (const b of world.buildings) {
@@ -305,17 +317,17 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
   for (const c of crossings(world)) {
     const b = getBuilding(world, c.buildingId);
     if (!b || !elsewhere(c.x) || b.x === c.x) continue;
-    add(ground(world, c.x, BASE_Y), 80, () => drawBuilding(ctx, 'intersection', { x: 0, base: 0, time: world.time, seed: b.id * 97 }));
+    add(ground(world, c.x, BASE_Y), 80, () => drawBuilding(ctx, 'intersection', { x: 0, base: 0, time: world.time, seed: b.id * 97 }), c.x);
   }
   // and a signpost where a crossroads can be built
-  for (const x of crossroadsPlaces(world)) if (elsewhere(x)) add(ground(world, x, BASE_Y), 80, () => drawCrossroadsSign(ctx, 0, 0, world.time));
+  for (const x of crossroadsPlaces(world)) if (elsewhere(x)) add(ground(world, x, BASE_Y), 80, () => drawCrossroadsSign(ctx, 0, 0, world.time), x);
   // every tree, wherever it stands (this street's too: they stand at all depths)
   const felling = beingFelled(world);
-  for (const t of world.trees) add(ground(world, t.x, t.y), 60, () => drawTreeAt(ctx, world, t, 0, 0, 1, felling));
+  for (const t of world.trees) add(ground(world, t.x, t.y), 60, () => drawTreeAt(ctx, world, t, 0, 0, 1, felling), t.x);
   // a quarry's crag rises from the front of its land as seen from the main street, over the middle of it from elsewhere
   QUARRIES.forEach((q, i) => {
     const r = quarryLand(q);
-    add({ x: q.x, y: eye.street === 0 && !eye.turned ? r.y0 : (r.y0 + r.y1) / 2 }, 320, () => drawQuarry(ctx, 0, 0, 1, i));
+    add({ x: q.x, y: eye.street === 0 ? r.y0 : (r.y0 + r.y1) / 2 }, 320, () => drawQuarry(ctx, 0, 0, 1, i), q.x);
   });
   // people at work, and those strolling, wherever they are
   for (const p of world.people) {
@@ -324,13 +336,13 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
       const w = p.job.worker;
       const x = b.x + w.dx;
       if (!elsewhere(x)) continue;
-      const f = facingOf(world.streets[streetOf(x)]);
+      const f = facingOf(streetAt(world, streetOf(x)));
       add(ground(world, x, w.y), 20, () => {
         ctx.scale(f / farmerScale(w.y), 1 / farmerScale(w.y));
         drawWorker(ctx, w, figureOf(p), 0, 0, world.time);
       });
     } else if (!p.job && outdoors(p) && elsewhere(p.stroll.x)) {
-      const f = facingOf(world.streets[streetOf(p.stroll.x)]);
+      const f = facingOf(streetAt(world, streetOf(p.stroll.x)));
       add(ground(world, p.stroll.x, p.stroll.y), 20, () => {
         ctx.scale(f, 1);
         drawVillager(ctx, walker(p), 0, 0, world.time);
@@ -342,27 +354,6 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
     add(ground(world, a.stroll.x, a.stroll.y), 20, () => drawVillager(ctx, walker(a), 0, 0, world.time));
   }
   return out.sort((a, b) => b.z - a.z);
-}
-
-/** A picture standing at map point p, scaled by its distance, or null where it isn't seen: off screen, too near or too far. */
-export function standingAt(ctx: Ctx, eye: Eye, p: Vec, width: number, draw: () => void): Standing | null {
-  const { u, z } = toEye(eye, p);
-  // standing things keep the game camera's cut-off: what stood behind it shouldn't loom up in front
-  if (z < nearStanding(eye) || z > farZ()) return null;
-  const q = project(eye, u, z);
-  const half = (width / 2 + 40) * q.s;
-  if (q.x + half < 0 || q.x - half > eye.viewW) return null;
-  return {
-    z,
-    y: q.y,
-    draw: () => {
-      ctx.save();
-      ctx.translate(q.x, q.y);
-      ctx.scale(q.s, q.s);
-      draw();
-      ctx.restore();
-    },
-  };
 }
 
 /** How hard a building's fire burns now (its hearth or furnace, whichever is more; 0: out). */

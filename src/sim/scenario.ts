@@ -16,6 +16,8 @@
 //   ride end | ride start              to the far (or near) end of the rider's street
 //   lay road 8 [start]                 ride to the street's end and build a road piece there, 8 times (built before the next)
 //   turn up|down                       turn at the crossroads the rider is at
+//   turn around                        look at the street from across the road, where its front land is built on (or back)
+//   reload                             save the game and load it again, and play on with what was loaded
 //   run 30s | run 2d | run until built [max 3d]
 //   map [ids] [trees] [B30:-C60]       the land from above; ids: which building is which
 //   menu                               what the menu Space opens at the rider offers
@@ -37,7 +39,7 @@ import { buildShortfall, warehouses } from '../game/economy';
 import { footprintOf } from '../game/grid';
 import { CELL_W } from '../game/layout';
 import { RESOURCES } from '../game/resources';
-import { rideRange, streetOf, streetRange, streetStart } from '../game/streets';
+import { rideRange, streetOf, streetRange, streetStart, streetAt, twinOf } from '../game/streets';
 import {
   buildingAt,
   confirmMenu,
@@ -49,6 +51,7 @@ import {
   placeBuilding,
   selectMenu,
   setConstructionEnabled,
+  turnAround,
   turnAtCrossroads,
   update,
   upgradeBuilding,
@@ -56,7 +59,8 @@ import {
   type Building,
   type World,
 } from '../game/world';
-import { checkInvariants, listBuildings, listStreets, renderMap, summary, where, type MapOptions } from './textmap';
+import { loadWorld, saveWorld } from '../game/save';
+import { checkInvariants, listBuildings, listStreets, renderMap, streetName, summary, where, type MapOptions } from './textmap';
 
 export interface ScenarioResult {
   /** Everything printed, command by command. */
@@ -98,13 +102,14 @@ export function runScenario(script: string, opts: ScenarioOptions = {}): Scenari
     return t;
   };
 
-  /** World x of a place: s<street>:<cell> (the middle of that cell), #id, or x=<world x>. */
+  /** World x of a place: s<street>:<cell> (the middle of that cell; s<street>':<cell> across its road), #id, or x=<world x>. */
   const xOf = (word: string | undefined): number => {
-    const m = /^s(\d+):(-?\d+)$/.exec(word ?? '');
+    const m = /^s(\d+)('?):(-?\d+)$/.exec(word ?? '');
     if (m) {
-      const s = world.streets[+m[1]];
+      const i = m[2] ? twinOf(+m[1]) : +m[1];
+      const s = streetAt(world, i);
       if (!s || s.gone) fail(`there is no street s${m[1]}`);
-      return streetStart(+m[1]) + (+m[2] + 0.5) * CELL_W;
+      return streetStart(i) + (+m[3] + 0.5) * CELL_W;
     }
     if (word === '#last') return (last && getBuilding(world, last.id)?.x) ?? fail('nothing built is standing');
     const id = /^#(\d+)$/.exec(word ?? '');
@@ -226,6 +231,13 @@ export function runScenario(script: string, opts: ScenarioOptions = {}): Scenari
           seenBroken = new Set();
           break;
         }
+        case 'reload': {
+          const r = loadWorld(JSON.parse(JSON.stringify(saveWorld(world))));
+          if (!r.ok) fail(`the save was refused: ${r.error}`);
+          else world = r.world;
+          say('saved and loaded');
+          break;
+        }
         case 'construction':
           setConstructionEnabled(world, w[1] !== 'off');
           break;
@@ -294,11 +306,16 @@ export function runScenario(script: string, opts: ScenarioOptions = {}): Scenari
           const range = streetRange(world, s);
           const ride = rideRange(world, s);
           world.rider.x = w[3] === 'start' ? ride.min : ride.max;
-          say(`s${s} now runs cells ${Math.round((range.min - streetStart(s)) / CELL_W)}..${Math.round((range.max - streetStart(s)) / CELL_W) - 1}`);
+          say(`${streetName(s)} now runs cells ${Math.round((range.min - streetStart(s)) / CELL_W)}..${Math.round((range.max - streetStart(s)) / CELL_W) - 1}`);
           break;
         }
         case 'turn': {
-          if (w[1] !== 'up' && w[1] !== 'down') fail('turn up | turn down');
+          if (w[1] === 'around') {
+            if (!turnAround(world)) fail('the menu is open');
+            say(summary(world).split('\n')[3]);
+            break;
+          }
+          if (w[1] !== 'up' && w[1] !== 'down') fail('turn up | turn down | turn around');
           if (!turnAtCrossroads(world, w[1] as 'up' | 'down')) fail('the rider is not at a finished crossroads');
           say(summary(world).split('\n')[3]);
           break;
@@ -411,8 +428,8 @@ export function runScenario(script: string, opts: ScenarioOptions = {}): Scenari
       }
       case 'rider': {
         const s = streetOf(world.rider.x);
-        if (w[1] !== `s${s}`) fail(`the rider is on s${s}, expected ${w[1]}`);
-        say(`ok: the rider is on s${s}`);
+        if (w[1] !== streetName(s)) fail(`the rider is on ${streetName(s)}, expected ${w[1]}`);
+        say(`ok: the rider is on ${streetName(s)}`);
         return;
       }
       default:
