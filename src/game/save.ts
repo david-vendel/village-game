@@ -31,7 +31,7 @@ import { cellKey, cellName, cellsOf, footprintOf } from './grid';
 import { lowestPlot, streetOf, type Street } from './streets';
 import { createWorld, goneStreet, layStreet, MERGES, PLOT_LAST, setStreetEnds, type Building, type Rider, type World } from './world';
 
-export const SAVE_VERSION = 36;
+export const SAVE_VERSION = 37;
 
 
 /** The persisted part of the world. */
@@ -314,6 +314,7 @@ function building(v: unknown, path: string): Building {
     };
   }
   if (b.spoiling !== undefined) out.spoiling = amounts(b.spoiling, `${path}.spoiling`);
+  if (b.burning !== undefined) out.burning = Math.max(0, Math.min(1, num(b.burning, `${path}.burning`)));
   if (b.herd !== undefined) {
     const h = obj(b.herd, `${path}.herd`);
     out.herd = {

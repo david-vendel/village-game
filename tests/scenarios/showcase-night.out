@@ -70,21 +70,21 @@
     A=#1 house  B=#3 tavern  C=#4 well  D=#5 warehouse  E=#7 house  F=#8 farm  G=#9 chapel  H=#10 house  I=#76 house  J=#77 bakery  K=#78 tavern  L=#79 house  M=#80 well  N=#81 sawmill  O=#82 woodcutter  P=#83 stonecutter  Q=#84 blacksmith  R=#85 chapel  S=#86 mill  T=#87 watchtower  U=#88 market  V=#89 farm  W=#90 warehouse  X=#92 house  Y=#93 tavern  Z=#94 stonecutter
     = | road  + crossing  Y kept for a crossroads  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
 > list
-  #1  house×2  s0:37-42  done  [bread=3 water=4 firewood=6]  home: 0/6 content 100%
-  #3  tavern  s0:43-51  done  [bread=1 firewood=3]
+  #1  house×2  s0:37-42  done  [bread=2 water=4 firewood=6]  home: 0/6 content 100%
+  #3  tavern  s0:43-51  done  [firewood=2]
   #4  well  s0:52-54  done
-  #5  warehouse×2  s0:64-69  done  [wood=21 stone=20 planks=11 bread=3 firewood=5]  staff: serf, serf, serf, serf, serf
-  #7  house  s0:76-78  done  [water=2 firewood=3]  home: 2/3 content 100%
+  #5  warehouse×2  s0:64-69  done  [wood=21 stone=20 planks=11 bread=6]  staff: serf, serf, serf, serf, serf
+  #7  house  s0:76-78  done  [firewood=3]  home: 2/3 content 100%
   #8  farm  s0:94-99  done  [firewood=3]  fields=24 (grass 0, fallow 0, growing 19, ripe 5)  staff: farmer
   #9  chapel  s0:124-129  done  [water=2]  home: 1/4 content 100%
   #10  house  s0:175-177  done  [water=2 firewood=3]  home: 3/3 content 95%
-  #76  house  s0:139-141  done  [water=2 firewood=1]  home: 3/3 content 100%
-  #77  bakery  s0:142-147  done  [water=2 firewood=2]  staff: baker
+  #76  house  s0:139-141  done  [water=2 firewood=3]  home: 3/3 content 100%
+  #77  bakery  s0:142-147  done  [water=2 firewood=3]  staff: baker
   #78  tavern  s0:148-156  done
   #79  house  s0:157-159  done  [water=2]  home: 2/3 content 97%
   #80  well  s0:160-162  done
-  #81  sawmill  s0:112-117  done  [wood=1 planks=2 firewood=4]  staff: sawyer
-  #82  woodcutter  s0:193-198  done  [wood=3]  staff: woodcutter
+  #81  sawmill  s0:112-117  done  [wood=1 planks=2 firewood=3]  staff: sawyer
+  #82  woodcutter  s0:193-198  done  [wood=2]  staff: woodcutter
   #83  stonecutter  s0:199-204  done  [stone=1]  staff: stonecutter
   #84  blacksmith  s0:205-210  done
   #85  chapel  s0:211-216  done  [water=2]  home: 0/4 content 100%

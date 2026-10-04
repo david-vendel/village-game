@@ -148,7 +148,7 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   (`YARD_ITEMS`), so the village can stock up for winter. Every building with a fire
   (`HAS_FIRE`: homes, the farm, the tavern, the watch, and every building whose workers live in it but
   the mill and the sawmill) keeps a woodpile by its corner (`woodpileSlot`) and burns it as hard as
-  `hearth.ts` says its fire burns, `WINTER_FIRE` times as much in winter; households burn theirs as a
+  `hearth.ts` says its fire burns, `WINTER_FIRE` times as much in winter, a whole log off the pile at a time (`Building.burning`: what is left of the one on the fire, so every store holds whole items); households burn theirs as a
   need. No firewood: the fire is out (no smoke), and a fire trade (`Recipe.fire`: bakery, smithy,
   smokehouse, brewery, chandler, pastry cook) can't work.
 - `spoilage.ts`: fresh goods (`SHELF_LIFE` in `balance.ts`: milk, eggs, meat, bread) spoil a whole

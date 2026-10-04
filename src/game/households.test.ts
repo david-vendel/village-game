@@ -162,19 +162,27 @@ describe('the seasons', () => {
     expect([1, 3, 4, 6, 7, 9, 10, 12].map((d) => dayAt(w, d))).toEqual(['spring', 'spring', 'summer', 'summer', 'autumn', 'autumn', 'winter', 'winter']);
   });
 
-  it('fires burn twice the firewood in winter', () => {
+  it('fires burn whole logs off the woodpile, twice as fast in winter', () => {
     const burnt = (day: number) => {
       const w = createWorld();
       dayAt(w, day);
       const farm = w.buildings.find((b) => b.type === 'farm')!;
       farm.stock.firewood = 3;
+      delete farm.burning;
       tick(w, 30);
-      return 3 - farm.stock.firewood;
+      // whole logs off the woodpile, less what is left of the one on the fire
+      return 3 - farm.stock.firewood - (farm.burning ?? 0);
     };
     const summer = burnt(5);
     const winter = burnt(11);
     expect(summer).toBeGreaterThan(0);
     expect(winter / summer).toBeCloseTo(2, 0);
+  });
+
+  it('every store holds whole items: a woodpile burns down a log at a time', () => {
+    const w = createWorld();
+    tick(w, 120);
+    for (const b of w.buildings) for (const [r, n] of Object.entries(b.stock)) expect(Number.isInteger(n), `${b.type} ${r} ${n}`).toBe(true);
   });
 
   it('animals drink twice the water in summer, and thirsty they give no milk', () => {

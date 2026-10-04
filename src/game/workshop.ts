@@ -18,6 +18,7 @@ import { room, type Load, type Resource } from './resources';
 import { errandResource, errandSpot, errandWork, fetchFor } from './transport';
 import type { JobTicket, Workplace } from './worker';
 import type { Building, World } from './world';
+import { fireLit } from './firewood';
 
 /** Seconds to lift a sack off the store. */
 const PICK_UP_TIME = 0.4;
@@ -42,7 +43,7 @@ export function workshopWorkplace(world: World, b: Building, recipe: Recipe): Wo
   const nextBatch = () =>
     b.stock[from] < batch - 1e-9 ? 0 :
     // worked over a fire: none without firewood
-    fire && b.stock.firewood < 1e-6 ? 0 :
+    fire && !fireLit(b) ? 0 :
     Math.min(batch, b.stock[from], also ? b.stock[also.resource] / also.amount : Infinity, Math.floor(room(b.stock, capacity, output().resource) / output().per + 1e-9));
   /** What a batch is made of: `amount` of each per one of `from`. */
   const inputs = [{ resource: from, amount: 1 }, ...(also ? [also] : []), ...(fire ? [{ resource: 'firewood' as Resource, amount: 1 }] : [])];

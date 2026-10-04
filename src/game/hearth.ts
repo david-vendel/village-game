@@ -14,6 +14,7 @@ import { BUILDINGS, HAS_FIRE } from './buildings';
 import { dayPhase, isWorkTime, sunHours, sunNow } from './daynight';
 import { employees } from './people';
 import type { Building, World } from './world';
+import { fireLit } from './firewood';
 
 export interface Hearth {
   /** 0..1: the fire in the hearth (smoke from the chimney: none without it). */
@@ -53,7 +54,7 @@ export function hearthOf(world: World, b: Building): Hearth {
   const lantern = dark && (allNight || hour > 12 || hour < 1) ? 1 : 0;
   const now = inside(world, b);
   // no firewood by the wall: the fire is out (firewood.ts)
-  if (HAS_FIRE.has(b.type) && b.stock.firewood < 1e-6) return { ...now, hearth: 0, furnace: 0, lantern };
+  if (HAS_FIRE.has(b.type) && !fireLit(b)) return { ...now, hearth: 0, furnace: 0, lantern };
   return { ...now, lantern };
 }
 

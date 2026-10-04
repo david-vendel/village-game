@@ -28,6 +28,7 @@ import { constructionStage, demolitionYield, getBuilding, streetFrom, whyNotBuil
 import { BUILDING_ART } from './buildings';
 import { drawBuildingIcon, drawBuildingIconCached, drawBuildingIconGrey } from './sprites';
 import type { Ctx } from './util';
+import { fireLit } from '../game/firewood';
 
 const SERIF = 'Georgia, "Times New Roman", serif';
 const GOLD = '#e8c872';
@@ -712,7 +713,7 @@ export function drawBuildingLabel(ctx: Ctx, world: World, b: Building, sx: numbe
     const short = locked ? ` — ${locked.toLowerCase()}` : Object.keys(upgradeShortfall(world, b)).length ? ' — not enough yet' : '';
     lines.push(`${upgradeHint} to a ${next.name} (${cost})${short}`);
   }
-  if (HAS_FIRE.has(b.type) && b.status === 'done' && b.stock.firewood < 1e-6) lines.push('The fire is out: no firewood');
+  if (HAS_FIRE.has(b.type) && b.status === 'done' && !fireLit(b)) lines.push('The fire is out: no firewood');
   if (def.livestock && b.status === 'done' && thirsty(b)) lines.push('The animals are thirsty: no water');
   if (b.type === 'reeve') lines.push(world.castle.request ? `Gathering for the castle: still wanting ${amounts(stillAsked(world))}` : `No request from the castle just now (standing ${world.castle.standing})`);
   if (b.type === 'market') lines.push(merchantHere(world) ? 'The merchant is here today' : `The merchant comes every ${MARKET.everyDays} days`);

@@ -136,6 +136,8 @@ export interface Building {
   herd?: Herd;
   /** A house's family: how content, what it is owed (households.ts). */
   household?: Household;
+  /** What is left of the log burning on its fire (0..1; firewood.ts). */
+  burning?: number;
   /** Fresh goods in its store on their way to spoiling (spoilage.ts). */
   spoiling?: Partial<Record<Resource, number>>;
   /** A newly finished house's people still to come out of its door, one by one: how many, and the seconds until the next (moveIn). */
