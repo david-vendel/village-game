@@ -254,7 +254,8 @@ describe('water from the well', () => {
   it('a bakery with flour but no well bakes nothing', () => {
     const w = quiet(createWorld());
     w.buildings = w.buildings.filter((b) => b.type !== 'well');
-    w.buildings.find((b) => b.type === 'warehouse')!.stock.flour = 5;
+    // more flour than the bakery holds, so some is still in the warehouse after
+    w.buildings.find((b) => b.type === 'warehouse')!.stock.flour = BUILDINGS.bakery.storage.flour! + 5;
     placeBuilding(w, 2587.5, 'bakery', { instant: true, free: true });
     tick(w, 120);
     expect(bakedAt(w)).toBe(0);
@@ -328,6 +329,8 @@ describe('construction by builders', () => {
     const everyone = w.people.map((p) => p.id).sort();
     const well = placeBuilding(w, 2162.5, 'well')!;
     const cost = BUILDINGS.well.cost;
+    const total = Object.values(cost).reduce((n, a) => n + a, 0);
+    const start = { ...villageStock(w) };
     // nothing is taken up front: builders fetch it
     expect(villageStock(w).stone).toBe(WAREHOUSE_START.stone);
     tick(w, 1);
@@ -338,13 +341,13 @@ describe('construction by builders', () => {
     for (let t = 0; t < 400 && well.status !== 'done'; t += 1 / 30) {
       update(w, 1 / 30, { left: false, right: false });
       carried ||= employees(w, well).some((p) => p.job!.worker.carrying?.resource === 'stone');
-      const delivered = well.site ? well.site.delivered.wood + well.site.delivered.stone : 0;
-      if (well.site && well.progress > delivered / (cost.wood! + cost.stone!) + 1e-9) aheadOfMaterials = true;
+      const delivered = well.site ? Object.keys(cost).reduce((n, r) => n + well.site!.delivered[r as keyof typeof cost], 0) : 0;
+      if (well.site && well.progress > delivered / total + 1e-9) aheadOfMaterials = true;
     }
     expect(well.status).toBe('done');
     expect(carried).toBe(true);
     expect(aheadOfMaterials).toBe(false);
-    expect(villageStock(w)).toMatchObject({ wood: WAREHOUSE_START.wood - cost.wood!, stone: WAREHOUSE_START.stone - cost.stone! });
+    for (const [r, n] of Object.entries(cost)) expect(villageStock(w)[r as keyof typeof cost]).toBe(start[r as keyof typeof cost] - n);
     // the builders go back to strolling; nobody appeared or vanished along the way
     expect(employees(w, well)).toHaveLength(0);
     expect(w.people.map((p) => p.id).sort()).toEqual(everyone);

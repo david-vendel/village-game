@@ -73,16 +73,16 @@
   #3  tavern  s0:43-51  done  [firewood=2]
   #4  well  s0:52-54  done
   #5  warehouse×2  s0:64-69  done  [wood=23 stone=20 planks=10 bread=10]  staff: serf, serf, serf, serf, serf
-  #7  house  s0:76-78  done  [firewood=3]  home: 2/3 content 100%
+  #7  house  s0:76-78  done  [firewood=3]  home: 3/3 content 100%
   #8  farm  s0:94-99  done  [firewood=2]  fields=24 (grass 10, fallow 1, growing 13, ripe 0)  staff: farmer
   #9  chapel  s0:124-129  done  [water=2]  home: 1/4 content 100%
   #10  house  s0:175-177  done  [water=1 firewood=3]  home: 3/3 content 100%
-  #76  house  s0:139-141  done  [water=1]  home: 3/3 content 100%
+  #76  house  s0:139-141  done  [water=1]  home: 2/3 content 100%
   #77  bakery  s0:142-147  done  [water=1]  staff: baker
   #78  tavern  s0:148-156  done
-  #79  house  s0:157-159  done  home: 2/3 content 100%
+  #79  house  s0:157-159  done  home: 3/3 content 100%
   #80  well  s0:160-162  done
-  #81  sawmill  s0:112-117  done  [firewood=5]  staff: sawyer
+  #81  sawmill  s0:112-117  done  [firewood=3]  staff: sawyer
   #82  woodcutter  s0:193-198  done  staff: woodcutter
   #83  stonecutter  s0:199-204  done  staff: stonecutter
   #84  blacksmith  s0:205-210  done
@@ -91,7 +91,7 @@
   #87  watchtower  s0:226-228  done
   #88  market  s0:229-234  done
   #89  farm  s0:235-240  done  fields=24 (grass 15, fallow 1, growing 8, ripe 0)  staff: farmer
-  #90  warehouse  s0:241-243  done  [planks=2]
-  #92  house  s0:166-168  done  home: 3/3 content 100%
+  #90  warehouse  s0:241-243  done  [wood=1 stone=1 planks=2]
+  #92  house  s0:166-168  done  home: 2/3 content 100%
   #93  tavern  s0:178-186  done
   #94  stonecutter  s0:247-252  done  staff: stonecutter

@@ -139,8 +139,8 @@ describe('hunger', () => {
     expect(BUILDINGS.mill.needs).toContain('bread');
     const w = createWorld();
     const mill = placeBuilding(w, 2587.5, 'mill', { instant: true, free: true })!;
-    // bread enough for every pantry in the village
-    for (const yard of of(w, 'warehouse')) yard.stock.bread = 40;
+    // bread enough for the tavern's bench and every pantry in the village, with plenty to spare
+    for (const yard of of(w, 'warehouse')) yard.stock.bread = 200;
     tick(w, 600, () => mill.stock.bread >= 1);
     expect(mill.stock.bread).toBeGreaterThanOrEqual(1);
   });

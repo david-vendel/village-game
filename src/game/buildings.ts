@@ -256,7 +256,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     cost: COSTS.bakery,
     // a sack of flour waiting per slot, a basket of loaves per slot (layout.ts BAKERY_SLOTS)
     // and buckets of water left of the flour (layout.ts BAKERY_WATER_SLOTS)
-    storage: { flour: 3, bread: 4, water: 2 },
+    storage: { flour: 5, bread: 6, water: 5 },
     jobs: { baker: 1 },
     ships: ['bread'],
     needs: ['flour', 'water'],
@@ -312,7 +312,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     buildTime: 13,
     cost: COSTS.tavern,
     // baskets of loaves on the bench outside (layout.ts TAVERN_SLOTS); hungry villagers eat them there (hunger.ts)
-    storage: { bread: 2 },
+    storage: { bread: 20, water: 20, meat: 20, eggs: 80 },
     jobs: {},
     needs: ['bread'],
   },

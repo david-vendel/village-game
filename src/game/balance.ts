@@ -15,7 +15,7 @@ export const NEW_BUILDING_COST: Amounts = { wood: 2, stone: 2 };
 /** What builders bring to put each building up (site.ts). */
 export const COSTS: Record<BuildingType, Amounts> = {
   warehouse: { wood: 6, stone: 4 },
-  house: { wood: 2, planks: 2, stone: 1 },
+  house: { planks: 3, stone: 1 },
   farm: { wood: 3, planks: 2, stone: 2 },
   mill: { wood: 3, planks: 4, stone: 6 },
   bakery: { wood: 2, planks: 2, stone: 5 },
@@ -24,7 +24,7 @@ export const COSTS: Record<BuildingType, Amounts> = {
   chapel: { wood: 2, planks: 2, stone: 15 },
   tavern: { wood: 4, planks: 4, stone: 4 },
   watchtower: { wood: 4, planks: 2, stone: 6 },
-  well: { wood: 1, stone: 3 },
+  well: { planks: 1, stone: 3 },
   woodcutter: { wood: 3, stone: 1 },
   sawmill: NEW_BUILDING_COST,
   chickenfarm: NEW_BUILDING_COST,
@@ -90,9 +90,9 @@ export const CHAPEL_RESIDENTS = 4;
  */
 export const HUNGER = { starving: 1, leave: 3, mealHours: 0.5, topUp: 0.5 };
 /** What people eat, and how many days of food an item of each is. */
-export const FOODS: Partial<Record<Resource, number>> = { bread: 1, cheese: 1, smokedmeat: 1, pastries: 1, eggs: 0.5, milk: 0.5, meat: 0.5 };
+export const FOODS: Partial<Record<Resource, number>> = { bread: 1, cheese: 1, smokedmeat: 1, pastries: 1, eggs: 0.5, milk: 0.5, meat: 2 };
 /** Loaves a building people live in keeps in its pantry (by the door), brought by serfs. */
-export const PANTRY = 2;
+export const PANTRY = 3;
 
 /**
  * What a household needs, by its house's level: each need is one of `goods`
