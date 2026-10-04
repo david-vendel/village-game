@@ -47,8 +47,8 @@ export type BuildingType =
 /**
  * Jobs a building can offer (see people.ts); builders work on construction
  * sites (site.ts); serfs run errands, carrying goods between buildings
- * (transport.ts). Serf is the one job that is not a profession: anyone out of
- * work takes it for as long as there is carrying to do. Serf comes last:
+ * (transport.ts). Serf is the profession of every peasant with no trade; a
+ * serf takes up the first lasting trade going for life. Serf comes last:
  * hiring fills the other jobs first.
  */
 export type Role = 'farmer' | 'builder' | 'miller' | 'baker' | 'woodcutter' | 'sawyer' | 'stonecutter' | 'herder' | 'dairymaid' | 'smoker' | 'weaver' | 'tanner' | 'chandler' | 'saddler' | 'brewer' | 'pastrycook' | 'smith' | 'serf';

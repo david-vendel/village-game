@@ -23,10 +23,10 @@ export interface Figure {
 
 /**
  * A person as a figure. Clothes follow their trade for life, not today's job,
- * so nobody changes outfit on the way to work; a seeker runs errands as a serf.
+ * so nobody changes outfit on the way to work.
  */
 export function figureOf(p: Person): Figure {
-  return { look: p.look, role: p.profession ?? (p.seeker ? 'serf' : (p.job?.role ?? null)), seed: p.seed };
+  return { look: p.look, role: p.profession ?? p.job?.role ?? null, seed: p.seed };
 }
 
 type Hat = 'none' | 'straw' | 'cap' | 'miller' | 'hood' | 'coif' | 'tonsure';

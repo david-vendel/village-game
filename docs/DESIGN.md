@@ -40,7 +40,7 @@ Houses don't need anything.
 ## 1. Needs and spoilage (built: households.ts, spoilage.ts; winter in daynight.ts)
 
 - **Where people live.** Someone in a lasting job lives at their workplace (the farmer at the
-  farm, the baker at the bakery); serfs, builders, people looking for work and townsfolk in houses,
+  farm, the baker at the bakery); serfs, builders and townsfolk in houses,
   going home to sleep at night; the monks in the chapel.
 - **Hunger (built: hunger.ts).** Everyone carries a few days of food in them, a day used up a
   day. Hungry, they eat at home if there is food there, else at the tavern's bench; starving,

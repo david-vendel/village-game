@@ -1,5 +1,5 @@
 // People and animals. Every villager is a person with a number (id), a name
-// and a job — or none. The unemployed stroll the street; a finished building
+// and a job — or none. Those between jobs stroll the street; a finished building
 // with open jobs hires the nearest of them, who then lives by the worker
 // routine (worker.ts) at that building. Someone in a lasting job (a farmer, the
 // baker) lives at their workplace; everyone else in a house, the monks in the
@@ -64,16 +64,15 @@ export interface Person {
   seed: number;
   /** null: between shifts, strolling the street. */
   job: Job | null;
-  /** Their profession for life; people with one take jobs of that role only. */
-  profession?: Role;
   /**
-   * Out of work and looking: no profession yet. The village's backup hands:
-   * runs errands as a serf while there are any, takes the first lasting job
-   * going (a miller, a woodcutter, a farmer), which then becomes their
-   * profession, and helps build when no builder is free (still looking
-   * after: building is not a profession they take up).
+   * Their profession; people with one take jobs of that role only. Nobody who
+   * works is without one: a peasant with no trade is a serf, the village's
+   * backup hands, who run errands while there are any, take the first lasting
+   * job going (a miller, a woodcutter, a farmer), which becomes their
+   * profession for life, and help build when no builder is free (still serfs
+   * after: building is not a trade they take up). Townsfolk and monks have none.
    */
-  seeker?: true;
+  profession?: Role;
   stroll: Stroll;
   /** Where they live (households.ts): their workplace in a lasting job, else a house (monks: the chapel); none for the homeless. */
   home?: number;
@@ -157,19 +156,20 @@ function betweenErrands(p: Person): boolean {
 
 /**
  * Who may take a job of this role, best first: people of that profession who
- * are free; for a lasting job (not building, not errands) then seekers who
- * are free, then seekers running errands as serfs, between errands; for
- * building, then free seekers; for errands, free seekers only.
+ * are free; for a lasting job (not building, not errands) then serfs who
+ * are free, then serfs running errands, between errands; for building, then
+ * free serfs.
  */
 function candidates(world: World, role: Role): Person[][] {
   // skilled work only for freemen: people whose home is a farmstead or better
   const able = (p: Person) => !SKILLED.has(role) || upgradesDone(world.buildings.find((b) => b.id === p.home) ?? { upgraded: undefined }) >= 1;
   // not while out for a meal; asleep at home, only to run errands (they work day and night)
   const free = (p: Person) => !p.job && !p.leaving && able(p) && (!p.visit || (role === 'serf' && p.visit.why === 'sleep'));
-  if (role === 'serf') return [world.people.filter((p) => free(p) && p.seeker)];
   const pros = world.people.filter((p) => free(p) && p.profession === role);
-  if (role === 'builder') return [pros, world.people.filter((p) => free(p) && p.seeker)];
-  return [pros, world.people.filter((p) => free(p) && p.seeker), world.people.filter((p) => p.seeker && !p.leaving && able(p) && betweenErrands(p))];
+  if (role === 'serf') return [pros];
+  const serfs = world.people.filter((p) => free(p) && p.profession === 'serf');
+  if (role === 'builder') return [pros, serfs];
+  return [pros, serfs, world.people.filter((p) => p.profession === 'serf' && !p.leaving && able(p) && betweenErrands(p))];
 }
 
 /**
@@ -190,9 +190,8 @@ export function staffBuildings(world: World, hire: (b: Building, role: Role, who
         // woken for errands: out of the door
         delete who.visit;
         if (lasting(role)) {
-          // a lasting job becomes a seeker's profession, and they live where they work
+          // a serf taking a lasting job takes up its trade, and lives where they work
           who.profession = role;
-          delete who.seeker;
           who.home = b.id;
         }
         who.job = { buildingId: b.id, role, worker: hire(b, role, who) };
@@ -260,7 +259,7 @@ function backToLane(world: World, s: Stroll, lane: number, dt: number): void {
   s.y = yAt(r.d);
 }
 
-/** Unemployed people and animals wander the street they are on, stopping now and then. */
+/** People between jobs and animals wander the street they are on, stopping now and then. */
 export function updateStrolls(world: World, dt: number, rand: () => number): void {
   const walkers: Array<{ s: Stroll; chicken: boolean; lane: number; leaving?: true }> = [
     ...world.people.filter((p) => !p.job && !p.visit).map((p) => ({ s: p.stroll, chicken: false, lane: laneY(p.id), leaving: p.leaving })),

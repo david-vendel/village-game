@@ -290,11 +290,11 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
     stackWoodpiles(world);
     world.events.length = 0;
     // six workers with a fixed profession for life (one farmer, five builders),
-    // two townsfolk who never work, and five out of work, looking for a job
+    // two townsfolk who never work, and five serfs
     const kinds: Array<Look | 'chicken'> = ['peasant', 'woman', 'monk', 'peasant', 'chicken', 'chicken', 'peasant', 'peasant', 'peasant', 'peasant'];
-    const seekers = 5;
+    const serfs = 5;
     let peasants = 0;
-    for (const kind of [...kinds, ...Array<Look>(seekers).fill('peasant')]) {
+    for (const kind of [...kinds, ...Array<Look>(serfs).fill('peasant')]) {
       const id = world.nextId++;
       const stroll = {
         x: FIRST_PLOT_X + rand(world) * 4000,
@@ -307,7 +307,7 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
       if (kind === 'chicken') world.animals.push({ id, kind, seed, stroll });
       else {
         const n = kind === 'peasant' ? peasants++ : -1;
-        const work = n < 0 ? {} : n === 0 ? { profession: 'farmer' as const } : n < 6 ? { profession: 'builder' as const } : { seeker: true as const };
+        const work = n < 0 ? {} : n === 0 ? { profession: 'farmer' as const } : n < 6 ? { profession: 'builder' as const } : { profession: 'serf' as const };
         // fed to start with, some more than others, so they don't all go to eat at once
         const food = 0.5 + rand(world);
         world.people.push({ id, name: nameFor(kind, seed, new Set(world.people.map((p) => p.name))), look: kind, seed, job: null, stroll, food, ...work });
@@ -755,7 +755,7 @@ function complete(world: World, b: Building): void {
   world.events.push({ kind: 'completed', buildingId: b.id });
 }
 
-/** People who move into the village when a house is finished: out of work and looking (Person.seeker), so they run errands as serfs. */
+/** People who move into the village when a house is finished: serfs (Person.profession), who run errands and take up the first trade going. */
 export { HOUSE_RESIDENTS };
 
 /** Seconds between one new villager stepping out of a house's door and the next. */
@@ -780,7 +780,7 @@ function arrive(world: World, dt: number): void {
     const name = nameFor('peasant', seed, new Set(world.people.map((p) => p.name)));
     // they live here, if there is room still (households.ts); else they find a home elsewhere
     const home = residentsOf(world, b).length < roomIn(b) ? { home: b.id } : {};
-    world.people.push({ id, name, look: 'peasant', seed, job: null, stroll, seeker: true, food: 1, ...home });
+    world.people.push({ id, name, look: 'peasant', seed, job: null, stroll, profession: 'serf', food: 1, ...home });
     a.left--;
     a.next = ARRIVAL_GAP;
     if (a.left <= 0) delete b.arriving;

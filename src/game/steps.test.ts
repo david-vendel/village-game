@@ -64,8 +64,8 @@ describe('step 2: keeping food', () => {
     const weaver = place(w, 2587.5, 'weaver');
     tick(w, 5);
     expect(employees(w, weaver)).toHaveLength(0);
-    // a seeker's house becomes a farmstead
-    const seeker = w.people.find((p) => p.seeker && p.home !== undefined)!;
+    // a serf's house becomes a farmstead
+    const seeker = w.people.find((p) => p.profession === 'serf' && p.home !== undefined)!;
     const home = w.buildings.find((b) => b.id === seeker.home)!;
     home.level = 1;
     home.upgraded = true;
@@ -226,7 +226,7 @@ describe('step 6: the merchant', () => {
     smithy.stock.firewood = 3;
     // a freeman to forge
     tick(w, 1 / 30);
-    const seeker = w.people.find((p) => p.seeker && p.home !== undefined)!;
+    const seeker = w.people.find((p) => p.profession === 'serf' && p.home !== undefined)!;
     const home = w.buildings.find((b) => b.id === seeker.home)!;
     home.level = 1;
     home.upgraded = true;

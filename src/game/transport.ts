@@ -33,7 +33,7 @@
 // someone, or gone stale in the meantime (its load gone, the room filled),
 // comes off.
 //
-// Serfs are the village's out-of-work people (Person.seeker), hired by the
+// Serfs are the village's peasants with no trade (Person.profession 'serf'), hired by the
 // transport hub (the oldest warehouse) for as long as there are errands:
 // after each errand a serf takes another if one is waiting, and otherwise is
 // let go where they stand and strolls again. A serf who is not carrying

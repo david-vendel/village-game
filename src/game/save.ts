@@ -31,7 +31,7 @@ import { cellKey, cellName, cellsOf, footprintOf } from './grid';
 import { lowestPlot, streetOf, type Street } from './streets';
 import { createWorld, goneStreet, layStreet, MERGES, PLOT_LAST, setStreetEnds, type Building, type Rider, type World } from './world';
 
-export const SAVE_VERSION = 37;
+export const SAVE_VERSION = 38;
 
 
 /** The persisted part of the world. */
@@ -194,7 +194,7 @@ function build(saved: SavedWorld): World {
   // builders while a site); otherwise the person is out of work
   for (const p of world.people) {
     const b = p.job && world.buildings.find((x) => x.id === p.job!.buildingId);
-    const offered = b && (p.job?.role === 'serf' ? b === transportHub(world) && !!p.seeker : !!openings(b, BUILDERS_PER_SITE, true)[p.job!.role]);
+    const offered = b && (p.job?.role === 'serf' ? b === transportHub(world) && p.profession === 'serf' : !!openings(b, BUILDERS_PER_SITE, true)[p.job!.role]);
     if (p.job && !offered) p.job = null;
   }
   // farm state belongs to finished farms only
@@ -378,12 +378,9 @@ function visit(v: unknown, path: string): Visit {
   };
 }
 
-/** Saved profession (or looking for one); older saves without one: whatever they work as, else builder (for peasants). */
-function professionOf(p: Raw, path: string): { profession?: Role; seeker?: true } {
-  if (p.seeker !== undefined) return bool(p.seeker, `${path}.seeker`) ? { seeker: true } : {};
-  if (p.profession !== undefined) return { profession: oneOf(p.profession, ROLES, `${path}.profession`) };
-  if (p.job) return { profession: oneOf(obj(p.job, `${path}.job`).role, ROLES, `${path}.job.role`) };
-  return p.look === 'peasant' ? { profession: 'builder' } : {};
+/** Saved profession (townsfolk and monks have none). */
+function professionOf(p: Raw, path: string): { profession?: Role } {
+  return p.profession !== undefined ? { profession: oneOf(p.profession, ROLES, `${path}.profession`) } : {};
 }
 
 function person(v: unknown, path: string): Person {

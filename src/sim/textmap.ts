@@ -233,7 +233,7 @@ export function summary(world: World): string {
   const s = villageStock(world);
   const jobs = new Map<string, number>();
   for (const p of world.people) {
-    const k = p.job?.role ?? (p.seeker ? 'looking for work' : p.profession ? `idle ${p.profession}` : 'townsfolk');
+    const k = p.job?.role ?? (p.profession ? `idle ${p.profession}` : 'townsfolk');
     jobs.set(k, (jobs.get(k) ?? 0) + 1);
   }
   return [

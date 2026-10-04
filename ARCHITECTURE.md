@@ -120,7 +120,7 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   `WELL_DRAW_SECONDS` in `balance.ts`): whoever comes for it (a serf, or the baker fetching their
   own) and finds no bucket waiting draws one (`draw-water`); a serf with no errand fills a well
   within `WELL_REACH`, two buckets each side (`WELL_SLOTS`). The well's windlass turns only while
-  someone draws (`drawingAt`). Serfs are the people looking for work, hired by the
+  someone draws (`drawingAt`). Serfs are the peasants with no trade (`Person.profession` 'serf'), hired by the
   transport hub (the oldest warehouse) while there are errands (up to `SERFS_MAX`, daylight only)
   and let go where they stand when there are none.
 - `workshop.ts`: any building with a `makes` recipe (`buildings.ts`: from, to, batch, per, seconds,
@@ -134,7 +134,7 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   places (`storeSlots`) and its art.
 - `households.ts`: every villager has a home (`Person.home`): someone in a lasting job lives at
   their workplace (the farmer at the farm, the baker at the bakery); the monks in the chapel;
-  everyone else (serfs, builders, people looking for work, townsfolk) in the nearest house with
+  everyone else (serfs, builders, townsfolk) in the nearest house with
   room (arrivals stay in their own house only while it has room). A house's family drinks and
   burns from the shelf by its door (`houseSlot` in `layout.ts`), which serfs keep stocked
   (`BuildingDef.needs`); `NEEDS` in `balance.ts` is per person per day. Food is each person's own
@@ -218,14 +218,14 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   no wood in the village: its builders fell trees round about for the wood they find none of
   (`fellsForWood`). With construction off, buildings are finished at once from the warehouses' stock.
 - `people.ts`: every villager is a `Person` with an id number, a name, a look and a `job` (a
-  building and role, plus their `Worker` state) or none. The unemployed stroll the street on
+  building and role, plus their `Worker` state) or none. Those between jobs stroll the street on
   their lane (`laneY`: odd ids the far side, even the near side);
   `staffBuildings` fills open jobs (a finished building's own, builders at sites, serfs at the
   transport hub) with the nearest of them, who walk over from where they are. A profession is
-  for life; the one exception is people looking for work (`seeker`): they run errands as serfs,
-  and take the first lasting job going (miller, farmer), which becomes their profession. Lasting
+  for life; the one exception is serfs: nobody is unemployed, a peasant with no trade is a serf,
+  who runs errands and takes the first lasting job going (miller, farmer), which becomes their profession. Lasting
   jobs are filled before errands, so a serf between errands is hired away for one. A new
-  village has one farmer, five builders, five people looking for work and two townsfolk.
+  village has one farmer, five builders, five serfs and two townsfolk.
   Someone not at work may be on a `Visit` (home asleep, out to eat: `hunger.ts`): not strolling,
   and hidden while inside (`outdoors`). Only people asleep can be hired then, and only for errands.
   Chickens are `Animal`s.

@@ -155,7 +155,7 @@ describe('construction', () => {
 
   it('a finished house brings three people out of work, merged into a neighbour or not', () => {
     const w = emptyWorld();
-    const seekers = () => w.people.filter((p) => p.seeker).length;
+    const seekers = () => w.people.filter((p) => p.profession === 'serf').length;
     const a = placeBuilding(w, 1000, 'house', { free: true })!;
     expect(seekers()).toBe(0); // nobody moves in before it is built
     setConstructionEnabled(w, false);
@@ -180,13 +180,13 @@ describe('construction', () => {
     update(w, 0.1, idle);
     const helping = w.people.filter((p) => p.job?.buildingId === site.id);
     expect(helping.length).toBeGreaterThan(0);
-    expect(helping.every((p) => p.seeker && p.job!.role === 'builder')).toBe(true); // still looking: building is no profession for them
+    expect(helping.every((p) => p.profession === 'serf' && p.job!.role === 'builder')).toBe(true); // still serfs: building is no trade they take up
     setConstructionEnabled(w, false);
     const hut = placeBuilding(w, 2500, 'woodcutter', { free: true })!;
     update(w, 0.1, idle);
     const cutter = w.people.find((p) => p.job?.buildingId === hut.id)!;
     expect(cutter.profession).toBe('woodcutter');
-    expect(cutter.seeker).toBeUndefined();
+    expect(cutter.profession).not.toBe('serf');
   });
 
   it('stages advance in order', () => {

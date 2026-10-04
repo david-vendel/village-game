@@ -13,7 +13,6 @@ import { buildingAt, getBuilding, type Building, type World } from '../game/worl
 
 function occupation(p: Person): string {
   if (p.profession) return p.profession;
-  if (p.seeker) return p.job?.role ?? 'unemployed';
   return p.look === 'monk' ? 'monk' : 'townswoman';
 }
 
@@ -66,7 +65,7 @@ function activity(world: World, p: Person): string {
     }
     if (s.y !== laneY(p.id)) return 'walking back to the street';
     const night = !timeOfDay(world).daylight;
-    const why = p.seeker ? (night ? ', looking for work in the morning' : ', looking for work') : !p.profession ? '' : night ? ', off for the night' : ', no work going';
+    const why = p.profession === 'serf' ? (night ? ', no errands till morning' : ', no errands') : !p.profession ? '' : night ? ', off for the night' : ', no work going';
     return (s.idle > 0 ? 'standing about' : 'strolling') + why;
   }
   const b = getBuilding(world, p.job.buildingId);

@@ -37,7 +37,7 @@ describe('hunger', () => {
     const tavern = of(w, 'tavern')[0];
     tavern.stock.bread = 2;
     // a townsperson out on the street, nothing at home
-    const who = w.people.find((p) => !p.job && p.look !== 'monk' && !p.seeker)!;
+    const who = w.people.find((p) => !p.job && p.look !== 'monk' && p.profession !== 'serf')!;
     onlyHungry(w, who);
     let ateThere = false;
     tick(w, 60, () => {
@@ -52,7 +52,7 @@ describe('hunger', () => {
   it('with food at home, someone hungry eats there, inside, and not at the tavern', () => {
     const w = createWorld();
     tick(w, 1 / 30);
-    const who = w.people.find((p) => !p.job && p.look !== 'monk' && !p.seeker)!;
+    const who = w.people.find((p) => !p.job && p.look !== 'monk' && p.profession !== 'serf')!;
     const home = w.buildings.find((b) => b.id === who.home)!;
     for (const b of w.buildings) b.stock.bread = 0;
     home.stock.bread = 1;
@@ -94,7 +94,7 @@ describe('hunger', () => {
     const store = placeBuilding(w, 2587.5, 'storehouse', { instant: true, free: true })!;
     store.stock.cheese = 3;
     tick(w, 1 / 30);
-    const who = w.people.find((p) => !p.job && p.look !== 'monk' && !p.seeker)!;
+    const who = w.people.find((p) => !p.job && p.look !== 'monk' && p.profession !== 'serf')!;
     onlyHungry(w, who);
     tick(w, 20);
     expect(hungry(who)).toBe(true);
