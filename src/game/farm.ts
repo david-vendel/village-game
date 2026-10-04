@@ -108,13 +108,16 @@ export function setFieldSpots(farm: FarmState, spots: FieldSpot[], workers: Work
   // farmers' jobs follow their plots; a job whose plot is gone is dropped
   for (const w of workers) {
     const job = currentJob(w);
-    if (!job) continue;
+    // (felling a tree on the fields is no plot's job: world.ts clearingFields)
+    if (!job || !isPlotJob(job.action)) continue;
     const next = successor.get(farm.plots[job.target]);
     if (!next) retarget(w, { door: HOME }, null);
     else retarget(w, { door: HOME }, { ...job, target: plots.indexOf(next) }, { dx: next.dx, y: workY(next.zone, next.row) });
   }
   farm.plots = plots;
 }
+
+const isPlotJob = (action: string) => action === 'sow' || action === 'harvest';
 
 /** Whether a plot needs this job: sowing bare land, or harvesting a ripe crop. */
 function jobFits(p: FieldPlot | undefined, action: string): p is FieldPlot {
@@ -136,7 +139,7 @@ export function repairFarm(farm: FarmState, workers: Worker[]): void {
   }
   for (const w of workers) {
     const job = currentJob(w);
-    if (job && !jobFits(farm.plots[job.target], job.action)) w.task = { kind: 'idle', wait: 0.3 };
+    if (job && isPlotJob(job.action) && !jobFits(farm.plots[job.target], job.action)) w.task = { kind: 'idle', wait: 0.3 };
   }
 }
 

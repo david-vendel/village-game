@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { yAt } from './layout';
-import { clearLand, treesInTheWay, WOOD_REACH } from './nature';
-import { streetDist } from './streets';
+import { clearLand, treesInTheWay, treesOnFields, WOOD_REACH } from './nature';
+import { streetDist, streetStart } from './streets';
+import { CELL_W } from './layout';
 import { createWorld, placeBuilding, setConstructionEnabled, update, type Building, type World } from './world';
 
 const idle = { left: false, right: false };
@@ -42,12 +43,57 @@ describe('trees in the way of building', () => {
     expect(logLaidDown).toBe(true);
   });
 
+  it("a crossroads' builders clear the road of the street it opens before it is finished", () => {
+    const w = createWorld();
+    const b = placeBuilding(w, streetStart(0) + 28.5 * CELL_W, 'intersection', { free: true })!;
+    // in front of the main street, where the new street's road runs on across it
+    const tree = { id: w.nextId++, x: b.x, y: yAt(-90), state: 'grown' as const, age: 0 };
+    w.trees.push(tree);
+    expect(treesInTheWay(w, b)).toContain(tree);
+    runFor(w, 300, () => b.status === 'done' || !w.trees.includes(tree));
+    expect(b.status).toBe('constructing');
+    expect(w.trees).not.toContain(tree);
+    runFor(w, 300, () => b.status === 'done');
+    expect(b.status).toBe('done');
+  });
+
   it('switching construction off clears what still stands on the land', () => {
     const w = createWorld();
     const b = placeBuilding(w, 2162.5, 'well', { free: true })!;
     const tree = treeOn(w, b);
     setConstructionEnabled(w, false);
     expect(w.trees).not.toContain(tree);
+  });
+});
+
+describe("trees on a farm's fields", () => {
+  it('are felled by its farmer, the log left by the road', () => {
+    const w = createWorld({ village: false });
+    setConstructionEnabled(w, false);
+    placeBuilding(w, 1000, 'house', { free: true });
+    runFor(w, 5);
+    const farm = placeBuilding(w, 1600, 'farm', { free: true })!;
+    let tree = null;
+    for (let x = farm.x - 200; x < farm.x + 200 && !tree; x += 10) {
+      for (let d = -300; d < 300 && !tree; d += 10) {
+        const t = { id: w.nextId++, x, y: yAt(d), state: 'grown' as const, age: 0 };
+        w.trees.push(t);
+        clearLand(w);
+        if (treesOnFields(w, farm).includes(t) && w.trees.includes(t)) tree = t;
+        else w.trees = w.trees.filter((o) => o !== t);
+      }
+    }
+    expect(tree).not.toBeNull();
+    clearLand(w);
+    expect(w.trees).toContain(tree);
+    let logLaidDown = false;
+    for (let t = 0; t < 200 && w.trees.includes(tree!); t += 1 / 30) update(w, 1 / 30, idle);
+    expect(w.trees).not.toContain(tree);
+    for (let t = 0; t < 30 && !logLaidDown; t += 1 / 30) {
+      update(w, 1 / 30, idle);
+      if (w.piles.some((p) => p.resource === 'wood')) logLaidDown = true;
+    }
+    expect(logLaidDown).toBe(true);
   });
 });
 

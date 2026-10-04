@@ -26,6 +26,7 @@
 import { storageOf } from './buildings';
 import { putAway, storeSpot } from './economy';
 import { behindRoad, CELL_W, CHOP_SPOT, QUARRIES, QUARRY_SPOTS, QUARRY_Y, STAND_Y, STONECUTTER_DOOR, PILE_UNIT, WOODCUTTER_DOOR, yAt } from './layout';
+import { dropOnGround, GROUND_PILE_Y } from './piles';
 import { room, type Load } from './resources';
 import { cellKey, landUse, type LandUse } from './grid';
 import { groundPoint, streetDist, streetOf, streetPoint, streetRange, type Vec } from './streets';
@@ -106,27 +107,126 @@ export function treeRoom(world: World, p: Vec, crowd = true, not?: Tree): boolea
   return true;
 }
 
-/** A site being built (a building or a road piece) on this land, whose builders clear it of trees. */
-const clearedBy = (world: World, u: LandUse): Building | undefined =>
-  u.kind === 'building' ? world.buildings.find((b) => b.id === u.buildingId && b.status === 'constructing' && b.site) : undefined;
+/**
+ * Land that gets cleared by hand: a site being built (a building or a road
+ * piece), whose builders fell what stands on it, or a farm's field, whose
+ * farmers do.
+ */
+const clearedByHand = (world: World, u: LandUse): boolean =>
+  u.kind === 'field' || (u.kind === 'building' && world.buildings.some((b) => b.id === u.buildingId && b.status === 'constructing' && b.site));
 
 /**
  * Trees are cut down wherever the land is taken (a building, a field, a road):
  * nothing grows on top of anything. A grown tree in the way of nothing but
- * sites being built stands until their builders fell it (treesInTheWay).
+ * sites being built and fields stands until it is felled there
+ * (treesInTheWay, treesOnFields).
  */
 export function clearLand(world: World): void {
   world.trees = world.trees.filter((t) => {
     const uses = inWayOf(world, treePoint(world, t));
-    return !uses.length || (t.state === 'grown' && uses.every((u) => clearedBy(world, u)));
+    return !uses.length || (t.state === 'grown' && uses.every((u) => clearedByHand(world, u)));
   });
 }
 
-/** The grown trees standing on site b's land: its builders fell them before building there. */
+/**
+ * The cells of the road a crossroads being built will open (world.ts sets
+ * this: the street is planned there), as cell keys; null for any other building.
+ */
+let roadToOpen: (world: World, b: Building) => Set<string> | null = () => null;
+export function setRoadToOpen(fn: typeof roadToOpen): void {
+  roadToOpen = fn;
+}
+
+/**
+ * The grown trees standing on site b's land: its builders fell them before
+ * building there. A crossroads clears the road of the street it opens, too.
+ */
 export function treesInTheWay(world: World, b: Building): Tree[] {
   if (!b.site || b.status !== 'constructing') return [];
   const mine = (u: LandUse) => u.kind === 'building' && u.buildingId === b.id;
+  const road = b.type === 'intersection' ? roadToOpen(world, b) : null;
+  /** On the coming road, or its verges (treeRoom). */
+  const onRoad = (p: Vec) => {
+    if (!road) return false;
+    for (let c = Math.floor((p.x - CELL_W) / CELL_W); c <= Math.floor((p.x + CELL_W) / CELL_W); c++) {
+      for (let row = Math.floor((p.y - CELL_W) / CELL_W); row <= Math.floor((p.y + CELL_W) / CELL_W); row++) if (road.has(cellKey(c, row))) return true;
+    }
+    return false;
+  };
+  return world.trees.filter((t) => {
+    if (t.state !== 'grown') return false;
+    const p = treePoint(world, t);
+    return usesNear(world, p, TRUNK_ROOM, mine).length > 0 || onRoad(p);
+  });
+}
+
+/** The grown trees standing on farm b's fields: its farmers fell them, and sow no field under one. */
+export function treesOnFields(world: World, b: Building): Tree[] {
+  const mine = (u: LandUse) => u.kind === 'field' && u.buildingId === b.id;
   return world.trees.filter((t) => t.state === 'grown' && usesNear(world, treePoint(world, t), TRUNK_ROOM, mine).length);
+}
+
+/** Whether a tree from `trees` stands on the land within TRUNK_ROOM of grid cell (c, row). */
+export function treeOnCell(world: World, trees: Tree[], c: number, row: number): boolean {
+  return trees.some((t) => {
+    const p = treePoint(world, t);
+    return Math.floor((p.x - TRUNK_ROOM) / CELL_W) <= c && c <= Math.floor((p.x + TRUNK_ROOM) / CELL_W) && Math.floor((p.y - TRUNK_ROOM) / CELL_W) <= row && row <= Math.floor((p.y + TRUNK_ROOM) / CELL_W);
+  });
+}
+
+/**
+ * A farm's work (farm.ts) with the clearing of its fields: after the harvest,
+ * before any sowing, a farmer fells a tree standing on them and carries the
+ * log to the road by it, for serfs. `blocked` says whether a plot (by index)
+ * has a tree on it: nobody sows there.
+ */
+export function clearingFields(world: World, b: Building, farm: Workplace, blocked: (trees: Tree[], plot: number) => boolean): Workplace {
+  const x = b.x;
+  const trees = () => treesOnFields(world, b);
+  const standing = (id: number) => trees().find((t) => t.id === id);
+  return {
+    ...farm,
+    nextJob(w, taken) {
+      const felling = new Set(taken.filter((j) => j.action === 'chop').map((j) => j.target));
+      const work = taken.filter((j) => j.action !== 'chop');
+      const next = farm.nextJob(w, work);
+      if (next?.job.action === 'harvest') return next;
+      const here = trees();
+      let best: Tree | null = null;
+      for (const t of here) {
+        if (!felling.has(t.id) && (!best || Math.abs(chopSpot(t, x).dx - w.dx) < Math.abs(chopSpot(best, x).dx - w.dx))) best = t;
+      }
+      if (best) return { job: { action: 'chop', target: best.id, slot: Math.round(chopSpot(best, x).dx) }, ...chopSpot(best, x) };
+      // sow only where no tree stands
+      const skip: JobTicket[] = [];
+      for (let n = next; n; n = farm.nextJob(w, [...work, ...skip])) {
+        if (!blocked(here, n.job.target)) return n;
+        skip.push(n.job);
+      }
+      return null;
+    },
+    jobSpot(job) {
+      if (job.action !== 'chop') return farm.jobSpot?.(job) ?? null;
+      const t = standing(job.target);
+      return t ? chopSpot(t, x) : null;
+    },
+    begin(job) {
+      if (job.action !== 'chop') return blocked(trees(), job.target) ? null : farm.begin(job);
+      return standing(job.target) ? CHOP_TIME : null;
+    },
+    finish(job) {
+      return job.action === 'chop' ? fell(world, job.target, true) : farm.finish(job);
+    },
+    dropSpot(job, load) {
+      // down at the edge of the road, in front of where the tree stood
+      if (job.action === 'chop') return { dx: (job.slot ?? 0), y: GROUND_PILE_Y };
+      return farm.dropSpot(job, load);
+    },
+    deliver(load, job) {
+      if (job.action === 'chop') dropOnGround(world, x + (job.slot ?? 0), load);
+      else farm.deliver(load, job);
+    },
+  };
 }
 
 /** Where someone stands to fell tree t, as dx from world x and a depth y: beside the trunk, a step nearer the viewer. */

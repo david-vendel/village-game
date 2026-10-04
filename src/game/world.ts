@@ -17,8 +17,8 @@ import { buildShortfall, putAway, takeFromWarehouses, upgradeShortfall, WAREHOUS
 import { createFarm, DEFAULT_WORK, farmWorkplace, updateCrops, type FarmState } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
 import { BASE_Y, BLOCK, CELL_W, FIRST_PLOT_X, FRONT_LIMIT, PLOT_SPACING, ROAD_GRID, STREET_BAND_HALF, STREET_LENGTH, yAt } from './layout';
-import { alongCell, baseLand, blockStartX, cellKey, footprintAt, footprintOf, landUse, onRoadGrid, roadBlocked, roadInWay, siteX, sizeOfBuilding, streetCell, whyNotHere } from './grid';
-import { clearLand, plantWoods, gatherWorkplace, isGatherHut, updateForest, type Tree } from './nature';
+import { alongCell, baseLand, blockStartX, cellKey, fieldCell, footprintAt, footprintOf, landUse, onRoadGrid, roadBlocked, roadInWay, siteX, sizeOfBuilding, streetCell, whyNotHere } from './grid';
+import { clearingFields, clearLand, plantWoods, gatherWorkplace, isGatherHut, setRoadToOpen, treeOnCell, updateForest, type Tree } from './nature';
 import { employees, laneY, nameFor, openings, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
 import { builderPositions, builders, createSite, siteWork, siteWorkplace, upgrading, type Site } from './site';
 import { demolitionWork, demolitionWorkplace, dropAll, materialsIn, tearDown, type Demolition } from './demolition';
@@ -938,6 +938,29 @@ export function planStreet(world: World, from: number, at: number): { street: St
   return { street, joins, clear };
 }
 
+/** The cells of the road a crossroads being built will open, kept until the streets or buildings change. */
+const roadsToOpen = new WeakMap<Building, { sig: string; cells: Set<string> }>();
+
+setRoadToOpen((world, b) => {
+  if (b.type !== 'intersection' || b.status !== 'constructing') return null;
+  const sig = world.streets.map((s) => `${s.lo}:${s.hi}`).join(',') + '|' + world.buildings.length;
+  const known = roadsToOpen.get(b);
+  if (known?.sig === sig) return known.cells;
+  const { street } = planStreet(world, b.id, b.x);
+  const start = streetStart(street.index);
+  const i0 = Math.round((plotX(street.index, street.lo) - STREET_END_RUN - start) / CELL_W);
+  const i1 = Math.round((plotX(street.index, street.hi) + STREET_END_RUN - start) / CELL_W) - 1;
+  const cells = new Set<string>();
+  for (let i = i0; i <= i1; i++) {
+    for (let j = -1; j <= 1; j++) {
+      const c = streetCell(street, i, j);
+      cells.add(cellKey(c.c, c.r));
+    }
+  }
+  roadsToOpen.set(b, { sig, cells });
+  return cells;
+});
+
 /**
  * Lay out the street a finished crossroads opens (planStreet). Loading a save
  * lays the streets out again this way, in order (the crossroads made where
@@ -1139,7 +1162,15 @@ function baseWorkplace(world: World, b: Building, role: Role): Workplace | null 
   if (b.status === 'demolishing') return role === 'builder' ? demolitionWorkplace(world, b) : null;
   if (b.site && b.type === 'road') return role === 'builder' ? roadWorkplace(world, b, world.params.buildSpeed) : null;
   if (b.site && (b.status !== 'done' || role === 'builder')) return siteWorkplace(world, b, world.params.buildSpeed);
-  if (b.farm) return farmWorkplace(b.farm, b.stock, world.params, isWinter(world), b.stock.horse >= 1 ? PLOUGH_SPEED : 1);
+  if (b.farm) {
+    const farm = b.farm;
+    const work = farmWorkplace(farm, b.stock, world.params, isWinter(world), b.stock.horse >= 1 ? PLOUGH_SPEED : 1);
+    // trees on its fields are felled by its farmers, and no field is sown under one
+    return clearingFields(world, b, work, (trees, i) => {
+      const cell = farm.plots[i] && fieldCell(world, b, farm.plots[i]);
+      return !!cell && treeOnCell(world, trees, cell.c, cell.r);
+    });
+  }
   const recipe = BUILDINGS[b.type].makes;
   if (recipe && b.status === 'done') return workshopWorkplace(world, b, recipe);
   const stock = BUILDINGS[b.type].livestock;
