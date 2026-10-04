@@ -4,7 +4,11 @@
 // is young (ANIMALS.adult, balance.ts), then productive (until
 // productiveUntil): only then do females give eggs or milk, adults give wool,
 // and a productive pair breeds. At the end of its lifespan its keeper
-// butchers it for meat. Animals drink (ANIMAL_WATER, SUMMER_DRINK times as
+// butchers it for meat, and so he does the oldest animal whenever the herd is
+// full, but never the youngest grown pair, so there is always room for young
+// ones and the herd doesn't grow old all together (horses are led away
+// instead). A farm left with no female or no male that is grown, or growing
+// up, gets a grown one brought in, as a new farm does (`restock`). Animals drink (ANIMAL_WATER, SUMMER_DRINK times as
 // much in summer) from the farm's store, brought from the well; thirsty, they
 // give nothing and don't breed.
 //
@@ -94,6 +98,41 @@ export function herdRoom(world: World, b: Building): number {
   return kind === 'horse' ? Math.min(max, Math.floor(pastureCells(world, b).length / PASTURE_CELLS_PER_HORSE)) : max;
 }
 
+/** Past breeding and giving, and kept only for meat. */
+export const isOld = (kind: AnimalKind, a: Beast) => a.age >= ANIMALS[kind].productiveUntil;
+
+/**
+ * The animal the keeper butchers next, if any (its index in the herd): one at the end of its life;
+ * else, with the herd full, the oldest but for the youngest productive female and male (horses
+ * are led away instead: the horse farm's spare horses).
+ */
+export function toButcher(world: World, b: Building): number {
+  const kind = livestockOf(b)!.animal;
+  const h = herdOf(b).animals;
+  const due = h.findIndex((a) => isDue(kind, a));
+  if (due >= 0 || kind === 'horse' || h.length < herdRoom(world, b)) return due;
+  const keep = new Set<Beast>();
+  for (const sex of ['female', 'male'] as const) {
+    const young = h.filter((a) => a.sex === sex && isProductive(kind, a)).sort((p, q) => p.age - q.age)[0];
+    if (young) keep.add(young);
+  }
+  let oldest = -1;
+  h.forEach((a, i) => {
+    if (!keep.has(a) && (oldest < 0 || a.age > h[oldest].age)) oldest = i;
+  });
+  return oldest;
+}
+
+/** A herd with no female (or no male) that is productive or will be gets a grown one brought in, where there is room. */
+function restock(world: World, b: Building, h: Herd): void {
+  const kind = livestockOf(b)!.animal;
+  for (const sex of ['female', 'male'] as const) {
+    if (h.animals.some((a) => a.sex === sex && !isOld(kind, a))) continue;
+    if (h.animals.length >= herdRoom(world, b)) continue;
+    h.animals.push({ sex, age: ANIMALS[kind].adult });
+  }
+}
+
 /** Every animal on every finished farm grows a year older each game day. */
 export function ageHerds(world: World, dt: number): void {
   const years = (dt * timeOfDay(world).hoursPerSecond) / 24;
@@ -103,6 +142,7 @@ export function ageHerds(world: World, dt: number): void {
     if (b.status !== 'done' || !kept) continue;
     const h = herdOf(b);
     for (const a of h.animals) a.age += years;
+    restock(world, b, h);
     // they drink, more in the summer heat, a bucket at a time from the store
     h.thirst = Math.min(2, (h.thirst ?? 0) + h.animals.length * ANIMAL_WATER[kept.animal] * (summer ? SUMMER_DRINK : 1) * years);
     while (h.thirst >= 1 && b.stock.water >= 1) {
@@ -126,7 +166,7 @@ export function livestockWorkplace(world: World, b: Building, def: Livestock): W
   const meat = ANIMALS[kind].meat;
   const trough = { dx: LIVESTOCK_FEED.dx, y: LIVESTOCK_FEED.y };
 
-  const due = () => herdOf(b).animals.findIndex((a) => isDue(kind, a));
+  const due = () => toButcher(world, b);
   const canBreed = () => {
     if (thirsty(b)) return false;
     const h = herdOf(b);

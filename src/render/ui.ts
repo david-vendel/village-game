@@ -19,8 +19,10 @@ import { materialsAllow, siteWork, upgrading } from '../game/site';
 import { sizeOf, sizeOfBuilding } from '../game/grid';
 import { WOOD_REACH } from '../game/nature';
 import { employees, jobsOf } from '../game/people';
-import { RESOURCES, type Amounts } from '../game/resources';
-import { herdRoom, isAdult, type AnimalKind, type Beast } from '../game/livestock';
+import { RESOURCES, type Amounts, type Resource } from '../game/resources';
+import { herdOf, herdRoom, isAdult, isOld, isProductive, toButcher, type AnimalKind, type Beast, type Livestock } from '../game/livestock';
+import { ANIMALS } from '../game/balance';
+import { room } from '../game/resources';
 import { pastureCells, PASTURE_CELLS_PER_HORSE } from '../game/pasture';
 import { householdOf, isHome, lacking, residentsOf, roomIn } from '../game/households';
 import { backOf, mapPoint, streetOf, streetRange, streetAt } from '../game/streets';
@@ -45,12 +47,57 @@ const STAGE_LABEL: Record<ConstructionStage, string> = {
 
 /** On-screen names of the jobs. */
 /** How a label names an animal farm's herd. */
-const HERD_WORDS: Record<AnimalKind, { female: string; male: string; young: string }> = {
-  chicken: { female: 'hens', male: 'cocks', young: 'chicks' },
-  cow: { female: 'cows', male: 'bulls', young: 'calves' },
-  sheep: { female: 'ewes', male: 'rams', young: 'lambs' },
-  horse: { female: 'mares', male: 'stallions', young: 'foals' },
+type Word = [one: string, many: string];
+const HERD_WORDS: Record<AnimalKind, { female: Word; male: Word; young: Word; animals: string; gives: string }> = {
+  chicken: { female: ['hen', 'hens'], male: ['cock', 'cocks'], young: ['chick', 'chicks'], animals: 'Hens', gives: 'lay' },
+  cow: { female: ['cow', 'cows'], male: ['bull', 'bulls'], young: ['calf', 'calves'], animals: 'Cows', gives: 'give milk' },
+  sheep: { female: ['ewe', 'ewes'], male: ['ram', 'rams'], young: ['lamb', 'lambs'], animals: 'Sheep', gives: 'give milk and wool' },
+  horse: { female: ['mare', 'mares'], male: ['stallion', 'stallions'], young: ['foal', 'foals'], animals: 'Horses', gives: 'breed' },
 };
+
+/** An age in years as a label says it. */
+const years = (n: number) => (n === 0.5 ? '½' : String(n));
+
+/**
+ * What an animal farm's label says about its herd: who is in it by age (young, in their prime, old),
+ * the ages that go with that (a game day is a year), and why nothing comes of it, if nothing does.
+ */
+function herdLines(world: World, b: Building, kept: Livestock): string[] {
+  const kind = kept.animal;
+  const w = HERD_WORDS[kind];
+  const h = herdOf(b).animals;
+  const count = (pick: (a: Beast) => boolean) => h.filter(pick).length;
+  const prime = (sex: 'female' | 'male') => count((a) => a.sex === sex && isProductive(kind, a));
+  const parts: Array<[number, Word]> = [
+    [prime('female'), w.female],
+    [prime('male'), w.male],
+    [count((a) => !isAdult(kind, a)), w.young],
+    [count((a) => isOld(kind, a)), ['old', 'old']],
+  ];
+  const a = ANIMALS[kind];
+  const lines = [
+    `Herd: ${parts.filter(([n]) => n > 0).map(([n, s]) => `${n} ${s[n === 1 ? 0 : 1]}`).join(', ') || 'none'} (room for ${herdRoom(world, b)})`,
+    `${w.animals} ${kind === 'horse' ? 'breed' : `${w.gives} and breed`} from ${years(a.adult)} to ${years(a.productiveUntil)} years old, and live to ${a.lifespan} (a day is a year)`,
+  ];
+  if (b.status !== 'done' || thirsty(b)) return lines; // (thirst has its own line)
+  const capacity = storageOf(b);
+  const [female] = w.female;
+  const [male] = w.male;
+  if (!prime('female')) lines.push(`No ${female} in her prime: no ${kept.gives ?? 'young'}`);
+  else if (!prime('male')) lines.push(`No ${male} in his prime: no young`);
+  const full = (r: Resource | undefined, n: number) => !!r && room(b.stock, capacity, r) < n - 1e-9;
+  /** What would take r away, when no building that wants it stands yet. */
+  const taker = (r: Resource) => {
+    const users = BUILDING_TYPES.filter((t) => BUILDINGS[t].needs?.includes(r));
+    const built = world.buildings.some((o) => users.includes(o.type) && o.status === 'done');
+    return !built && users.length ? `: a ${BUILDINGS[users[0]].name.toLowerCase()} would take it` : '';
+  };
+  const per = kept.per ?? 1;
+  if (full(kept.gives, per) && (!kept.or || full(kept.or, per))) lines.push(`The store is full of ${kept.gives}${taker(kept.gives!)}`);
+  if (toButcher(world, b) >= 0 && full('meat', a.meat)) lines.push(`The store is full of meat, so the keeper butchers none to make room for young${taker('meat')}`);
+  if (b.stock[kept.feed] < 1 - 1e-9) lines.push(`No ${kept.feed} in the store: the keeper is waiting for some`);
+  return lines;
+}
 
 const ROLE_NAME: Record<Role, string> = { farmer: 'Farmer', builder: 'Builders', miller: 'Miller', baker: 'Baker', woodcutter: 'Woodcutter', sawyer: 'Sawyer', herder: 'Keeper', dairymaid: 'Dairymaid', smoker: 'Smoker', weaver: 'Weaver', tanner: 'Tanner', chandler: 'Chandler', saddler: 'Saddler', brewer: 'Brewer', pastrycook: 'Pastry cook', smith: 'Smith', stonecutter: 'Stonecutter', serf: 'Serfs' };
 
@@ -715,15 +762,8 @@ export function drawBuildingLabel(ctx: Ctx, world: World, b: Building, sx: numbe
   }
   const kept = def.livestock;
   if (kept && b.herd) {
-    // the herd by age and sex, e.g. "2 cows, 1 bull, 1 calf"
-    const names = HERD_WORDS[kept.animal];
-    const count = (pick: (a: Beast) => boolean) => b.herd!.animals.filter(pick).length;
-    const parts = [
-      [count((a) => isAdult(kept.animal, a) && a.sex === 'female'), names.female],
-      [count((a) => isAdult(kept.animal, a) && a.sex === 'male'), names.male],
-      [count((a) => !isAdult(kept.animal, a)), names.young],
-    ] as const;
-    lines.push(`Herd: ${parts.filter(([n]) => n > 0).map(([n, w]) => `${n} ${w}`).join(', ') || 'none'} (room for ${herdRoom(world, b)})`);
+    // the herd by age, e.g. "2 cows, 1 bull, 1 calf, 1 old", and why nothing comes of it
+    lines.push(...herdLines(world, b, kept));
     if (kept.animal === 'horse') lines.push(`Pasture: ${pastureCells(world, b).length} cells behind the farm, ${PASTURE_CELLS_PER_HORSE} for each horse`);
   }
   if (b.type === 'woodcutter') {

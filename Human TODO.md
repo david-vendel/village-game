@@ -22,6 +22,10 @@ Things only you can do or decide, so agents work faster. Tick them off or delete
 - [ ] **Check the animals' numbers** in `ANIMALS` (`src/game/balance.ts`): grown up / productive
   until / lifespan in years (a game day is a year), feeds per young one, herd caps, meat per animal.
   Also `PASTURE_CELLS_PER_HORSE` (8) in `src/game/pasture.ts`.
+- [ ] **Decide whether restocked animals should cost something.** An animal farm left with no
+  female or no male that can still breed now gets a grown one brought in for free (like the pair a
+  new farm starts with), so a farm never stays empty. It could cost coin instead, or come from the
+  merchant. Also: a full herd now has its oldest butchered to make room for young ones.
 - [ ] **Add the new buildings to the showcase scenario** if you want them there; the free spots
   on its main street are mostly kept for crossroads, so it needs a layout decision.
 

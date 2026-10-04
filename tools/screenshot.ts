@@ -14,6 +14,7 @@
 //   --keys <k:ms,...>  keys to hold down in turn after loading, e.g. d:1500 rides right 1.5 s
 //   --port <n>         dev server port (default 5179)
 //   --panels <list>    side panels to open, e.g. workers,settings,versions (all start closed)
+//   --mouse <x>,<y>    move the mouse there (CSS px) before the shot: a building's info box shows under it
 // Page errors and console warnings are printed, so a blank shot says why.
 
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -30,6 +31,7 @@ const out = resolve(opt('out', join(tmpdir(), 'screenshot.png')));
 const wait = Number(opt('wait', '6000'));
 const [w, h] = opt('size', '1400x800').split('x').map(Number);
 const keys = opt('keys', '');
+const mouse = opt('mouse', '');
 const port = Number(opt('port', '5179'));
 const panels = opt('panels', '').split(',').filter(Boolean);
 const page = args[0] ?? '';
@@ -126,6 +128,11 @@ for (const step of keys ? keys.split(',') : []) {
   await send('Input.dispatchKeyEvent', { type: 'keyUp', key, code });
 }
 await sleep(Math.max(0, wait - 3000));
+if (mouse) {
+  const [mx, my] = mouse.split(',').map(Number);
+  await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: mx, y: my });
+  await sleep(300);
+}
 
 const shot = await send('Page.captureScreenshot', { format: 'png' });
 writeFileSync(out, Buffer.from(String(shot.result!.data), 'base64'));

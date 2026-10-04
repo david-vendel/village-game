@@ -188,7 +188,10 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   breeds (female and male young in turn). They drink from the farm's store of water (brought from the
   well); thirsty, they give nothing and don't breed. The keeper (`herder`) carries the feed (grain for hens,
   hay for the rest) to the trough, carries back what the animals give, and butchers an animal at the
-  end of its lifespan for meat. They share one yard layout (`LIVESTOCK_DOOR`, `FEED_SLOTS`,
+  end of its lifespan for meat, and the oldest whenever the herd is full but for the youngest grown
+  pair (`toButcher`), so there is room for young ones and the herd never ages out all together. A
+  herd with no female or male that will still breed gets a grown one brought in (`restock`). The
+  farm's info box shows the herd by age (young, in their prime, old) and why nothing comes of it. They share one yard layout (`LIVESTOCK_DOOR`, `FEED_SLOTS`,
   `GOODS_SLOTS` in `layout.ts`). Their goods stay in their stores for now: nothing uses them yet.
 - `pasture.ts`: a horse farm's pasture: the free cells reachable from the row behind it, bounded by
   roads, buildings, fields, the quarries, crossroads land and the road grid's lines, so never past
