@@ -70,16 +70,16 @@
     A=#1 house  B=#3 tavern  C=#4 well  D=#5 warehouse  E=#7 house  F=#8 farm  G=#9 chapel  H=#10 house  I=#77 house  J=#78 bakery  K=#79 tavern  L=#80 house  M=#81 well  N=#82 sawmill  O=#83 woodcutter  P=#84 stonecutter  Q=#85 blacksmith  R=#86 chapel  S=#87 mill  T=#88 watchtower  U=#89 market  V=#90 farm  W=#91 warehouse  X=#93 house  Y=#94 tavern  Z=#95 stonecutter
     = | road  + crossing  Y kept for a crossroads  # rocks  @ rider  fields: , grass  _ fallow  " growing  * ripe  (lower case: being built)
 > list
-  #1  house×2  s0:37-42  done  [bread=2 water=4 firewood=6]  home: 6/6 content 100%
+  #1  house×2  s0:37-42  done  [bread=3 water=4 firewood=6]  home: 6/6 content 100%
   #3  tavern  s0:43-51  done  [firewood=3]
   #4  well  s0:52-54  done
-  #5  warehouse×2  s0:64-69  done  [wood=22 stone=20 planks=11 bread=5]  staff: serf, serf, serf, serf, serf
+  #5  warehouse×2  s0:64-69  done  [wood=22 stone=20 planks=11 bread=1 firewood=1]  staff: serf, serf, serf, serf, serf
   #7  house  s0:76-78  done  [water=2 firewood=3]  home: 3/3 content 100%
   #8  farm  s0:94-99  done  [firewood=3]  fields=24 (grass 0, fallow 0, growing 19, ripe 5)  staff: farmer
   #9  chapel  s0:124-129  done
   #10  house  s0:175-177  done  [water=2 firewood=3]  home: 3/3 content 100%
   #77  house  s0:139-141  done  [water=2 firewood=3]  home: 3/3 content 100%
-  #78  bakery  s0:142-147  done  [water=2 firewood=2]  staff: baker
+  #78  bakery  s0:142-147  done  [water=2 firewood=3]  staff: baker
   #79  tavern  s0:148-156  done
   #80  house  s0:157-159  done  [water=2]  home: 3/3 content 100%
   #81  well  s0:160-162  done

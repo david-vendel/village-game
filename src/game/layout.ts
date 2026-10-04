@@ -190,18 +190,19 @@ function pyramid(i: number, rows: readonly number[]): { row: number; col: number
  * where it can be seen, so this is also its capacity: YARD_ITEMS × PILE_UNIT
  * (buildings.ts).
  */
-export const YARD_ITEMS = { wood: 15, stone: 15, planks: 10, grain: 5, flour: 5, bread: 5 } as const;
+export const YARD_ITEMS = { wood: 15, stone: 15, planks: 10, grain: 5, flour: 5, bread: 5, firewood: 15 } as const;
 /** Whether the storage yard keeps r (it has piles for it). */
 export const isYardItem = (r: string): r is keyof typeof YARD_ITEMS => r in YARD_ITEMS;
 /** How many items of each the yard's piles are laid out for: a medium yard's. */
-const YARD_LAID = { wood: 30, stone: 30, planks: 20, grain: 10, flour: 10, bread: 10 } as const;
+const YARD_LAID = { wood: 30, stone: 30, planks: 20, grain: 10, flour: 10, bread: 10, firewood: 30 } as const;
 
 /**
  * The storage yard's piles: a stone heap on the left, a log pile on the right,
  * boards standing on end against the fence behind both (the first half behind the stones),
  * and between them an open-fronted shed with sacks of grain (left) and flour
- * (right) stacked on the ground and baskets of bread on two shelves at the
- * back. Item i (0 = bottom of the stack).
+ * (right) stacked on the ground, baskets of bread on two shelves at the
+ * back, and under them a cord of firewood against the back wall. Item i (0 =
+ * bottom of the stack).
  */
 export function warehouseSlot(r: keyof typeof YARD_ITEMS, i: number, size = 2): Slot {
   // laid out for a medium yard; a small one is squeezed into half the width, a large one spread over half again
@@ -227,6 +228,8 @@ function warehouseSlotMedium(r: keyof typeof YARD_ITEMS, i: number): Slot {
     return { dx: (n < half ? -78 : 44) + (n % half) * 4.6, lift: 0 };
   }
   if (r === 'bread') return { dx: -20 + (n % 5) * 10, lift: n < 5 ? 50 : 62 };
+  // the cord: rows of seven split logs, five rows high, between the floor and the lower shelf
+  if (r === 'firewood') return { dx: -27 + (n % 7) * 9, lift: Math.floor(n / 7) * 5.5 };
   const { row, col } = pyramid(n, [4, 3, 2, 1]);
   return { dx: (r === 'grain' ? -27 : 5) + col * 8 + row * 4, lift: row * 9 };
 }

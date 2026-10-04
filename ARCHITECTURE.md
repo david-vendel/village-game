@@ -141,7 +141,8 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   (`Person.leaving`: they walk to the end of their street and are gone). `HOUSEHOLD` in
   `balance.ts` holds the rates. A house lacking something shows it in a bubble over its door.
 - `firewood.ts`: firewood, split from logs at the sawmill (`FIREWOOD.perLog` a log; it makes planks
-  or firewood, whichever the village is shorter of: `Recipe.or`). Every building with a fire
+  or firewood, whichever the village is shorter of: `Recipe.or`); the storage yard keeps it too, a cord in its shed
+  (`YARD_ITEMS`), so the village can stock up for winter. Every building with a fire
   (`HAS_FIRE`: homes, the farm, the tavern, the watch, and every building whose workers live in it but
   the mill and the sawmill) keeps a woodpile by its corner (`woodpileSlot`) and burns it as hard as
   `hearth.ts` says its fire burns, `WINTER_FIRE` times as much in winter; households burn theirs as a

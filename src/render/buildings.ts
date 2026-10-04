@@ -592,6 +592,11 @@ function drawWarehouse(ctx: Ctx, a: DrawArgs): void {
     rect(ctx, xr - 6, a.base - lift + 2.5, 2, 4, '#5e452e');
   }
   gableRoof(ctx, xl - 4, a.base - 72, xr - xl + 8, 30, 16, '#b8955a', '#6b4f33', 'thatch', a.seed);
+  // a cord of firewood stacked against the back wall, under the shelves (the sacks stand in front of it)
+  for (let i = 0; i < items('firewood'); i++) {
+    const s = slot('firewood', i);
+    drawItem(ctx, 'firewood', a.x + s.dx, a.base + 2 - s.lift, 0.85, a.time);
+  }
   // bread in baskets on the shelves, the last basket part-full
   const bread = stock?.bread ?? 0;
   for (let i = 0; i < items('bread'); i++) {
