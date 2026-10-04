@@ -683,7 +683,7 @@ export function drawBuildingLabel(ctx: Ctx, world: World, b: Building, sx: numbe
   }
   if (isHome(b)) {
     const h = householdOf(b);
-    const want = lacking(b);
+    const want = lacking(world, b);
     lines.push(`Home of ${residentsOf(world, b).length} (room for ${roomIn(b)}) · content ${Math.round(h.content * 100)}%${want.length ? ` · wants ${want.join(' and ')}` : ''}`);
   }
   const kept = def.livestock;

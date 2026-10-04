@@ -1,13 +1,17 @@
 // People and animals. Every villager is a person with a number (id), a name
 // and a job — or none. The unemployed stroll the street; a finished building
 // with open jobs hires the nearest of them, who then lives by the worker
-// routine (worker.ts) at that building. Animals (chickens) just stroll.
+// routine (worker.ts) at that building. Someone in a lasting job (a farmer, the
+// baker) lives at their workplace; everyone else in a house, the monks in the
+// chapel (households.ts). Those not at work go home to sleep, and go out to eat
+// when hungry (`Visit`, hunger.ts). Animals (chickens) just stroll.
 
 import { BUILDINGS, currentUpgrade, ROLES, SKILLED, upgradesDone, type Role } from './buildings';
 import { ROAD_Y, yAt } from './layout';
 import { findPath, terrainSpeed } from './paths';
 import { fromStreet, groundPoint, streetDist, streetOf, streetRange, type Vec } from './streets';
-import type { Worker } from './worker';
+import type { Walker, Worker } from './worker';
+import type { Resource } from './resources';
 import type { Building, World } from './world';
 
 export type Look = 'peasant' | 'woman' | 'monk';
@@ -21,6 +25,29 @@ export interface Stroll {
   speed: number;
   /** Seconds remaining standing still. */
   idle: number;
+}
+
+/**
+ * Someone not at work gone somewhere (hunger.ts): home to sleep, or to eat at
+ * a building. Walking there (`left` unset), then inside (`left` game hours to
+ * go), or eating where they stand (`outdoors`); then back out to the street.
+ * Their place is still their stroll's (x, y) all the while.
+ */
+export interface Visit {
+  at: number;
+  why: 'eat' | 'sleep';
+  /** What they eat (eat). */
+  food?: Resource;
+  /** Where they walk to: dx from the building, and depth. */
+  dx: number;
+  y: number;
+  /** Arrived: game hours still to stay. */
+  left?: number;
+  /** Arrived and eating where they stand, not inside. */
+  outdoors?: true;
+  /** Walking: where they are, seen from the building (worker.ts Walker), and for how long (s). */
+  walker?: Walker;
+  t?: number;
 }
 
 export interface Job {
@@ -48,8 +75,12 @@ export interface Person {
    */
   seeker?: true;
   stroll: Stroll;
-  /** The house they live in (households.ts); none for monks, or the homeless. */
+  /** Where they live (households.ts): their workplace in a lasting job, else a house (monks: the chapel); none for the homeless. */
   home?: number;
+  /** Days of food in them (hunger.ts): at none they are hungry, below that starving. */
+  food: number;
+  /** Gone home to sleep, or out to eat, while not at work. */
+  visit?: Visit;
   /** Leaving the village: walking to the end of the street, then gone. */
   leaving?: true;
 }
@@ -78,6 +109,12 @@ export function nameFor(look: Look, seed: number, taken: ReadonlySet<string> = n
   // every name of that kind is in use: number them
   for (let k = 2; ; k++) if (!taken.has(`${list[start]} ${k}`)) return `${list[start]} ${k}`;
 }
+
+/** A lasting job (lived at): anything but building and errands. */
+export const lasting = (role: Role) => role !== 'serf' && role !== 'builder';
+
+/** Whether someone is out where they can be seen: not inside on a visit. */
+export const outdoors = (p: Person) => !p.visit || p.visit.left === undefined || !!p.visit.outdoors;
 
 /** The lane of the street someone strolls along: odd ids on the far side, even ids on the near side. */
 export function laneY(id: number): number {
@@ -127,7 +164,8 @@ function betweenErrands(p: Person): boolean {
 function candidates(world: World, role: Role): Person[][] {
   // skilled work only for freemen: people whose home is a farmstead or better
   const able = (p: Person) => !SKILLED.has(role) || upgradesDone(world.buildings.find((b) => b.id === p.home) ?? { upgraded: undefined }) >= 1;
-  const free = (p: Person) => !p.job && !p.leaving && able(p);
+  // not while out for a meal; asleep at home, only to run errands (they work day and night)
+  const free = (p: Person) => !p.job && !p.leaving && able(p) && (!p.visit || (role === 'serf' && p.visit.why === 'sleep'));
   if (role === 'serf') return [world.people.filter((p) => free(p) && p.seeker)];
   const pros = world.people.filter((p) => free(p) && p.profession === role);
   if (role === 'builder') return [pros, world.people.filter((p) => free(p) && p.seeker)];
@@ -149,10 +187,13 @@ export function staffBuildings(world: World, hire: (b: Building, role: Role, who
         if (!tier) break; // nobody for this job: on to the next
         const who = tier.sort((a, c) => streetDist(world, whereX(world, a), x) - streetDist(world, whereX(world, c), x))[0];
         if (who.job) release(world, who); // a serf leaves their errands from where they stand
-        if (role !== 'serf' && role !== 'builder') {
-          // a lasting job becomes a seeker's profession
+        // woken for errands: out of the door
+        delete who.visit;
+        if (lasting(role)) {
+          // a lasting job becomes a seeker's profession, and they live where they work
           who.profession = role;
           delete who.seeker;
+          who.home = b.id;
         }
         who.job = { buildingId: b.id, role, worker: hire(b, role, who) };
       }
@@ -175,6 +216,11 @@ export function release(world: World, p: Person): void {
 
 /** Each stroller's way back to their lane (paths.ts), while they walk it. */
 const ways = new WeakMap<Stroll, { to: Vec; path: Vec[] }>();
+
+/** Forget the way back to the lane someone was on (they went somewhere else meanwhile). */
+export function forgetWay(s: Stroll): void {
+  ways.delete(s);
+}
 
 /** Walk towards the lane, straight across the street from where they were, round anything in the way (paths.ts). */
 function backToLane(world: World, s: Stroll, lane: number, dt: number): void {
@@ -217,7 +263,7 @@ function backToLane(world: World, s: Stroll, lane: number, dt: number): void {
 /** Unemployed people and animals wander the street they are on, stopping now and then. */
 export function updateStrolls(world: World, dt: number, rand: () => number): void {
   const walkers: Array<{ s: Stroll; chicken: boolean; lane: number; leaving?: true }> = [
-    ...world.people.filter((p) => !p.job).map((p) => ({ s: p.stroll, chicken: false, lane: laneY(p.id), leaving: p.leaving })),
+    ...world.people.filter((p) => !p.job && !p.visit).map((p) => ({ s: p.stroll, chicken: false, lane: laneY(p.id), leaving: p.leaving })),
     ...world.animals.map((a) => ({ s: a.stroll, chicken: true, lane: laneY(a.id) })),
   ];
   for (const { s, chicken, lane, leaving } of walkers) {

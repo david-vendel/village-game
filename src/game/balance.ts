@@ -81,6 +81,20 @@ export const HOUSE_RESIDENTS = 3;
 export const CHAPEL_RESIDENTS = 4;
 
 /**
+ * Hunger (hunger.ts): everyone carries some days of food in them, used up a day
+ * a game day. At none left they are hungry: they eat at home if its pantry has
+ * food, else at a tavern. `starving` days past that they are starving: they put
+ * down their work and eat whatever food they find anywhere. `leave` days past
+ * it they leave the village. A meal takes `mealHours` game hours. At home (lunch,
+ * or the night) they eat from the pantry once down to `topUp` days.
+ */
+export const HUNGER = { starving: 1, leave: 3, mealHours: 0.5, topUp: 0.5 };
+/** What people eat, and how many days of food an item of each is. */
+export const FOODS: Partial<Record<Resource, number>> = { bread: 1, cheese: 1, smokedmeat: 1, pastries: 1, eggs: 0.5, milk: 0.5, meat: 0.5 };
+/** Loaves a building people live in keeps in its pantry (by the door), brought by serfs. */
+export const PANTRY = 2;
+
+/**
  * What a household needs, by its house's level: each need is one of `goods`
  * (any will do), `perDay` per person per game day. Clothing is a cloth a
  * person a year (YEAR_DAYS).
@@ -90,25 +104,19 @@ export interface Need {
   perDay: number;
 }
 export const NEEDS: Record<'chapel' | 'cottage' | 'farmstead' | 'townhouse', Need[]> = {
-  // the monks: bread and water, and no fire to keep
-  chapel: [
-    { goods: ['bread'], perDay: 1 / 3 },
-    { goods: ['water'], perDay: 1 / 2 },
-  ],
+  // the monks: water, and no fire to keep (food is each person's own hunger: HUNGER)
+  chapel: [{ goods: ['water'], perDay: 1 / 2 }],
   cottage: [
-    { goods: ['bread'], perDay: 1 / 3 },
     { goods: ['water'], perDay: 1 / 2 },
     { goods: ['firewood'], perDay: 1 / 6 },
   ],
   farmstead: [
-    { goods: ['bread'], perDay: 1 / 3 },
     { goods: ['water'], perDay: 1 / 2 },
     { goods: ['firewood'], perDay: 1 / 6 },
     { goods: ['cheese', 'smokedmeat'], perDay: 1 / 4 },
     { goods: ['cloth'], perDay: 1 / 12 },
   ],
   townhouse: [
-    { goods: ['bread'], perDay: 1 / 3 },
     { goods: ['water'], perDay: 1 / 2 },
     { goods: ['firewood'], perDay: 1 / 6 },
     { goods: ['cheese', 'smokedmeat'], perDay: 1 / 4 },

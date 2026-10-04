@@ -401,6 +401,11 @@ export function woodpileSlot(width: number, i: number): Slot {
   return { dx: width / 2 - 6 - (i % 2) * 6, lift: Math.floor(i / 2) * 4 };
 }
 
+/** A pantry's loaves (buildings.ts PANTRIES), in a row on the ground just right of the door. */
+export function pantrySlot(doorDx: number, i: number): Slot {
+  return { dx: doorDx + 11 + i * 7, lift: 0 };
+}
+
 /** Baskets of loaves on the bench in front of the tavern, where its guests help themselves. */
 export const TAVERN_SLOTS: readonly Slot[] = [
   { dx: -62, lift: 10 },

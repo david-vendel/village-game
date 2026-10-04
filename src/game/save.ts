@@ -21,7 +21,7 @@ import { farmFieldSpots, syncFarmFields } from './land';
 import { FIELD_ROWS, type FieldZone } from './layout';
 import { BUILDERS_PER_SITE, createSite, workSpots, type Site } from './site';
 import { transportHub, type ErrandBoard } from './transport';
-import { employees, openings, type Animal, type Job, type Person, type Stroll } from './people';
+import { employees, openings, type Animal, type Job, type Person, type Stroll, type Visit } from './people';
 import type { Castle } from './castle';
 import { RESOURCES, stockOf, type Load, type Resource, type Stock } from './resources';
 import type { Worker, WorkerTask } from './worker';
@@ -31,7 +31,7 @@ import { cellKey, cellName, cellsOf, footprintOf } from './grid';
 import { lowestPlot, streetOf, type Street } from './streets';
 import { createWorld, goneStreet, layStreet, MERGES, PLOT_LAST, setStreetEnds, type Building, type Rider, type World } from './world';
 
-export const SAVE_VERSION = 35;
+export const SAVE_VERSION = 36;
 
 
 /** The persisted part of the world. */
@@ -363,6 +363,20 @@ function stroll(v: unknown, path: string): Stroll {
   return { x: num(s.x, `${path}.x`), y: num(s.y, `${path}.y`), dir: dir(s.dir, `${path}.dir`), speed: num(s.speed, `${path}.speed`), idle: num(s.idle, `${path}.idle`) };
 }
 
+/** Someone gone home or out to eat (the way there is found again from where they stand). */
+function visit(v: unknown, path: string): Visit {
+  const s = obj(v, path);
+  return {
+    at: int(s.at, `${path}.at`),
+    why: oneOf(s.why, ['eat', 'sleep'] as const, `${path}.why`),
+    ...(s.food !== undefined ? { food: oneOf(s.food, RESOURCES, `${path}.food`) } : {}),
+    dx: num(s.dx, `${path}.dx`),
+    y: num(s.y, `${path}.y`),
+    ...(s.left !== undefined ? { left: num(s.left, `${path}.left`) } : {}),
+    ...(s.outdoors !== undefined && bool(s.outdoors, `${path}.outdoors`) ? { outdoors: true as const } : {}),
+  };
+}
+
 /** Saved profession (or looking for one); older saves without one: whatever they work as, else builder (for peasants). */
 function professionOf(p: Raw, path: string): { profession?: Role; seeker?: true } {
   if (p.seeker !== undefined) return bool(p.seeker, `${path}.seeker`) ? { seeker: true } : {};
@@ -382,6 +396,8 @@ function person(v: unknown, path: string): Person {
     ...professionOf(p, path),
     stroll: stroll(p.stroll, `${path}.stroll`),
     ...(p.home !== undefined ? { home: int(p.home, `${path}.home`) } : {}),
+    food: num(p.food, `${path}.food`),
+    ...(p.visit !== undefined ? { visit: visit(p.visit, `${path}.visit`) } : {}),
     ...(p.leaving !== undefined && bool(p.leaving, `${path}.leaving`) ? { leaving: true as const } : {}),
   };
 }
@@ -462,11 +478,11 @@ function ticket(v: unknown, path: string) {
 
 function task(v: unknown, path: string): WorkerTask {
   const t = obj(v, path);
-  switch (oneOf(t.kind, ['idle', 'walk', 'job', 'enter', 'home', 'exit'] as const, `${path}.kind`)) {
+  switch (oneOf(t.kind, ['idle', 'walk', 'job', 'enter', 'home', 'exit', 'meal'] as const, `${path}.kind`)) {
     case 'idle':
       return { kind: 'idle', wait: num(t.wait, `${path}.wait`) };
     case 'walk': {
-      const then = oneOf(t.then, ['job', 'deliver', 'home'] as const, `${path}.then`);
+      const then = oneOf(t.then, ['job', 'deliver', 'home', 'eat'] as const, `${path}.then`);
       return {
         kind: 'walk',
         toDx: num(t.toDx, `${path}.toDx`),
@@ -495,6 +511,14 @@ function task(v: unknown, path: string): WorkerTask {
       return { kind: 'exit', t: num(t.t, `${path}.t`), ...(t.job === undefined ? {} : { job: ticket(t.job, `${path}.job`) }) };
     case 'home':
       return { kind: 'home', activity: oneOf(t.activity, ['lunch', 'sleep'] as const, `${path}.activity`), left: num(t.left, `${path}.left`) };
+    case 'meal':
+      return {
+        kind: 'meal',
+        job: ticket(t.job, `${path}.job`),
+        t: num(t.t, `${path}.t`),
+        duration: num(t.duration, `${path}.duration`),
+        ...(t.indoors !== undefined && bool(t.indoors, `${path}.indoors`) ? { indoors: true as const } : {}),
+      };
   }
 }
 

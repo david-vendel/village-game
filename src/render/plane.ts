@@ -15,7 +15,7 @@ import { roadShown } from './roads';
 import { BUILDINGS } from '../game/buildings';
 import { crossroadsPlaces, sizeOfBuilding } from '../game/grid';
 import { BASE_Y, CELL_W, EYE_DIST, FIELD_ROWS, QUARRIES, quarryLand, ROAD_FAR_Y, ROAD_NEAR_Y, STREET_LINE_Y, TREE_Y } from '../game/layout';
-import { employees } from '../game/people';
+import { employees, outdoors } from '../game/people';
 import { drawingAt } from '../game/transport';
 import { pastureCells } from '../game/pasture';
 import { isHome, lacking } from '../game/households';
@@ -259,7 +259,7 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
       level: upgradesDone(b),
       fire: HAS_FIRE.has(b.type) ? fireOf(world, b) : undefined,
       merchant: b.type === 'market' && merchantHere(world),
-      wants: isHome(b) ? lacking(b) : undefined,
+      wants: isHome(b) ? lacking(world, b) : undefined,
       pasture: b.type === 'horsefarm' && b.status === 'done' ? pastureCells(world, b).length : undefined,
     };
     const { at, view } = lot(b, x);
@@ -332,7 +332,7 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
         ctx.scale(f / farmerScale(w.y), 1 / farmerScale(w.y));
         drawWorker(ctx, w, figureOf(p), 0, 0, world.time);
       });
-    } else if (!p.job && elsewhere(p.stroll.x)) {
+    } else if (!p.job && outdoors(p) && elsewhere(p.stroll.x)) {
       const f = facingOf(world.streets[streetOf(p.stroll.x)]);
       add(ground(world, p.stroll.x, p.stroll.y), 20, () => {
         ctx.scale(f, 1);

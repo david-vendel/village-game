@@ -29,6 +29,10 @@ Things only you can do or decide, so agents work faster. Tick them off or delete
   days, how much coin; and which charter unlocks what (`charter:` on each building in
   `src/game/buildings.ts`: 1 for the food and leather chains and the farmstead, 2 for the saddler,
   stable, brewery, pastry cook and the townhouse).
+- [ ] **Check hunger's numbers** (`HUNGER`, `FOODS`, `PANTRY` in `balance.ts`): a loaf is a day's
+  food for anyone (three times the bread the old household need used), hungry at none left,
+  starving a day later, leaving three days later. With 10 starting loaves and no bakery the
+  starting village goes hungry on day 2 and people start leaving around day 5.
 - [ ] **Decide what coin buys** besides the merchant's iron and salt (DESIGN.md "As built").
 - [ ] **3D models** are missing for the sawmill, the animal farms and every building from steps
   2–6 (they show as 2D with advanced graphics on).

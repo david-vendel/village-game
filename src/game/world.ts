@@ -26,9 +26,9 @@ import { dropOnGround, type Pile } from './piles';
 import { RESOURCES, stockOf, type Resource, type Stock } from './resources';
 import { CROSS_PLOT, fromStreet, groundPoint, mainStreet, newStreet, plotPoint, lowestPlot, plotX, PLOT_FIRST, PLOT_LAST, PLOTS_PER_STREET, rideRange, STREET_END_RUN, streetOf, streetRange, streetsAt, streetStart, turnFacing, type Junction, type Street, type Vec } from './streets';
 import { findPath, terrainSpeed } from './paths';
-import { eatAtTaverns } from './tavern';
+import { mealsOf, sendToEat, updateHunger, updateVisits } from './hunger';
 import { serfPositions, transportHub, transportWorkplace, unplannedBoard, type ErrandBoard } from './transport';
-import { createWorker, currentJob, offDuty, updateWorker, type Nav, type Worker, type Workplace } from './worker';
+import { createWorker, currentJob, offDuty, updateWorker, type Nav, type Walker, type Worker, type Workplace } from './worker';
 import { workshopWorkplace } from './workshop';
 import { HOUSE_RESIDENTS } from './balance';
 import { residentsOf, roomIn, updateHouseholds, type Household } from './households';
@@ -306,7 +306,9 @@ export function createWorld(opts: CreateWorldOptions = {}): World {
       else {
         const n = kind === 'peasant' ? peasants++ : -1;
         const work = n < 0 ? {} : n === 0 ? { profession: 'farmer' as const } : n < 6 ? { profession: 'builder' as const } : { seeker: true as const };
-        world.people.push({ id, name: nameFor(kind, seed, new Set(world.people.map((p) => p.name))), look: kind, seed, job: null, stroll, ...work });
+        // fed to start with, some more than others, so they don't all go to eat at once
+        const food = 0.5 + rand(world);
+        world.people.push({ id, name: nameFor(kind, seed, new Set(world.people.map((p) => p.name))), look: kind, seed, job: null, stroll, food, ...work });
       }
     }
     staff(world);
@@ -776,7 +778,7 @@ function arrive(world: World, dt: number): void {
     const name = nameFor('peasant', seed, new Set(world.people.map((p) => p.name)));
     // they live here, if there is room still (households.ts); else they find a home elsewhere
     const home = residentsOf(world, b).length < roomIn(b) ? { home: b.id } : {};
-    world.people.push({ id, name, look: 'peasant', seed, job: null, stroll, seeker: true, ...home });
+    world.people.push({ id, name, look: 'peasant', seed, job: null, stroll, seeker: true, food: 1, ...home });
     a.left--;
     a.next = ARRIVAL_GAP;
     if (a.left <= 0) delete b.arriving;
@@ -1119,7 +1121,6 @@ export function update(world: World, dt: number, input: MoveInput): void {
   world.time += dt;
   const clockBefore = world.dayClock;
   world.dayClock += dt * clockRate(world);
-  eatAtTaverns(world, clockBefore);
   updateMarkets(world, clockBefore);
   updateCastle(world);
   feedStables(world, dt);
@@ -1129,6 +1130,7 @@ export function update(world: World, dt: number, input: MoveInput): void {
   staff(world);
   // nothing grows in winter
   if (!isWinter(world)) for (const b of world.buildings) if (b.farm) updateCrops(b.farm, dt);
+  updateHunger(world, dt);
   updateHouseholds(world, dt, moveIn);
   updateSpoilage(world, dt);
   ageHerds(world, dt);
@@ -1139,6 +1141,7 @@ export function update(world: World, dt: number, input: MoveInput): void {
   for (const b of world.buildings) if (b.site && b.progress >= 1) complete(world, b);
   // and one being pulled down that is down is gone
   for (const b of [...world.buildings]) if (b.status === 'demolishing' && b.progress <= 1e-9) pulledDown(world, b);
+  updateVisits(world, dt, (x) => navFrom(world, x));
   updateStrolls(world, dt, () => rand(world));
 }
 
@@ -1203,7 +1206,7 @@ function newWorker(world: World, b: Building, role: Role, who: Person): Worker {
 }
 
 /** Each walking worker's way (paths.ts), kept while they walk to the same spot over the same land. */
-const ways = new WeakMap<Worker, { to: Vec; land: unknown; path: Vec[] }>();
+const ways = new WeakMap<Walker, { to: Vec; land: unknown; path: Vec[] }>();
 
 /** How far in front of a street's road a point can still be seen from it (map px): beyond, it is seen from another (layout.ts yAt). */
 const FRONT_REACH = FRONT_LIMIT - 5;
@@ -1270,17 +1273,19 @@ function updateWorkers(world: World, dt: number): void {
       const w = p.job!.worker;
       // day labourers are let go at nightfall, once they've finished the job in
       // hand and delivered what they carry (they're hired again in the morning)
-      if (place.dayLabour && offDuty(w, now, place) && !w.carrying && w.task.kind !== 'job') {
+      if (place.dayLabour && offDuty(w, now, place) && !w.carrying && w.task.kind !== 'job' && w.task.kind !== 'meal') {
         release(world, p);
         continue;
       }
       const taken = staffers.filter((o) => o !== w).flatMap((o) => currentJob(o) ?? []);
+      // hungry, between jobs: off to eat (hunger.ts)
+      sendToEat(world, p, b.x, place.allHours || now.daylight);
       // errand work: with nothing to carry and no errand waiting, they are let go where they stand
       if (place.temporary && w.task.kind === 'idle' && !w.carrying && !place.nextJob(w, taken)) {
         release(world, p);
         continue;
       }
-      updateWorker(w, place, dt, now, taken, nav);
+      updateWorker(w, place, dt, now, taken, nav, mealsOf(world, p));
     }
   }
 }

@@ -1,8 +1,11 @@
-// Households: every villager has a home, a house (the monks the chapel), and a
-// home's household eats and drinks from its own store, the shelf by its door
-// (houseSlot in layout.ts). What it needs (NEEDS in
-// balance.ts, per person per day) serfs bring like anything a building needs
-// (BuildingDef.needs, transport.ts).
+// Households: every villager has a home. Someone in a lasting job lives at
+// their workplace (the farmer at the farm, the baker at the bakery); everyone
+// else in a house, the monks in the chapel. A house's (or the chapel's)
+// household drinks and burns from its own store, the shelf by its door
+// (houseSlot in layout.ts). What it needs (NEEDS in balance.ts, per person per
+// day) serfs bring like anything a building needs (BuildingDef.needs,
+// transport.ts). Food is each person's own (hunger.ts): a household's need for
+// it is met while none of its people is hungry.
 //
 // A household is content as far as its needs are met, and its contentment
 // follows that over about a day. Content, with room in the house: a newcomer
@@ -14,12 +17,14 @@
 // way, but no newcomers come out of the chapel.
 //
 // People without a home (a house pulled down, or new to the village) move into
-// the nearest house with room as soon as there is one.
+// the nearest house with room as soon as there is one; someone in a lasting
+// job lives at their workplace.
 
 import { WINTER_FIRE, CHAPEL_REACH, CHAPEL_RESIDENTS, FARMSTEAD_EXTRA, HOUSE_RESIDENTS, HOUSEHOLD, NEEDS, TAX_PER_DAY, TOWNHOUSE_EXTRA, type Need } from './balance';
 import { upgradesDone } from './buildings';
 import { isWinter, timeOfDay } from './daynight';
-import { release, type Person } from './people';
+import { lasting, release, type Person } from './people';
+import { hungry, pantryFood } from './hunger';
 import type { Resource } from './resources';
 import { streetDist, streetOf, streetRange } from './streets';
 import type { Building, World } from './world';
@@ -61,10 +66,11 @@ export function householdOf(b: Building): Household {
   return (b.household ??= { content: 1, owed: {}, growIn: 0, leaveIn: 0 });
 }
 
-/** What a household lacks right now: needs it is owed a whole item of and has none of (the first of their goods). */
-export function lacking(b: Building): Resource[] {
+/** What a household lacks right now: needs it is owed a whole item of and has none of (the first of their goods); bread when someone is hungry and there is no food. */
+export function lacking(world: World, b: Building): Resource[] {
   const h = householdOf(b);
-  return householdNeeds(b).filter((n) => (h.owed[keyOf(n)] ?? 0) >= 1 && n.goods.every((r) => b.stock[r] < 1)).map((n) => n.goods[0]);
+  const out = householdNeeds(b).filter((n) => (h.owed[keyOf(n)] ?? 0) >= 1 && n.goods.every((r) => b.stock[r] < 1)).map((n) => n.goods[0]);
+  return residentsOf(world, b).some(hungry) && !pantryFood(b) ? ['bread', ...out] : out;
 }
 
 /** Give the homeless a home: the nearest house with room. */
@@ -72,7 +78,13 @@ function settle(world: World): void {
   const all = homes(world);
   const ids = new Set(all.map((b) => b.id));
   for (const p of world.people) {
-    if (p.leaving || (p.home !== undefined && ids.has(p.home))) continue;
+    if (p.leaving) continue;
+    // in a lasting job: at their workplace
+    if (p.job && lasting(p.job.role)) {
+      p.home = p.job.buildingId;
+      continue;
+    }
+    if (p.home !== undefined && ids.has(p.home)) continue;
     delete p.home;
     const x = p.job ? (world.buildings.find((b) => b.id === p.job!.buildingId)?.x ?? p.stroll.x) : p.stroll.x;
     const free = all.filter((b) => homeFor(p, b) && residentsOf(world, b).length < roomIn(b)).sort((a, b) => streetDist(world, x, a.x) - streetDist(world, x, b.x));
@@ -81,9 +93,10 @@ function settle(world: World): void {
 }
 
 /** Someone leaves the village: they put down their work and walk off down the street. */
-function leave(world: World, p: Person): void {
+export function leave(world: World, p: Person): void {
   if (p.job) release(world, p);
   delete p.home;
+  delete p.visit;
   p.leaving = true;
   const { min, max } = streetRange(world, streetOf(p.stroll.x));
   p.stroll.dir = p.stroll.x - min < max - p.stroll.x ? -1 : 1;
@@ -124,8 +137,9 @@ export function updateHouseholds(world: World, dt: number, moveIn: (b: Building,
       }
       if (h.owed[k] < 1) met++;
     }
-    // burghers want the chapel near too
-    const wants = needs.length + (upgradesDone(b) >= 2 ? 1 : 0);
+    // fed: nobody hungry; burghers want the chapel near too
+    const wants = needs.length + 1 + (upgradesDone(b) >= 2 ? 1 : 0);
+    if (!people.some(hungry)) met++;
     if (upgradesDone(b) >= 2 && chapelNear(world, b)) met++;
     const share = people.length ? met / wants : 1;
     // content burghers pay their taxes

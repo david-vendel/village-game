@@ -28,8 +28,11 @@ export interface JobTicket {
 
 export type WorkerTask =
   | { kind: 'idle'; wait: number }
-  /** Walking somewhere; `job` is the job to do there, or (for a delivery) the job the load came from. */
-  | { kind: 'walk'; toDx: number; toY: number; then: 'job' | 'deliver' | 'home'; job: JobTicket | null }
+  /**
+   * Walking somewhere; `job` is the job to do there, or (for a delivery) the job the load came
+   * from, or (`eat`) the meal: `eat-<food>` at building `target` (hunger.ts).
+   */
+  | { kind: 'walk'; toDx: number; toY: number; then: 'job' | 'deliver' | 'home' | 'eat'; job: JobTicket | null }
   /**
    * Doing a job: t seconds done out of duration. `carried`: working on the load
    * they brought (Workplace.workOn), where they stand or, `indoors`, inside.
@@ -43,7 +46,9 @@ export type WorkerTask =
   /** Indoors, out of sight. At lunch, `left` counts the game hours still to eat. */
   | { kind: 'home'; activity: 'lunch' | 'sleep'; left: number }
   /** Stepping out of the door, back to work; with a `job`, carrying out what was made inside, to its place. */
-  | { kind: 'exit'; t: number; job?: JobTicket };
+  | { kind: 'exit'; t: number; job?: JobTicket }
+  /** Having a meal (hunger.ts): t seconds of `duration`, inside (at home) or where they stand (a tavern's bench, a store). */
+  | { kind: 'meal'; job: JobTicket; t: number; duration: number; indoors?: true };
 
 export interface Worker {
   dx: number;
@@ -106,6 +111,17 @@ export interface Workplace {
   deliver(load: Load, job: JobTicket): void;
 }
 
+/** Where someone has their meals (hunger.ts): the world, for a worker who sets off for one. */
+export interface Meals {
+  /** Arrived for the meal: the food is taken; how long it takes and whether it is had inside, or null if the food is gone. */
+  sit(job: JobTicket): { seconds: number; indoors: boolean } | null;
+  /** The meal is eaten. */
+  eaten(job: JobTicket): void;
+}
+
+/** Someone walking: where they are (dx from their workplace, or whatever they are seen from) and which way they face. */
+export type Walker = Pick<Worker, 'dx' | 'y' | 'facing' | 'stride'>;
+
 /** A point on the village map (map px). */
 export interface MapPoint {
   x: number;
@@ -122,8 +138,8 @@ export interface Nav {
   toMap(dx: number, y: number): MapPoint;
   /** Map point p as (dx, y), seen from the street the worker at `nearDx` is on, or one nearer p. */
   fromMap(p: MapPoint, nearDx: number): { dx: number; y: number };
-  /** The next point on the fastest way from `from` to `to` (to itself at the end), for this worker. */
-  next(w: Worker, from: MapPoint, to: MapPoint): MapPoint;
+  /** The next point on the fastest way from `from` to `to` (to itself at the end), for this walker. */
+  next(w: Walker, from: MapPoint, to: MapPoint): MapPoint;
   /** How fast someone walks at p, as a share of their speed on grass. */
   speedAt(p: MapPoint): number;
 }
@@ -177,12 +193,23 @@ export function retarget(w: Worker, place: Pick<Workplace, 'door'>, job: JobTick
   }
 }
 
-function walkTo(w: Worker, toDx: number, toY: number, then: 'job' | 'deliver' | 'home', job: JobTicket | null): void {
+function walkTo(w: Worker, toDx: number, toY: number, then: 'job' | 'deliver' | 'home' | 'eat', job: JobTicket | null): void {
   w.task = { kind: 'walk', toDx, toY, then, job };
 }
 
 function goHome(w: Worker, place: Pick<Workplace, 'door'>): void {
   walkTo(w, place.door.dx, place.door.y, 'home', null);
+}
+
+/** Set off for a meal (hunger.ts): to (toDx, toY), to have `job` there. */
+export function goToMeal(w: Worker, toDx: number, toY: number, job: JobTicket): void {
+  walkTo(w, toDx, toY, 'eat', job);
+}
+
+/** On the way to a meal, or having it: the meal's ticket. */
+export function mealOf(w: Worker): JobTicket | null {
+  const t = w.task;
+  return t.kind === 'meal' || (t.kind === 'walk' && t.then === 'eat') ? t.job : null;
 }
 
 const atDoor = (w: Worker, place: Workplace) => Math.abs(w.dx - place.door.dx) < 0.5 && Math.abs(w.y - place.door.y) < 0.5;
@@ -199,7 +226,7 @@ export function offDuty(w: Worker, now: TimeOfDay, place: Pick<Workplace, 'dayLa
  * Walk the fastest way across the land towards (toDx, toY) for `reach` px of
  * grass (further on the road, less in fields). Returns whether they got there.
  */
-function walkOnLand(w: Worker, toDx: number, toY: number, reach: number, nav: Nav): boolean {
+export function walkOnLand(w: Walker, toDx: number, toY: number, reach: number, nav: Nav): boolean {
   const to = nav.toMap(toDx, toY);
   let p = nav.toMap(w.dx, w.y);
   let left = reach;
@@ -252,9 +279,17 @@ function walkStraight(w: Worker, toDx: number, toY: number, step: number): boole
 }
 
 /** Advance one worker. `taken`: jobs the workplace's other workers are on; `nav`: the way to other streets. */
-export function updateWorker(w: Worker, place: Workplace, dt: number, now: TimeOfDay, taken: JobTicket[], nav?: Nav): void {
+export function updateWorker(w: Worker, place: Workplace, dt: number, now: TimeOfDay, taken: JobTicket[], nav?: Nav, meals?: Meals): void {
   const task = w.task;
   const off = offDuty(w, now, place);
+
+  if (task.kind === 'meal') {
+    task.t += dt;
+    if (task.t < task.duration) return;
+    meals?.eaten(task.job);
+    w.task = { kind: 'idle', wait: 0.3 };
+    return;
+  }
 
   if (task.kind === 'enter' || task.kind === 'exit') {
     task.t += dt;
@@ -335,6 +370,10 @@ export function updateWorker(w: Worker, place: Workplace, dt: number, now: TimeO
       if (w.carrying && task.job) place.deliver(w.carrying, task.job);
       w.carrying = null;
       w.task = { kind: 'idle', wait: 0.8 };
+    } else if (task.then === 'eat' && task.job) {
+      const meal = meals?.sit(task.job) ?? null;
+      // the food went while they walked: back to whatever is next
+      w.task = meal ? { kind: 'meal', job: task.job, t: 0, duration: meal.seconds, ...(meal.indoors ? { indoors: true as const } : {}) } : { kind: 'idle', wait: 0.3 };
     } else if (off) {
       w.task = { kind: 'enter', t: 0 };
     } else {

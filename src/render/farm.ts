@@ -228,7 +228,7 @@ export function doorProgress(f: Worker): number {
   const t = f.task;
   if (t.kind === 'enter') return clamp01(t.t / DOOR_TIME);
   if (t.kind === 'exit') return 1 - clamp01(t.t / DOOR_TIME);
-  return t.kind === 'home' || (t.kind === 'job' && t.indoors) ? 1 : 0;
+  return t.kind === 'home' || ((t.kind === 'job' || t.kind === 'meal') && t.indoors) ? 1 : 0;
 }
 
 /**

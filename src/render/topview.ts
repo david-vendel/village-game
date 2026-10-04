@@ -13,6 +13,7 @@ import { GROUND_PILE_Y } from '../game/piles';
 import type { Load } from '../game/resources';
 import { backOf, groundPoint, mapPoint, streetOf, streetPoint, streetStart, type Vec } from '../game/streets';
 import { getBuilding, type World } from '../game/world';
+import { outdoors } from '../game/people';
 import { doorProgress } from './farm';
 import { figureOf, outfitOf } from './figure';
 import { circle, type Ctx, ellipse, hash, line, mix, poly, shade } from './util';
@@ -298,7 +299,7 @@ export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zo
       if (doorProgress(w) >= 1) continue; // indoors
       const x = b.x + w.dx;
       person(groundPoint(world, x, w.y), o.top, o.skin, headingAt(x, w.facing), w.stride * 0.25, w.task.kind === 'walk', w.carrying);
-    } else if (!p.job) {
+    } else if (!p.job && outdoors(p)) {
       const s = p.stroll;
       person(groundPoint(world, s.x, s.y), o.top, o.skin, headingAt(s.x, s.dir), time * s.speed * 0.2 + p.seed, s.idle <= 0, null);
     }

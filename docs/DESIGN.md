@@ -30,8 +30,8 @@ grants charters; the market's merchant trades what you can't make.
 ## Where it stands now
 
 Built: houses, storage yards, serfs carrying goods, builders, roads and crossroads; the farm
-(grain and hay), mill (flour), bakery (bread, with water), well (water drawn by hand), tavern (eats
-bread); woodcutter (logs), sawmill (planks), stonecutter (stone); chicken, cow, sheep and horse
+(grain and hay), mill (flour), bakery (bread, with water), well (water drawn by hand), tavern (the
+hungry eat its bread); woodcutter (logs), sawmill (planks), stonecutter (stone); chicken, cow, sheep and horse
 farms (herds with sexes and ages in years; eggs, milk, wool, meat; horses on pasture).
 
 Not used yet: milk, wool, eggs, meat. The market, blacksmith, chapel and watchtower have no work.
@@ -39,8 +39,15 @@ Houses don't need anything.
 
 ## 1. Needs and spoilage (built: households.ts, spoilage.ts; winter in daynight.ts)
 
-- **Households.** Each house's family has needs by the house's level and eats from its own small
-  store (a shelf by the door). A family member walks to the nearest place that has what they lack
+- **Where people live.** Someone in a lasting job lives at their workplace (the farmer at the
+  farm, the baker at the bakery); serfs, builders, people looking for work and townsfolk in houses,
+  going home to sleep at night; the monks in the chapel.
+- **Hunger (built: hunger.ts).** Everyone carries a few days of food in them, a day used up a
+  day. Hungry, they eat at home if there is food there, else at the tavern's bench; starving,
+  they put down their work and eat whatever food is nearest, anywhere; long starving, they leave.
+  Every home has a pantry by the door that serfs keep in bread, so its people eat without a walk.
+- **Households.** Each house's family has needs by the house's level and drinks and burns from its own small
+  store (a shelf by the door); its need for food is met while nobody in it is hungry. A family member walks to the nearest place that has what they lack
   (a yard, a workshop's store, the market) and carries it home, like any errand.
 - **Needs met → happiness.** A household's happiness is how well its needs were met over the last
   few days. Happy: works at full speed, has children (new villagers). Unhappy: works slower. Long
@@ -117,7 +124,10 @@ iron → tools.
   merchant); nothing but iron and salt costs coin yet.
 - Brewery and pastry cook are built (they were parked), because the townhouse needs ale and
   pastries.
-- Families still don't fetch their own goods; serfs bring everything.
+- Families still don't fetch their own goods; serfs bring everything (except that the hungry go to
+  their food).
+- A loaf is a day's food for anyone (`FOODS`), a first guess: three times the bread the old
+  household need used. Hunger doesn't slow anyone's work yet.
 
 ## Ideas parked for later
 

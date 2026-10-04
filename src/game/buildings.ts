@@ -7,7 +7,7 @@
 // and an entry in BUILDING_ART.
 
 import { WORKSHOP_DOOR, BAKERY_DOOR, BAKERY_OVEN, CHAPEL_DOOR, HOME, HOUSE_DOOR_DX, MILL_DOOR, SAWMILL_DOOR, SAWMILL_SAW, SMITHY_DOOR, STAND_Y, STONECUTTER_DOOR, TAVERN_DOOR, PILE_UNIT, LIVESTOCK_DOOR, WELL_DRAW, WOODCUTTER_DOOR, YARD_ITEMS, type Spot } from './layout';
-import { COSTS, FIREWOOD, UPGRADE_COSTS } from './balance';
+import { COSTS, FIREWOOD, FOODS, PANTRY, UPGRADE_COSTS } from './balance';
 import type { Livestock } from './livestock';
 import type { Amounts, Resource } from './resources';
 
@@ -311,7 +311,7 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     width: 225,
     buildTime: 13,
     cost: COSTS.tavern,
-    // baskets of loaves on the bench outside (layout.ts TAVERN_SLOTS); guests eat them (tavern.ts)
+    // baskets of loaves on the bench outside (layout.ts TAVERN_SLOTS); hungry villagers eat them there (hunger.ts)
     storage: { bread: 2 },
     jobs: {},
     needs: ['bread'],
@@ -665,6 +665,29 @@ for (const t of HAS_FIRE) {
   for (let u = def.upgrade; u; u = u.next) {
     if (u.storage) u.storage = { ...u.storage, firewood: FIREWOOD.kept };
     if (u.needs) u.needs = [...u.needs, 'firewood'];
+  }
+}
+
+/**
+ * The buildings people live in for their work (a lasting job: hunger.ts) that
+ * keep a pantry: a basket of loaves by the door (PANTRY), which serfs keep
+ * stocked, so they eat at home. Not those whose store holds food already (the
+ * bakery's bread, the dairy's cheese): they eat that.
+ */
+export const PANTRIES: ReadonlySet<BuildingType> = new Set(
+  BUILDING_TYPES.filter((t) => {
+    const def = BUILDINGS[t];
+    const jobs = [def.jobs, ...upgradesOf(t).map((u) => u.jobs)].some((j) => Object.keys(j).some((r) => r !== 'serf' && r !== 'builder'));
+    return jobs && !!def.door && !Object.keys(def.storage).some((r) => FOODS[r as Resource]);
+  }),
+);
+for (const t of PANTRIES) {
+  const def = BUILDINGS[t];
+  def.storage = { ...def.storage, bread: PANTRY };
+  def.needs = [...(def.needs ?? []), 'bread'];
+  for (let u = def.upgrade; u; u = u.next) {
+    if (u.storage) u.storage = { ...u.storage, bread: PANTRY };
+    if (u.needs) u.needs = [...u.needs, 'bread'];
   }
 }
 

@@ -1,11 +1,11 @@
 // Workers panel: a DOM table on the left edge listing every villager with
-// their number, occupation, how well fed they are and what they are doing
-// right now.
+// their number, occupation, where they live, how well fed they are and what
+// they are doing right now.
 
-import { HOUSEHOLD } from '../game/balance';
+import { HUNGER } from '../game/balance';
 import { BUILDINGS } from '../game/buildings';
 import { timeOfDay } from '../game/daynight';
-import { householdOf, lacking } from '../game/households';
+import { hungry, mealFood, starving } from '../game/hunger';
 import { laneY, type Person } from '../game/people';
 import { offDuty } from '../game/worker';
 import { makeCollapsible } from './panel';
@@ -33,20 +33,19 @@ function whereAt(world: World, x: number): string {
   return b ? `the ${nameOf(b)}${b.site ? ' site' : ''}` : 'the street';
 }
 
-/**
- * How well fed someone is: their household's contentment (households.ts), how
- * well its needs have been met lately, and what its shelf has run out of.
- * Below HOUSEHOLD.leaveBelow people start to leave; at HOUSEHOLD.growAbove
- * a house with room gains a newcomer.
- */
-function fed(world: World, p: Person): string {
-  if (p.leaving) return '<span style="color:#e07a5f">leaving the village</span>';
+/** Where someone lives (households.ts): their workplace, a house, the chapel. */
+function homeOf(world: World, p: Person): string {
   const home = p.home === undefined ? undefined : getBuilding(world, p.home);
-  if (!home) return '<span style="color:#a89a80">no home</span>';
-  const content = householdOf(home).content;
-  const colour = content < HOUSEHOLD.leaveBelow ? '#e07a5f' : content < HOUSEHOLD.growAbove ? '#e8c872' : '#9ccc7a';
-  const want = lacking(home);
-  return `<span style="color:${colour}">${Math.round(content * 100)}%</span>${want.length ? ` <span style="color:#e07a5f">no ${want.join(', ')}</span>` : ''}`;
+  return home ? `${nameOf(home)} #${home.id}` : '<span style="color:#a89a80">no home</span>';
+}
+
+/** How fed someone is (hunger.ts): the days of food in them, or how long they have gone without. */
+function fed(p: Person): string {
+  if (p.leaving) return '<span style="color:#e07a5f">leaving</span>';
+  const days = (d: number) => `${d.toFixed(1)} d`;
+  if (starving(p)) return `<span style="color:#e07a5f">starving ${days(-p.food)}</span>`;
+  if (hungry(p)) return `<span style="color:#e8c872">hungry ${days(-p.food)}</span>`;
+  return `<span style="color:#9ccc7a">fed ${days(p.food)}</span>`;
 }
 
 /**
@@ -57,6 +56,14 @@ function fed(world: World, p: Person): string {
 function activity(world: World, p: Person): string {
   if (!p.job) {
     const s = p.stroll;
+    const v = p.visit;
+    const at = v && getBuilding(world, v.at);
+    if (v && at) {
+      const there = `the ${nameOf(at)}`;
+      if (v.why === 'sleep') return v.left === undefined ? `going home for the night to ${there}` : `asleep in ${there}`;
+      if (v.left === undefined) return `going to ${there} to eat ${v.food}`;
+      return v.outdoors ? `eating ${v.food} at ${there}` : `eating ${v.food} in ${there}`;
+    }
     if (s.y !== laneY(p.id)) return 'walking back to the street';
     const night = !timeOfDay(world).daylight;
     const why = p.seeker ? (night ? ', looking for work in the morning' : ', looking for work') : !p.profession ? '' : night ? ', off for the night' : ', no work going';
@@ -123,6 +130,7 @@ function activity(world: World, p: Person): string {
         if (off === 'sleep') return `going in for the night${from}`;
         return `heading back to ${place}${from}`;
       }
+      if (t.then === 'eat') return `going to ${named(t.job!.target)} to eat ${mealFood(t.job!)}`;
       if (a === 'sow') return 'walking to sow a field';
       if (a === 'harvest') return 'walking to harvest a field';
       if (a === 'chop') return 'walking out to fell a tree';
@@ -143,6 +151,8 @@ function activity(world: World, p: Person): string {
       return t.job && w.carrying ? `coming out of ${place} with ${w.carrying.amount} ${w.carrying.resource}` : `stepping out of ${place}`;
     case 'idle':
       return here === place ? `waiting at ${place}` : `pausing at ${here}`;
+    case 'meal':
+      return t.indoors ? `eating ${mealFood(t.job)} in ${named(t.job.target)}` : `eating ${mealFood(t.job)} at ${named(t.job.target)}`;
   }
 }
 
@@ -159,12 +169,14 @@ export function installWorkersPanel(world: World): void {
   document.body.appendChild(root);
 
   const render = () => {
-    const rows = ['<tr style="color:#e8c872;text-align:left"><th>#</th><th style="padding:0 12px">occupation</th><th style="padding-right:12px">fed</th><th>doing</th></tr>'];
+    const rows = ['<tr style="color:#e8c872;text-align:left"><th>#</th><th style="padding:0 12px">occupation</th><th style="padding-right:12px">home</th><th style="padding-right:12px">fed</th><th>doing</th></tr>'];
     for (const p of world.people) {
-      rows.push(`<tr><td>${p.id}</td><td style="padding:0 12px">${occupation(p)}</td><td style="padding-right:12px;white-space:nowrap">${fed(world, p)}</td><td>${activity(world, p)}</td></tr>`);
+      rows.push(
+        `<tr><td>${p.id}</td><td style="padding:0 12px">${occupation(p)}</td><td style="padding-right:12px;white-space:nowrap">${homeOf(world, p)}</td><td style="padding-right:12px;white-space:nowrap">${fed(p)}</td><td>${activity(world, p)}</td></tr>`,
+      );
     }
     rows.push(
-      `<tr style="color:#a89a80"><td colspan="4" style="padding-top:6px">fed: how well their home has had what it needs lately; below ${Math.round(HOUSEHOLD.leaveBelow * 100)}% they start to leave the village</td></tr>`,
+      `<tr style="color:#a89a80"><td colspan="5" style="padding-top:6px">fed: days of food left in them; hungry, they eat at home or the tavern; starving after ${HUNGER.starving} d, anywhere; after ${HUNGER.leave} d they leave the village</td></tr>`,
     );
     table.innerHTML = rows.join('');
   };

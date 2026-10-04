@@ -58,7 +58,7 @@ describe('step 2: keeping food', () => {
     expect(roomIn(house)).toBe(4);
   });
 
-  it('weaving is skilled: only a freeman (whose home is a farmstead) takes it', () => {
+  it('weaving is skilled: only a freeman (whose home is a farmstead) takes it, and lives at the weaver then', () => {
     const w = createWorld();
     tick(w, 1 / 30);
     const weaver = place(w, 2587.5, 'weaver');
@@ -70,7 +70,7 @@ describe('step 2: keeping food', () => {
     home.level = 1;
     home.upgraded = true;
     tick(w, 5);
-    expect(employees(w, weaver).map((p) => p.home)).toEqual([home.id]);
+    expect(employees(w, weaver).map((p) => p.home)).toEqual([weaver.id]);
   });
 });
 

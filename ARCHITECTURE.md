@@ -132,11 +132,14 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   nothing to make and none of the input, they fetch it themselves from the nearest source,
   unless someone is already bringing it. A new production building needs only a recipe, store
   places (`storeSlots`) and its art.
-- `households.ts`: every villager but the monks has a home (`Person.home`, the nearest house with
-  room; arrivals stay in their own house only while it has room). A house's family eats and drinks
-  from the shelf by its door (`houseSlot` in `layout.ts`), which serfs keep stocked
-  (`BuildingDef.needs`); `NEEDS` in `balance.ts` is per person per day. A household's content
-  follows how well its needs are met (`Building.household`); content with room, a newcomer comes
+- `households.ts`: every villager has a home (`Person.home`): someone in a lasting job lives at
+  their workplace (the farmer at the farm, the baker at the bakery); the monks in the chapel;
+  everyone else (serfs, builders, people looking for work, townsfolk) in the nearest house with
+  room (arrivals stay in their own house only while it has room). A house's family drinks and
+  burns from the shelf by its door (`houseSlot` in `layout.ts`), which serfs keep stocked
+  (`BuildingDef.needs`); `NEEDS` in `balance.ts` is per person per day. Food is each person's own
+  (`hunger.ts`): a household's need for it is met while none of its people is hungry. A
+  household's content follows how well its needs are met (`Building.household`); content with room, a newcomer comes
   out of the door; discontent, people leave one by one from the unhappiest household
   (`Person.leaving`: they walk to the end of their street and are gone). `HOUSEHOLD` in
   `balance.ts` holds the rates. A house lacking something shows it in a bubble over its door.
@@ -191,9 +194,19 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   roads, buildings, fields, the quarries, crossroads land and the road grid's lines, so never past
   its square of the grid; building there takes from it. A horse needs `PASTURE_CELLS_PER_HORSE`
   cells (`herdRoom`); the farm's sign shows how many it has.
-- `tavern.ts`: the tavern `needs` bread (serfs bring it from a warehouse to the baskets on its
-  bench, `TAVERN_SLOTS`); its guests eat a loaf every `LOAF_HOURS` game hours, worked out from the
-  day clock.
+- `hunger.ts`: every villager carries days of food in them (`Person.food`), a day used up a game
+  day (`HUNGER`, `FOODS` in `balance.ts`). In at home (lunch, the night) and running low, they eat
+  from the home's pantry: loaves by the door of every building people live in for their work
+  (`PANTRIES` in `buildings.ts`, `PANTRY` loaves, `pantrySlot`), and a house's shelf, which serfs
+  keep stocked; a workshop whose store holds food (the bakery's bread) has no pantry, they eat
+  that. Hungry (none left): home if it has food, else the nearest tavern, eating its bread at the
+  bench (`TAVERN_SLOTS`; the tavern `needs` bread). Starving (`HUNGER.starving` days on): they put
+  down their work and eat the nearest food anywhere. Long starving (`HUNGER.leave`), they leave. A
+  worker sets off between jobs (`sendToEat`: worker.ts walk then `eat`, then the `meal` task, with
+  `Meals` from here); someone not at work goes on a `Visit` (`updateVisits`), which is also how
+  people who live in a house or the chapel go home to sleep at night. Food is reserved by whoever
+  is on their way to it (read off their tickets and visits) and taken when they sit down. Nobody
+  goes out for food at night.
 - `site.ts`: construction. A placed building is a site that hires up to `BUILDERS_PER_SITE`
   idle villagers as builders (day labour: no lunch, let go at nightfall, hired again in the
   morning). They take its cost off the nearest warehouse's stacks `LOAD_SIZE` at a time and
@@ -213,14 +226,17 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   and take the first lasting job going (miller, farmer), which becomes their profession. Lasting
   jobs are filled before errands, so a serf between errands is hired away for one. A new
   village has one farmer, five builders, five people looking for work and two townsfolk.
+  Someone not at work may be on a `Visit` (home asleep, out to eat: `hunger.ts`): not strolling,
+  and hidden while inside (`outdoors`). Only people asleep can be hired then, and only for errands.
   Chickens are `Animal`s.
-- `worker.ts`: the working day, the same for every job: work in daylight, go home at 11:30
+- `worker.ts`: the working day, the same for every job: work in daylight, go home (their workplace) at 11:30
   (`LUNCH_AT`) and eat for an hour (`LUNCH_HOURS`) once inside, once a day; sleep at night; step
   in and out of the door (`DOOR_TIME`); carry loads (walking faster with empty hands,
   `WALK_SPEED_EMPTY`) to the exact spot they go down. What the work *is* comes from the
   building as a `Workplace`: its door, the next job and where it is done, how long a job takes,
   what it yields and where that goes down (`dropSpot`, asked again on the way as piles change),
-  and whether a load is taken indoors to be worked on there (`inside`).
+  and whether a load is taken indoors to be worked on there (`inside`). A hungry worker goes off
+  for a meal between jobs (`goToMeal`, the `meal` task; where and what: `hunger.ts`).
 - `farm.ts`: the farm's fields, and the farm as a `Workplace`. Tested by `farm.test.ts`. Each
   field is one land-grid cell (see `land.ts`) in one of the field rows (`FIELD_ROWS` in
   `layout.ts`): the three lot rows behind the road, two in front of it. A new

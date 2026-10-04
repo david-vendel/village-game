@@ -16,10 +16,15 @@ const dayOf = (w: World) => 24 / timeOfDay(w).hoursPerSecond;
 const houses = (w: World) => w.buildings.filter((b) => b.type === 'house');
 
 describe('households', () => {
-  it('everyone has a home, the monks the chapel, and no house holds more than it has room for', () => {
+  it('everyone has a home: a lasting job its workplace, the monks the chapel, the rest a house; none fuller than its room', () => {
     const w = createWorld();
     tick(w, 1 / 30);
-    for (const p of w.people) expect(w.buildings.find((b) => b.id === p.home)?.type, p.name).toBe(p.look === 'monk' ? 'chapel' : 'house');
+    for (const p of w.people) {
+      const home = w.buildings.find((b) => b.id === p.home);
+      if (p.job && p.job.role !== 'serf' && p.job.role !== 'builder') expect(home?.id, p.name).toBe(p.job.buildingId);
+      else expect(home?.type, p.name).toBe(p.look === 'monk' ? 'chapel' : 'house');
+    }
+    expect(w.people.find((p) => p.profession === 'farmer')!.home).toBe(w.buildings.find((b) => b.type === 'farm')!.id);
     for (const b of houses(w)) expect(residentsOf(w, b).length).toBeLessThanOrEqual(roomIn(b));
   });
 

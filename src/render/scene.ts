@@ -4,7 +4,7 @@
 // touch buttons) is drawn separately by main.ts in its own coordinate space.
 
 import { chapelBell } from '../game/daynight';
-import { employees } from '../game/people';
+import { employees, outdoors } from '../game/people';
 import { drawingAt } from '../game/transport';
 import { pastureCells } from '../game/pasture';
 import { isHome, lacking } from '../game/households';
@@ -115,7 +115,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     level: upgradesDone(b),
     fire: HAS_FIRE.has(b.type) ? fireOf(world, b) : undefined,
     merchant: b.type === 'market' && merchantHere(world),
-    wants: isHome(b) ? lacking(b) : undefined,
+    wants: isHome(b) ? lacking(world, b) : undefined,
     pasture: b.type === 'horsefarm' && b.status === 'done' ? pastureCells(world, b).length : undefined,
     doorOpen: !!b.arriving,
     stakedOut: stakedOut(b),
@@ -139,7 +139,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     ctx.restore();
   };
   // the unemployed and the animals stroll the street, each at their own depth
-  const strollers = [...world.people.filter((p) => !p.job), ...world.animals];
+  const strollers = [...world.people.filter((p) => !p.job && outdoors(p)), ...world.animals];
 
   // things that spread behind buildings (farm fields)
   for (const b of world.buildings) {

@@ -2,9 +2,10 @@
 // a sunlit front face, a shaded side face receding up-right, and a pitched
 // roof. The sun is to the left, so right-hand faces are in shadow.
 
-import { BUILDINGS, doorOf, HAS_FIRE, storageOf, type BuildingType } from '../game/buildings';
+import { PANTRY } from '../game/balance';
+import { BUILDINGS, doorOf, HAS_FIRE, PANTRIES, storageOf, type BuildingType } from '../game/buildings';
 import type { FarmState } from '../game/farm';
-import { BAKERY_OVEN_MOUTH_DX, BAKERY_SLOTS, BAKERY_WATER_SLOTS, BASKET, WELL_SLOTS, MILL_SLOTS, PILE_UNIT, SACK, SAWMILL_BENCH_DX, SAWMILL_SLOTS, houseSlot, pileItems, DRINK_SLOTS, woodpileSlot, FARM_HORSE, marketSlot, reeveSlot, SMITHY_SLOTS, STABLE_SLOTS, storehouseSlot, WORKSHOP_ALSO, WORKSHOP_IN, WORKSHOP_OUT, FEED_SLOTS, GOODS_SLOTS, HAY_SLOTS, LIVESTOCK_TROUGH_DX, STONECUTTER_SLOTS, TAVERN_SLOTS, warehouseSlot, WOODCUTTER_SLOTS, YARD_ITEMS, type Slot } from '../game/layout';
+import { BAKERY_OVEN_MOUTH_DX, BAKERY_SLOTS, BAKERY_WATER_SLOTS, BASKET, WELL_SLOTS, MILL_SLOTS, PILE_UNIT, SACK, SAWMILL_BENCH_DX, SAWMILL_SLOTS, houseSlot, pantrySlot, pileItems, DRINK_SLOTS, woodpileSlot, FARM_HORSE, marketSlot, reeveSlot, SMITHY_SLOTS, STABLE_SLOTS, storehouseSlot, WORKSHOP_ALSO, WORKSHOP_IN, WORKSHOP_OUT, FEED_SLOTS, GOODS_SLOTS, HAY_SLOTS, LIVESTOCK_TROUGH_DX, STONECUTTER_SLOTS, TAVERN_SLOTS, warehouseSlot, WOODCUTTER_SLOTS, YARD_ITEMS, type Slot } from '../game/layout';
 import type { Amounts, Resource, Stock } from '../game/resources';
 import type { Worker } from '../game/worker';
 import { goodsOf, type Herd } from '../game/livestock';
@@ -1689,6 +1690,21 @@ export const BUILDING_ART: Record<BuildingType, BuildingArt> = {
   // a stretch of road being laid: its picture is for the build menu; in the street the road itself is drawn with the ground, as the street's end moves on (roads.ts)
   road: { height: 64, draw: drawRoadPiece },
 };
+
+// Every building people live in for their work keeps its pantry's loaves by the door (game/layout.ts pantrySlot).
+for (const t of PANTRIES) {
+  const art = BUILDING_ART[t];
+  const draw = art.draw;
+  const door = BUILDINGS[t].door!.dx;
+  art.draw = (ctx, a) => {
+    draw(ctx, a);
+    // (no more than it keeps: a menu's showpiece stock is the village's)
+    for (let i = 0; i < Math.min(PANTRY, pileItems(a.stock?.bread ?? 0)); i++) {
+      const s = pantrySlot(door, i);
+      drawItem(ctx, 'bread', a.x + s.dx, a.base + 2 - s.lift, 0.8, a.time);
+    }
+  };
+}
 
 // Every building with a fire has its woodpile against its right-hand corner (game/layout.ts woodpileSlot).
 for (const t of HAS_FIRE) {
