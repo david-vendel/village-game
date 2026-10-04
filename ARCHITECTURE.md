@@ -252,7 +252,8 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   building if it still lacks wood, else onto the ground for serfs. Grown trees on a farm's fields are
   felled by its farmers after the harvest and before sowing, and nothing is sown under one
   (`clearingFields`). Saplings sprout mostly near grown trees. A woodcutter walks out to the nearest grown tree in
-  reach and fells it; with none, he plants a sapling at a random free spot in reach (while fewer than
+  reach and fells it; with none, or his store full, he plants a sapling at a random free spot near home
+  (`PLANT_NEAR`, further out only if there is no room there; while fewer than
   `SAPLINGS_TENDED` grow there). A stonecutter cuts at the face of the nearest quarry.
   Workers walk at real ground speed, the fastest way across the land (`paths.ts`, walked by `worker.ts`):
   never through a building but the one they set out from or are going to, faster on roads (×1.2) than

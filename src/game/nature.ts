@@ -10,8 +10,9 @@
 // field or a road is cleared of trees (clearLand), but for grown trees on the
 // land of a site being built: its builders fell those first (site.ts), and the
 // logs go into the building or onto the ground for serfs. With no grown tree
-// in reach, a woodcutter walks out and plants a sapling somewhere free round
-// about (while fewer than SAPLINGS_TENDED are growing in his reach).
+// in reach, or his store full, a woodcutter plants a sapling somewhere free
+// near home (PLANT_NEAR; further out only if there is no room there), while
+// fewer than SAPLINGS_TENDED are growing round about.
 //
 // The quarries (QUARRIES) are rocky hills that come down to the tree line:
 // a stonecutter walks to the face and cuts blocks out of it, as many as
@@ -61,7 +62,13 @@ export const CUT_TIME = 12;
 /** Seconds to plant a sapling. */
 export const PLANT_TIME = 6;
 /** A woodcutter with nothing to fell plants saplings while fewer than this are growing in his reach. */
-export const SAPLINGS_TENDED = 8;
+export const SAPLINGS_TENDED = 20;
+/**
+ * Where a woodcutter plants, near home: up to `along` px either side of his
+ * hut, `behind` px behind the road (or in the woods in front); `reach`
+ * is how far round home his saplings count towards SAPLINGS_TENDED.
+ */
+export const PLANT_NEAR = { along: 300, behind: [140, 450], reach: 600 } as const;
 
 /** Grown fraction 0..1 (a stump counts as grown: it is what is left of one). */
 export function treeGrowth(t: Tree): number {
@@ -358,25 +365,30 @@ export function gatherWorkplace(world: World, b: Building & { type: GatherHut },
     const q = QUARRIES[job.target];
     return q ? { dx: q.x + (QUARRY_SPOTS[job.slot ?? 0] ?? 0) - x, y: QUARRY_Y + 3 } : null;
   };
-  /** A place picked at random in reach to plant a sapling: free land, clear of trees and of saplings about to go in. */
+  /**
+   * A place picked at random to plant a sapling: free land, clear of trees and
+   * of saplings about to go in. Near home (PLANT_NEAR) if there is room there,
+   * else anywhere in his reach.
+   */
   const plantJob = (taken: JobTicket[]): JobTicket | null => {
     const planting = taken.filter((j) => j.action === 'plant');
-    const growing = world.trees.filter((t) => t.state === 'growing' && walk(x, t.x, behindRoad(t.y)) <= WOOD_REACH).length;
+    const growing = world.trees.filter((t) => t.state === 'growing' && walk(x, t.x, behindRoad(t.y)) <= PLANT_NEAR.reach).length;
     if (growing + planting.length >= SAPLINGS_TENDED) return null;
-    for (let tries = 0; tries < 24; tries++) {
-      const tx = Math.round(x + (rand() * 2 - 1) * WOOD_REACH);
-      const band = rand() < 0.75 ? WOODS.behind : WOODS.front;
+    for (let tries = 0; tries < 48; tries++) {
+      const near = tries < 32;
+      const tx = Math.round(x + (rand() * 2 - 1) * (near ? PLANT_NEAR.along : WOOD_REACH));
+      const band = near ? (rand() < 0.75 ? PLANT_NEAR.behind : WOODS.front) : rand() < 0.75 ? WOODS.behind : WOODS.front;
       const d = Math.round(band[0] + rand() * (band[1] - band[0]));
       const street = world.streets[streetOf(tx)];
       const { min, max } = streetRange(world, streetOf(tx));
       if (!street || street.gone || tx < min || tx > max || walk(x, tx, d) > WOOD_REACH) continue;
       const p = streetPoint(world, tx, d);
       if (!treeRoom(world, p)) continue;
-      const near = (j: JobTicket) => {
+      const crowds = (j: JobTicket) => {
         const q = streetPoint(world, j.target, j.slot ?? 0);
         return Math.hypot(q.x - p.x, q.y - p.y) < TREE_GAP;
       };
-      if (!planting.some(near)) return { action: 'plant', target: tx, slot: d };
+      if (!planting.some(crowds)) return { action: 'plant', target: tx, slot: d };
     }
     return null;
   };
@@ -384,11 +396,18 @@ export function gatherWorkplace(world: World, b: Building & { type: GatherHut },
     door,
     nextJob(w, taken) {
       // loads on their way count against the room in the store
-      if (room(b.stock, capacity, resource) <= taken.length * PILE_UNIT + 1e-9) return null;
+      const loads = taken.filter((j) => j.action !== 'plant').length;
+      const full = room(b.stock, capacity, resource) <= loads * PILE_UNIT + 1e-9;
+      // with the store full a woodcutter plants, and a stonecutter waits
+      if (full) {
+        const job = action === 'chop' ? plantJob(taken) : null;
+        const at = job && spot(job);
+        return job && at ? { job, ...at } : null;
+      }
       const here = x + w.dx;
       let job: JobTicket | null = null;
       if (action === 'chop') {
-        const busy = new Set(taken.map((j) => j.target));
+        const busy = new Set(taken.filter((j) => j.action !== 'plant').map((j) => j.target));
         let best: Tree | null = null;
         const to = (from: number, t: Tree) => walk(from, t.x, behindRoad(t.y));
         for (const t of world.trees) {

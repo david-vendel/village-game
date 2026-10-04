@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { yAt } from './layout';
-import { clearLand, treesInTheWay, treesOnFields, WOOD_REACH } from './nature';
+import { clearLand, PLANT_NEAR, treesInTheWay, treesOnFields, WOOD_REACH } from './nature';
+import { storageOf } from './buildings';
 import { streetDist, streetStart } from './streets';
 import { CELL_W } from './layout';
 import { createWorld, placeBuilding, setConstructionEnabled, update, type Building, type World } from './world';
@@ -120,5 +121,25 @@ describe('woodcutter', () => {
       expect(t?.state).toBe('growing');
       expect(streetDist(w, hut.x, x)).toBeLessThanOrEqual(WOOD_REACH);
     }
+  });
+
+  it('plants near home, and goes on planting with his store full', () => {
+    const w = createWorld({ village: false });
+    setConstructionEnabled(w, false);
+    placeBuilding(w, 1000, 'house', { free: true });
+    runFor(w, 5);
+    const hut = placeBuilding(w, 2500, 'woodcutter', { free: true })!;
+    hut.stock.wood = storageOf(hut).wood!; // no storage yard to take it to: it stays full
+    const planted = new Set<number>();
+    for (let t = 0; t < 200; t += 1 / 30) {
+      update(w, 1 / 30, idle);
+      for (const p of w.people) {
+        const task = p.job?.buildingId === hut.id ? p.job.worker.task : null;
+        if (task?.kind === 'job' && task.job.action === 'plant') planted.add(task.job.target);
+      }
+    }
+    expect(hut.stock.wood).toBe(storageOf(hut).wood);
+    expect(planted.size).toBeGreaterThan(2);
+    for (const x of planted) expect(Math.abs(x - hut.x)).toBeLessThanOrEqual(PLANT_NEAR.along);
   });
 });
