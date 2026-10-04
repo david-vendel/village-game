@@ -4,11 +4,11 @@
 // takes it (game/grid.ts): road, building, field or quarry; and the name of
 // the cell under the mouse. Drawn in the ground perspective (ground.ts), so
 // it lines up with the fields. Also the block the rider could build on
-// (drawBlockGlow) and the cells a building chosen in the build menu would
-// take (drawSitePreview).
+// (drawBlockGlow), the cells a building chosen in the build menu would
+// take (drawSitePreview) and a new site's staked-out ground (drawStakedOut).
 
 import { BUILDINGS, type BuildingType } from '../game/buildings';
-import { blockStartX, cellKey, cellName, footprintAt, landUse, streetCell, type LandUse } from '../game/grid';
+import { blockStartX, cellKey, cellName, footprintAt, footprintOf, landUse, streetCell, type LandUse } from '../game/grid';
 import { BLOCK, CELL_W, LOT_ROW, rowFar, rowNear } from '../game/layout';
 import { behindRoad as behindRoadGame, yAt as yAtGame } from '../game/layout';
 import { backdropDistance, unviewY, viewY } from './ground';
@@ -17,7 +17,7 @@ import { backdropDistance, unviewY, viewY } from './ground';
 const yAt = (d: number) => viewY(yAtGame(d));
 const behindRoad = (screenY: number) => behindRoadGame(unviewY(screenY));
 import { streetOf, streetStart } from '../game/streets';
-import { placeAt, whyNotBuild, type World } from '../game/world';
+import { constructionStage, placeAt, whyNotBuild, type Building, type World } from '../game/world';
 import { depthScale, groundX } from './ground';
 import type { Ctx } from './util';
 
@@ -187,5 +187,63 @@ export function drawSitePreview(ctx: Ctx, world: World, type: BuildingType, want
   ctx.fillStyle = ok ? '#e8ffd8' : '#ffd8cc';
   const y = yAt(rowFar(f.j1)) - 6;
   ctx.fillText(BUILDINGS[type].name, groundX((streetStart(f.street) + ((f.i0 + f.i1 + 1) / 2) * CELL_W) - camX, y, vpX), y);
+  ctx.restore();
+}
+
+/** Whether a site's ground is marked out with stakes and string: from when it is placed until its foundation is laid. */
+export function stakedOut(b: Building): boolean {
+  if (b.status !== 'constructing' || b.demolition || b.type === 'road' || b.type === 'intersection') return false;
+  const stage = constructionStage(b.progress).stage;
+  return stage === 'staking' || stage === 'foundation';
+}
+
+/**
+ * A site marked out on the ground: a stake at each corner of its cells and a
+ * string from stake to stake round them, there as soon as the building is
+ * placed, before any builder comes. Drawn in the ground perspective.
+ */
+export function drawStakedOut(ctx: Ctx, b: Building, camX: number, viewW: number): void {
+  const f = footprintOf(b);
+  if (!f) return;
+  const vpX = viewW / 2;
+  const inset = 6;
+  const x0 = streetStart(f.street) + f.i0 * CELL_W + inset - camX;
+  const x1 = streetStart(f.street) + (f.i1 + 1) * CELL_W - inset - camX;
+  const far = rowFar(f.j1) - inset;
+  const near = rowNear(f.j0) + inset;
+  /** A corner's foot on screen and how tall a stake stands there. */
+  const corner = (x: number, d: number) => {
+    const y = yAtGame(d);
+    const k = depthScale(y);
+    return { x: groundX(x, viewY(y), vpX), y: viewY(y), h: 15 * k, w: Math.max(1.5, 3 * k) };
+  };
+  const [bl, br, fr, fl] = [corner(x0, far), corner(x1, far), corner(x1, near), corner(x0, near)];
+  const stake = (c: { x: number; y: number; h: number; w: number }) => {
+    ctx.fillStyle = '#7a5a3a';
+    ctx.fillRect(c.x - c.w / 2, c.y - c.h, c.w, c.h);
+    ctx.fillStyle = '#a58460';
+    ctx.fillRect(c.x - c.w / 2, c.y - c.h, c.w / 2, c.h);
+  };
+  /** The string from stake to stake, tied a little below their tops, sagging slightly. */
+  const string = (a: typeof bl, c: typeof bl) => {
+    const ay = a.y - a.h * 0.75;
+    const cy = c.y - c.h * 0.75;
+    ctx.beginPath();
+    ctx.moveTo(a.x, ay);
+    ctx.quadraticCurveTo((a.x + c.x) / 2, (ay + cy) / 2 + 2, c.x, cy);
+    ctx.stroke();
+  };
+  ctx.save();
+  ctx.strokeStyle = '#efe2bd';
+  ctx.lineWidth = 1;
+  // far side first, near side last, so the near stakes stand in front of the strings
+  stake(bl);
+  stake(br);
+  string(bl, br);
+  string(bl, fl);
+  string(br, fr);
+  string(fl, fr);
+  stake(fl);
+  stake(fr);
   ctx.restore();
 }

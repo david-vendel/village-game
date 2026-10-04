@@ -38,6 +38,8 @@ export interface DrawArgs {
   onSite?: Amounts;
   /** Under construction: materials laid down at each work spot (dx from the centre), not yet built in. */
   laid?: Array<{ dx: number; amounts: Amounts }>;
+  /** Under construction: its ground is marked out with stakes and string (drawn on the ground, grid.ts), so no row of stakes. */
+  stakedOut?: boolean;
   /** Its door stands open (a new house's people coming out of it). */
   doorOpen?: boolean;
   /** An animal farm's herd (game/livestock.ts). */

@@ -29,7 +29,7 @@ import { drawBuilding } from './sprites';
 import { drawConstruction, drawConstructionBehind, drawConstructionFront, drawDemolition, drawUpgrade } from './construction';
 import { drawWorker } from './farm';
 import { type Figure, figureOf } from './figure';
-import { drawBlockGlow, drawLandGrid, drawSitePreview } from './grid';
+import { drawBlockGlow, drawLandGrid, drawSitePreview, drawStakedOut, stakedOut } from './grid';
 import { groundX, viewRatio, viewY } from './ground';
 import { drawSkyBehind, lightAt, tintLand } from './sky';
 import { drawRider } from './horse';
@@ -118,6 +118,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     wants: isHome(b) ? lacking(b) : undefined,
     pasture: b.type === 'horsefarm' && b.status === 'done' ? pastureCells(world, b).length : undefined,
     doorOpen: !!b.arriving,
+    stakedOut: stakedOut(b),
   });
   // people at work, with their workplace's position
   const atWork = world.people.flatMap((p) => {
@@ -180,6 +181,7 @@ export function drawScene(ctx: Ctx, world: World, sv: SceneView): void {
     if (!onScreen(b.x)) continue;
     const a = args(b);
     if (gfx.take(b, a)) continue;
+    if (stakedOut(b)) drawStakedOut(ctx, b, camX, viewW);
     if (b.demolition && b.demolition.from >= 1) drawDemolition(ctx, b.type, a, b.progress); // one still being built comes down through its stages
     else if (upgrading(b)) drawUpgrade(ctx, b.type, a, b.progress);
     else if (b.status === 'done') drawBuilding(ctx, b.type, a);

@@ -51,8 +51,8 @@ export function drawConstruction(ctx: Ctx, type: BuildingType, a: DrawArgs, prog
   // drawn stages (scaffolding and all) where the building's sprites have them
   if (stage !== 'done' && drawStageSprites(ctx, type, a, stage, t)) return;
 
-  // 1. stakes and rope marking the footprint
-  const stakes = 6;
+  // 1. stakes and rope marking the footprint (on this street, marked out on the ground instead: grid.ts)
+  const stakes = a.stakedOut ? 0 : 6;
   const shown = stage === 'staking' ? Math.ceil(t * stakes) : stakes;
   for (let i = 0; i < shown; i++) {
     const sx = left + (i / (stakes - 1)) * W;
