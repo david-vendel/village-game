@@ -118,10 +118,10 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   (`World.errands`, saved) and planned anew every `BOARD_SECONDS`, or soon after it runs empty; a
   serf takes the nearest one still good. `errandWork` is how anyone runs one. Water is drawn by hand at a well (`BuildingDef.drawn`,
   `WELL_DRAW_SECONDS` in `balance.ts`): whoever comes for it (a serf, or the baker fetching their
-  own) and finds no bucket waiting draws one (`draw-water`); a serf with no errand fills a well
-  within `WELL_REACH`, two buckets each side (`WELL_SLOTS`). The well's windlass turns only while
+  own) and finds no bucket waiting draws one (`draw-water`); a serf with no errand fills the
+  nearest well not yet full (the hub hires serfs for that as for errands), two buckets each side (`WELL_SLOTS`). The well's windlass turns only while
   someone draws (`drawingAt`). Serfs are the peasants with no trade (`Person.profession` 'serf'), hired by the
-  transport hub (the oldest warehouse) while there are errands (up to `SERFS_MAX`, daylight only)
+  transport hub (the oldest warehouse) while there are errands or wells to fill (up to `SERFS_MAX`, daylight only)
   and let go where they stand when there are none.
 - `workshop.ts`: any building with a `makes` recipe (`buildings.ts`: from, to, batch, per, seconds,
   verb, door, and `also`, a second input) as a workplace: the mill (grain → flour), the bakery

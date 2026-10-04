@@ -17,7 +17,8 @@
 // - draw: what is drawn by hand without end (BuildingDef.drawn: a well's
 //   water). Whoever comes for water and finds no bucket waiting draws one
 //   (WELL_DRAW_SECONDS) and takes it; a serf with no errand to run fills the
-//   store of a well close by (WELL_REACH), bucket by bucket.
+//   store of the nearest well, bucket by bucket: the hub hires serfs for
+//   wells not yet full as for errands, so they keep four buckets waiting.
 //
 // What someone is on their way to pick up is theirs (reserved): an errand
 // runner's load, and a builder's (site.ts), at a store or on a pile. Nobody
@@ -53,14 +54,13 @@ import type { Building, World } from './world';
 import { CART_LOAD, carts } from './carts';
 import { builderFetch, LOAD_SIZE } from './site';
 import { stillAsked } from './castle';
+import { timeOfDay } from './daynight';
 import { marketWants } from './market';
 
 /** Most serfs the village hires at once. */
 export const SERFS_MAX = 5;
 /** Seconds to lift a load off a store. */
 const PICK_UP_TIME = 0.25;
-/** How far (px along the streets) a serf with nothing to do goes to fill a well. */
-export const WELL_REACH = 300;
 /** Seconds the errand board is used before it is planned anew. */
 export const BOARD_SECONDS = 1;
 /** Seconds an empty board waits before it is planned anew. */
@@ -222,12 +222,15 @@ function supplyErrand(world: World, runs: Runs, b: Building, r: Resource): (Erra
   return { job: { action, target: from.id, to: b.id }, from, r };
 }
 
-/** A well within WELL_REACH of x with room in its store, for a serf with nothing else to do to fill. */
-function wellToFill(world: World, x: number): Errand | null {
+/** Finished wells with room for another bucket, counting those already on their way to be drawn. */
+function wellsToFill(world: World): Building[] {
   const runs = tally(world);
-  const near = world.buildings
-    .filter((b) => b.status === 'done' && BUILDINGS[b.type].drawn && streetDist(world, x, b.x) <= WELL_REACH)
-    .filter((b) => roomLeft(runs, b, BUILDINGS[b.type].drawn!.resource) > 1e-9)
+  return world.buildings.filter((b) => b.status === 'done' && BUILDINGS[b.type].drawn && roomLeft(runs, b, BUILDINGS[b.type].drawn!.resource) > 1e-9);
+}
+
+/** The nearest well with room in its store, for a serf with nothing else to do to fill. */
+function wellToFill(world: World, x: number): Errand | null {
+  const near = wellsToFill(world)
     .sort((a, b) => streetDist(world, x, a.x) - streetDist(world, x, b.x))[0];
   if (!near) return null;
   const r = BUILDINGS[near.type].drawn!.resource;
@@ -349,12 +352,16 @@ function nearestErrand(world: World, x: number): Errand | null {
   return best;
 }
 
-/** Serf jobs the hub offers now: one per errand serfs are running or that is waiting, up to SERFS_MAX. */
+/**
+ * Serf jobs the hub offers now: one per errand serfs are running or that is
+ * waiting, and in daylight one per well not yet full (nobody is woken to fill
+ * one), up to SERFS_MAX.
+ */
 export function serfPositions(world: World): number {
   const hub = transportHub(world);
   const serfs = hub ? employees(world, hub).map((p) => p.job!.worker) : [];
   const running = serfs.filter((w) => currentJob(w) || delivering(w)).length;
-  return Math.min(SERFS_MAX, running + waiting(world).length);
+  return Math.min(SERFS_MAX, running + waiting(world).length + (timeOfDay(world).daylight ? wellsToFill(world).length : 0));
 }
 
 /**
@@ -426,7 +433,7 @@ export function transportWorkplace(world: World, hub: Building): Workplace {
     temporary: true,
     door: { dx: 0, y: STAND_Y },
     nextJob(w) {
-      // an errand if there is one; with none, fill a well close by
+      // an errand if there is one; with none, fill the nearest well not yet full
       const next = nearestErrand(world, x + w.dx) ?? wellToFill(world, x + w.dx);
       if (!next) return null;
       // a cart for it if one is free in a stable (carts.ts), not for drawing water

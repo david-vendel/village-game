@@ -8,7 +8,6 @@ import { HOME, SHEAF_SLOTS } from './layout';
 import { employees, release } from './people';
 import { stockOf } from './resources';
 import { createWorker, LUNCH_AT, MIDDAY, updateWorker } from './worker';
-import { dropOnGround } from './piles';
 import { createWorld, placeBuilding, plotOf, update, type World } from './world';
 
 const CAPACITY = BUILDINGS.farm.storage.grain!;
@@ -18,6 +17,8 @@ function quiet(w: World): World {
   w.buildings = w.buildings.filter((b) => b.type !== 'house' && b.type !== 'chapel');
   // and no bread for the tavern either
   for (const b of w.buildings) b.stock.bread = 0;
+  // and wells full, so no serf is out filling one
+  for (const b of w.buildings) if (b.type === 'well') b.stock.water = BUILDINGS.well.storage.water!;
   for (const p of w.people) if (p.job?.role === 'serf') release(w, p);
   return w;
 }
@@ -284,6 +285,7 @@ describe('water from the well', () => {
     const w = quiet(createWorld());
     // no storage yard: nobody hires serfs; the flour is at the bakery already
     w.buildings = w.buildings.filter((b) => b.type !== 'warehouse');
+    for (const b of w.buildings) if (b.type === 'well') b.stock.water = 0; // no bucket waiting
     const bakery = placeBuilding(w, 2587.5, 'bakery', { instant: true, free: true })!;
     bakery.stock.flour = 3;
     bakery.stock.firewood = 3; // for the oven
@@ -301,12 +303,10 @@ describe('water from the well', () => {
     expect(baked).toBe(true);
   });
 
-  it('a serf with nothing to do fills a well close by, two buckets each side', () => {
+  it('serfs with nothing else to do keep a well full, two buckets each side, however far it is', () => {
     const w = createWorld();
-    const well = placeBuilding(w, 1787.5, 'well', { instant: true, free: true })!;
-    // an errand by the yard, so a serf is hired and is free there afterwards
-    dropOnGround(w, 1760, { resource: 'wood', amount: 1 });
-    tick(w, 120);
+    const well = placeBuilding(w, 3787.5, 'well', { instant: true, free: true })!;
+    tick(w, 200);
     expect(well.stock.water).toBe(BUILDINGS.well.storage.water);
   });
 });
