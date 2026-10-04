@@ -294,11 +294,13 @@ export const BUILDINGS: Record<BuildingType, BuildingDef> = {
     type: 'chapel',
     door: CHAPEL_DOOR,
     name: 'Chapel',
-    purpose: 'Bells, prayer and a steeple seen for miles.',
+    purpose: 'Bells, prayer and a steeple seen for miles. Home of the monks, who need bread and water like any family.',
     width: 150,
     buildTime: 18,
     cost: COSTS.chapel,
-    storage: {},
+    // what the monks eat and drink, on a shelf by the door (layout.ts houseSlot); households.ts
+    storage: { bread: 2, water: 2 },
+    needs: ['bread', 'water'],
     jobs: {},
   },
   tavern: {

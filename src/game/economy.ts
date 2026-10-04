@@ -170,8 +170,8 @@ export function storeSlots(b: Building, r: Resource): { unit: number; perTrip: n
     const k = Math.max(0, Object.keys(storageOf(b)).indexOf(r));
     return { unit: 1, perTrip: 1, slot: (i) => storehouseSlot(k, i) };
   }
-  if (b.type === 'house' && storageOf(b)[r]) {
-    const door = doorOf('house', b.size ?? 1)!.dx;
+  if ((b.type === 'house' || b.type === 'chapel') && storageOf(b)[r]) {
+    const door = doorOf(b.type, b.size ?? 1)!.dx;
     return { unit: 1, perTrip: 1, slot: (i) => ({ dx: door + houseSlot(r, i).dx, lift: 0 }) };
   }
   if (b.type === 'farm' && r === 'grain') return { unit: 1, perTrip: 1, slot: pick(SHEAF_SLOTS) };

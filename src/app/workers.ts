@@ -1,8 +1,11 @@
 // Workers panel: a DOM table on the left edge listing every villager with
-// their number, occupation and what they are doing right now.
+// their number, occupation, how well fed they are and what they are doing
+// right now.
 
+import { HOUSEHOLD } from '../game/balance';
 import { BUILDINGS } from '../game/buildings';
 import { timeOfDay } from '../game/daynight';
+import { householdOf, lacking } from '../game/households';
 import { laneY, type Person } from '../game/people';
 import { offDuty } from '../game/worker';
 import { makeCollapsible } from './panel';
@@ -28,6 +31,22 @@ const resource = (action: string, verb: string) => (action.startsWith(`${verb}-`
 function whereAt(world: World, x: number): string {
   const b = buildingAt(world, x);
   return b ? `the ${nameOf(b)}${b.site ? ' site' : ''}` : 'the street';
+}
+
+/**
+ * How well fed someone is: their household's contentment (households.ts), how
+ * well its needs have been met lately, and what its shelf has run out of.
+ * Below HOUSEHOLD.leaveBelow people start to leave; at HOUSEHOLD.growAbove
+ * a house with room gains a newcomer.
+ */
+function fed(world: World, p: Person): string {
+  if (p.leaving) return '<span style="color:#e07a5f">leaving the village</span>';
+  const home = p.home === undefined ? undefined : getBuilding(world, p.home);
+  if (!home) return '<span style="color:#a89a80">no home</span>';
+  const content = householdOf(home).content;
+  const colour = content < HOUSEHOLD.leaveBelow ? '#e07a5f' : content < HOUSEHOLD.growAbove ? '#e8c872' : '#9ccc7a';
+  const want = lacking(home);
+  return `<span style="color:${colour}">${Math.round(content * 100)}%</span>${want.length ? ` <span style="color:#e07a5f">no ${want.join(', ')}</span>` : ''}`;
 }
 
 /**
@@ -140,10 +159,13 @@ export function installWorkersPanel(world: World): void {
   document.body.appendChild(root);
 
   const render = () => {
-    const rows = ['<tr style="color:#e8c872;text-align:left"><th>#</th><th style="padding:0 12px">occupation</th><th>doing</th></tr>'];
+    const rows = ['<tr style="color:#e8c872;text-align:left"><th>#</th><th style="padding:0 12px">occupation</th><th style="padding-right:12px">fed</th><th>doing</th></tr>'];
     for (const p of world.people) {
-      rows.push(`<tr><td>${p.id}</td><td style="padding:0 12px">${occupation(p)}</td><td>${activity(world, p)}</td></tr>`);
+      rows.push(`<tr><td>${p.id}</td><td style="padding:0 12px">${occupation(p)}</td><td style="padding-right:12px;white-space:nowrap">${fed(world, p)}</td><td>${activity(world, p)}</td></tr>`);
     }
+    rows.push(
+      `<tr style="color:#a89a80"><td colspan="4" style="padding-top:6px">fed: how well their home has had what it needs lately; below ${Math.round(HOUSEHOLD.leaveBelow * 100)}% they start to leave the village</td></tr>`,
+    );
     table.innerHTML = rows.join('');
   };
   render();

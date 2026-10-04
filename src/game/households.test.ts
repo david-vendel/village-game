@@ -16,10 +16,10 @@ const dayOf = (w: World) => 24 / timeOfDay(w).hoursPerSecond;
 const houses = (w: World) => w.buildings.filter((b) => b.type === 'house');
 
 describe('households', () => {
-  it('everyone but the monks has a home, and no house holds more than it has room for', () => {
+  it('everyone has a home, the monks the chapel, and no house holds more than it has room for', () => {
     const w = createWorld();
     tick(w, 1 / 30);
-    for (const p of w.people) expect(p.home !== undefined, p.name).toBe(p.look !== 'monk');
+    for (const p of w.people) expect(w.buildings.find((b) => b.id === p.home)?.type, p.name).toBe(p.look === 'monk' ? 'chapel' : 'house');
     for (const b of houses(w)) expect(residentsOf(w, b).length).toBeLessThanOrEqual(roomIn(b));
   });
 
@@ -66,7 +66,27 @@ describe('households', () => {
     expect(w.people.some((p) => p.id === leaver)).toBe(false);
   });
 
-  it('a content household with room in its house gains a newcomer', () => {
+  it('the monks eat bread and drink water off the chapel shelf, and wanting them, leave', () => {
+    const w = createWorld();
+    tick(w, 1 / 30);
+    const chapel = w.buildings.find((b) => b.type === 'chapel')!;
+    const monk = w.people.find((p) => p.look === 'monk')!;
+    chapel.stock.bread = 2;
+    chapel.stock.water = 2;
+    // nothing more brought
+    w.buildings = w.buildings.filter((b) => b.type !== 'warehouse' && b.type !== 'well');
+    tick(w, dayOf(w) * 3.5); // one monk: a loaf every 3 days, a bucket every 2
+    expect(chapel.stock.bread).toBeLessThan(2);
+    expect(chapel.stock.water).toBeLessThan(2);
+    let left = false;
+    tick(w, dayOf(w) * 6, () => {
+      chapel.stock.bread = chapel.stock.water = 0;
+      left ||= !!w.people.find((p) => p.id === monk.id)?.leaving || !w.people.some((p) => p.id === monk.id);
+    });
+    expect(left).toBe(true);
+  });
+
+    it('a content household with room in its house gains a newcomer', () => {
     const w = createWorld();
     tick(w, 1 / 30);
     // a new house with one person moved in from elsewhere: room for two more

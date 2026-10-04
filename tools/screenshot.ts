@@ -108,6 +108,7 @@ const send = (method: string, params: Record<string, unknown> = {}) =>
   });
 
 await send('Runtime.enable');
+await send('Page.enable');
 await send('Emulation.setDeviceMetricsOverride', { width: w, height: h, deviceScaleFactor: 1, mobile: false });
 // the side panels asked for start open (app/panel.ts keeps whether each is open in localStorage)
 const PANEL_KEY: Record<string, string> = { workers: 'workers-open', settings: 'tuning-open', versions: 'versions-open' };

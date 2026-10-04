@@ -22,7 +22,7 @@ import { employees, jobsOf } from '../game/people';
 import { RESOURCES, type Amounts } from '../game/resources';
 import { herdRoom, isAdult, type AnimalKind, type Beast } from '../game/livestock';
 import { pastureCells, PASTURE_CELLS_PER_HORSE } from '../game/pasture';
-import { householdOf, lacking, residentsOf, roomIn } from '../game/households';
+import { householdOf, isHome, lacking, residentsOf, roomIn } from '../game/households';
 import { backOf, mapPoint, streetOf, streetRange } from '../game/streets';
 import { constructionStage, demolitionYield, getBuilding, streetFrom, whyNotBuild, whyNotDemolish, type Building, type BuildingOption, type ConstructionStage, type World } from '../game/world';
 import { BUILDING_ART } from './buildings';
@@ -681,7 +681,7 @@ export function drawBuildingLabel(ctx: Ctx, world: World, b: Building, sx: numbe
     const n = (st: string) => b.farm!.plots.filter((p) => p.state === st).length;
     lines.push(`Fields: ${n('ripe')} ripe · ${n('growing')} growing · ${n('fallow')} to sow`);
   }
-  if (b.type === 'house' && b.status === 'done') {
+  if (isHome(b)) {
     const h = householdOf(b);
     const want = lacking(b);
     lines.push(`Home of ${residentsOf(world, b).length} (room for ${roomIn(b)}) · content ${Math.round(h.content * 100)}%${want.length ? ` · wants ${want.join(' and ')}` : ''}`);

@@ -13,9 +13,9 @@ import { createWorld, placeBuilding, plotOf, update, type World } from './world'
 
 const CAPACITY = BUILDINGS.farm.storage.grain!;
 
-/** The village without its houses (so no households asking for bread and water) or bread, and nobody on errands: a quiet place to watch one thing. */
+/** The starting village with nobody's shelf to keep stocked (no houses, no chapel), so serfs only run the errands a test sets. */
 function quiet(w: World): World {
-  w.buildings = w.buildings.filter((b) => b.type !== 'house');
+  w.buildings = w.buildings.filter((b) => b.type !== 'house' && b.type !== 'chapel');
   // and no bread for the tavern either
   for (const b of w.buildings) b.stock.bread = 0;
   for (const p of w.people) if (p.job?.role === 'serf') release(w, p);

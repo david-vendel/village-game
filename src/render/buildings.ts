@@ -954,6 +954,11 @@ function drawChapel(ctx: Ctx, a: DrawArgs): void {
   for (let y = a.base - th + 6; y < a.base; y += 7) rect(ctx, tx, y, tw, 1, '#5a5046');
   ctx.globalAlpha = 1;
   door(ctx, doorX(a, 'chapel') - 10, a.base, 20, 40, '#5e3d24');
+  // the monks' shelf by the door: water one side, bread the other (game/layout.ts houseSlot)
+  for (const r of ['water', 'bread'] as const) {
+    for (let i = 0; i < pileItems(a.stock?.[r] ?? 0); i++) drawItem(ctx, r, doorX(a, 'chapel') + houseSlot(r, i).dx, a.base + 3, r === 'water' ? 1 : 0.9, a.time);
+  }
+  if (a.wants?.length) wantBubble(ctx, doorX(a, 'chapel'), a.base - 62, a.wants, a.time);
   // belfry opening with a swinging bell
   ctx.fillStyle = '#2e2622';
   ctx.beginPath();

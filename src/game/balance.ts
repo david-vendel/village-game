@@ -77,6 +77,8 @@ export const WINTER_DAYS = 3;
 
 /** People a small house holds (a merged one, as many as its parts). */
 export const HOUSE_RESIDENTS = 3;
+/** Monks a chapel houses. */
+export const CHAPEL_RESIDENTS = 4;
 
 /**
  * What a household needs, by its house's level: each need is one of `goods`
@@ -87,7 +89,12 @@ export interface Need {
   goods: Resource[];
   perDay: number;
 }
-export const NEEDS: Record<'cottage' | 'farmstead' | 'townhouse', Need[]> = {
+export const NEEDS: Record<'chapel' | 'cottage' | 'farmstead' | 'townhouse', Need[]> = {
+  // the monks: bread and water, and no fire to keep
+  chapel: [
+    { goods: ['bread'], perDay: 1 / 3 },
+    { goods: ['water'], perDay: 1 / 2 },
+  ],
   cottage: [
     { goods: ['bread'], perDay: 1 / 3 },
     { goods: ['water'], perDay: 1 / 2 },

@@ -18,7 +18,7 @@ import { BASE_Y, CELL_W, EYE_DIST, FIELD_ROWS, QUARRIES, quarryLand, ROAD_FAR_Y,
 import { employees } from '../game/people';
 import { drawingAt } from '../game/transport';
 import { pastureCells } from '../game/pasture';
-import { lacking } from '../game/households';
+import { isHome, lacking } from '../game/households';
 import { merchantHere } from '../game/market';
 import { HAS_FIRE, upgradesDone } from '../game/buildings';
 import { hearthOf } from '../game/hearth';
@@ -259,7 +259,7 @@ export function standingOn(ctx: Ctx, world: World, eye: Eye): Standing[] {
       level: upgradesDone(b),
       fire: HAS_FIRE.has(b.type) ? fireOf(world, b) : undefined,
       merchant: b.type === 'market' && merchantHere(world),
-      wants: b.type === 'house' && b.status === 'done' ? lacking(b) : undefined,
+      wants: isHome(b) ? lacking(b) : undefined,
       pasture: b.type === 'horsefarm' && b.status === 'done' ? pastureCells(world, b).length : undefined,
     };
     const { at, view } = lot(b, x);
