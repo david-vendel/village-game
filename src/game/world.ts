@@ -746,8 +746,8 @@ function complete(world: World, b: Building): void {
     openStreet(world, b);
     syncFarmFields(world);
   }
-  // nothing grows on the farm's fields
-  if (b.type === 'farm') clearLand(world);
+  // nothing grows on the farm's fields, nor on the building (trees still standing there when construction was switched off)
+  clearLand(world);
   world.events.push({ kind: 'completed', buildingId: b.id });
 }
 
@@ -1144,7 +1144,7 @@ function baseWorkplace(world: World, b: Building, role: Role): Workplace | null 
   if (recipe && b.status === 'done') return workshopWorkplace(world, b, recipe);
   const stock = BUILDINGS[b.type].livestock;
   if (stock && b.status === 'done') return livestockWorkplace(world, b, stock);
-  if (isGatherHut(b.type) && b.status === 'done') return gatherWorkplace(world, b as Building & { type: typeof b.type });
+  if (isGatherHut(b.type) && b.status === 'done') return gatherWorkplace(world, b as Building & { type: typeof b.type }, () => rand(world));
   if (b === transportHub(world)) return transportWorkplace(world, b);
   return null;
 }

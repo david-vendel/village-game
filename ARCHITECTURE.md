@@ -245,8 +245,13 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
 - `nature.ts`: the woods and the quarries. Trees stand anywhere on the land with room (`treeRoom`):
   in clumps behind the streets and a little in front, never on a road, a building's lot, a field or a
   quarry, nor crowding each other; each keeps its place as a world x along a street and a depth y.
-  Land that gets taken (a building, a farm's fields, a new road) is cleared (`clearLand`). Saplings
-  sprout mostly near grown trees. A woodcutter walks out to the nearest grown tree in reach and fells it; a stonecutter cuts at the face of the nearest quarry.
+  Land that gets taken (a building, a farm's fields, a new road) is cleared (`clearLand`), but for
+  grown trees on the land of a site being built (a building or a road piece): nothing is ever kept from
+  being built by a tree, its builders fell them first (`treesInTheWay`, site.ts), building only once the
+  land is clear, and the log goes into the building if it still lacks wood, else onto the ground for
+  serfs. Saplings sprout mostly near grown trees. A woodcutter walks out to the nearest grown tree in
+  reach and fells it; with none, he plants a sapling at a random free spot in reach (while fewer than
+  `SAPLINGS_TENDED` grow there). A stonecutter cuts at the face of the nearest quarry.
   Workers walk at real ground speed, the fastest way across the land (`paths.ts`, walked by `worker.ts`):
   never through a building but the one they set out from or are going to, faster on roads (×1.2) than
   on grass (×1), slower through fields (×0.8); to another street too, straight across the land.

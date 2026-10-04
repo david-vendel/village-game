@@ -21,6 +21,11 @@
 // Progress is the share of the cost built in, so it can never run ahead of
 // the materials.
 //
+// Grown trees standing on the site's land are felled first (nature.ts
+// treesInTheWay): nothing is built while one stands, though materials are
+// fetched meanwhile. A felled log goes into the building, if it still lacks
+// wood, or else down on the ground by the site for serfs to carry away.
+//
 // An upgrade (BuildingDef.upgrade) is built the same way, as a site on the
 // finished building: its builders work alongside the building's own workers.
 
@@ -28,8 +33,9 @@ import { BUILDINGS, nextUpgrade } from './buildings';
 import { materialSource, nearestPile, storeSpot, takeOut } from './economy';
 import { pileItems, siteSlot, SPOT_PILE_DX, STAND_Y, type Spot } from './layout';
 import { employees } from './people';
+import { CHOP_TIME, chopSpot, fell, treesInTheWay } from './nature';
 import { heapDx } from './roadwork';
-import { pileById, pileSpot as groundSpot, takeFromPile } from './piles';
+import { dropOnGround, pileById, pileSpot as groundSpot, takeFromPile } from './piles';
 import { streetDist } from './streets';
 import { RESOURCES, stockOf, total, type Amounts, type Load, type Resource, type Stock } from './resources';
 import { freeNow } from './transport';
@@ -93,6 +99,8 @@ const fetchedResource = (action: string): Resource | null => RESOURCES.find((r) 
 export const builderFetch = fetchedResource;
 const gathering = (action: string) => action.startsWith('gather-');
 const takenResource = (action: string) => MATERIALS.find((r) => action === takeAction(r)) ?? null;
+/** Felling a tree in the way (target: the tree's id). */
+const CHOP = 'chop';
 
 /** Where builders stand along the front of the building (dx), to lay materials down and build. */
 export function workSpots(type: Building['type']): number[] {
@@ -185,6 +193,8 @@ export function builderPositions(world: World, b: Building): number {
   const x = b.x;
   const free = freeNow(world);
   for (const r of RESOURCES) if (need[r] && (materialSource(world, r, x, free) || nearestPile(world, r, x, free))) waiting += loads(need[r]);
+  const felling = new Set(taken.filter((j) => j.action === CHOP).map((j) => j.target));
+  waiting += treesInTheWay(world, b).filter((t) => !felling.has(t.id)).length;
   return Math.min(BUILDERS_PER_SITE, busy.length + waiting);
 }
 
@@ -222,17 +232,10 @@ export function siteWorkplace(world: World, b: Building, buildSpeed: number): Wo
     walkSpeed: world.params.builderWalk,
     door: FRONT,
     nextJob(w, taken: JobTicket[]) {
-      // build where materials lie and nobody else is building: the nearest such spot
       const building = new Set(taken.filter((j) => j.action === 'build').map((j) => j.target));
-      let best = -1;
-      spots.forEach((dx, k) => {
-        if (laidAt(k) > 1e-9 && !building.has(k) && (best < 0 || Math.abs(dx - w.dx) < Math.abs(spots[best] - w.dx))) best = k;
-      });
-      if (best >= 0) return { job: { action: 'build', target: best }, dx: spots[best], y: FRONT.y };
-
       /** The spot to bring a load to: the one with least lying there and on its way (then nearest the worker). */
       const incoming = spots.map(() => 0);
-      for (const j of taken) if (j.slot !== undefined && (fetchedResource(j.action) || takenResource(j.action))) incoming[j.slot] = (incoming[j.slot] ?? 0) + LOAD_SIZE;
+      for (const j of taken) if (j.slot !== undefined && (fetchedResource(j.action) || takenResource(j.action) || j.action === CHOP)) incoming[j.slot] = (incoming[j.slot] ?? 0) + LOAD_SIZE;
       const target = () => {
         let k = 0;
         const load = (i: number) => laidAt(i) + incoming[i] + (building.has(i) ? LOAD_SIZE / 2 : 0);
@@ -241,6 +244,23 @@ export function siteWorkplace(world: World, b: Building, buildSpeed: number): Wo
         });
         return k;
       };
+
+      // the land is cleared first: the nearest tree in the way nobody is felling yet
+      const trees = treesInTheWay(world, b);
+      const felling = new Set(taken.filter((j) => j.action === CHOP).map((j) => j.target));
+      let tree: { id: number; dx: number; y: number } | null = null;
+      for (const t of trees) {
+        const at = chopSpot(t, x);
+        if (!felling.has(t.id) && (!tree || Math.abs(at.dx - w.dx) < Math.abs(tree.dx - w.dx))) tree = { id: t.id, ...at };
+      }
+      if (tree) return { job: { action: CHOP, target: tree.id, slot: target() }, dx: tree.dx, y: tree.y };
+
+      // build where materials lie and nobody else is building, once the land is clear: the nearest such spot
+      let best = -1;
+      spots.forEach((dx, k) => {
+        if (laidAt(k) > 1e-9 && !building.has(k) && (best < 0 || Math.abs(dx - w.dx) < Math.abs(spots[best] - w.dx))) best = k;
+      });
+      if (best >= 0 && !trees.length) return { job: { action: 'build', target: best }, dx: spots[best], y: FRONT.y };
 
       // a load from the pile (a site's starting materials)
       for (const r of MATERIALS) {
@@ -264,6 +284,10 @@ export function siteWorkplace(world: World, b: Building, buildSpeed: number): Wo
       return null; // nothing to build with, and nothing to fetch
     },
     jobSpot(job) {
+      if (job.action === CHOP) {
+        const t = treesInTheWay(world, b).find((o) => o.id === job.target);
+        return t ? chopSpot(t, x) : null;
+      }
       const t = takenResource(job.action);
       if (t) return pileSpot(b, t, pileItems(site.pile[t]) - 1);
       const r = fetchedResource(job.action);
@@ -275,7 +299,8 @@ export function siteWorkplace(world: World, b: Building, buildSpeed: number): Wo
       return r && from ? storeSpot(world, from, r, x, true) : null;
     },
     begin(job) {
-      if (job.action === 'build') return laidAt(job.target) > 1e-9 ? BUILD_CHUNK : null;
+      if (job.action === CHOP) return treesInTheWay(world, b).some((t) => t.id === job.target) ? CHOP_TIME : null;
+      if (job.action === 'build') return laidAt(job.target) > 1e-9 && !treesInTheWay(world, b).length ? BUILD_CHUNK : null;
       const t = takenResource(job.action);
       if (t) return site.pile[t] > 1e-9 ? PICK_UP_TIME : null;
       const r = fetchedResource(job.action);
@@ -284,6 +309,8 @@ export function siteWorkplace(world: World, b: Building, buildSpeed: number): Wo
       return r && from && from.stock[r] > 0 ? LOADING_TIME : null;
     },
     finish(job): Load | null {
+      // nothing is left of a tree felled to build on, not even the stump
+      if (job.action === CHOP) return fell(world, job.target, true);
       if (job.action === 'build') {
         // work in what lies at this spot, a share of each material
         const here = site.laid[job.target];
@@ -324,6 +351,14 @@ export function siteWorkplace(world: World, b: Building, buildSpeed: number): Wo
     },
     deliver(load, job) {
       const k = Math.max(0, Math.min(spots.length - 1, job.slot ?? 0));
+      if (job.action === CHOP) {
+        // a log off the site's own land: into the building if it still lacks wood, else down by the road
+        const use = Math.min(load.amount, owed(world, b)[load.resource] ?? 0);
+        site.laid[k][load.resource] += use;
+        site.delivered[load.resource] += use;
+        dropOnGround(world, x + (spots[k] ?? 0), { resource: load.resource, amount: load.amount - use });
+        return;
+      }
       site.laid[k][load.resource] += load.amount;
       if (fetchedResource(job.action)) site.delivered[load.resource] += load.amount;
     },

@@ -409,6 +409,20 @@ export function drawWorker(ctx: Ctx, f: Worker, fig: Figure, x: number, y: numbe
     if (p < 0.2 || p > 0.8) ellipse(ctx, tip[0] + 2, tip[1] - 1, 2.4, 1.4, p < 0.2 ? '#e8d6b0' : '#a8642e');
     drawArm(ctx, o, sx, sy, ...hand);
     ctx.restore();
+  } else if (job && action === 'plant') {
+    // bent to the ground, setting a sapling in and pressing the earth round it
+    const p = clamp01(job.t / job.duration);
+    const press = Math.abs(Math.sin(time * 5)) * 1.2;
+    body([7, 1 + press]);
+    ctx.save();
+    ctx.rotate(-bend);
+    ellipse(ctx, 10, 9.5, 3.2, 1, '#5a4228');
+    line(ctx, 10, 9.5, 10, 9.5 - 6 * p, '#6b4a2c', 1);
+    if (p > 0.3) circle(ctx, 10, 9.5 - 6 * p, 1.5 + 1.5 * p, '#4f7a32');
+    ctx.restore();
+    drawArm(ctx, o, sx, sy, 8, 1.5 + press);
+    ctx.restore();
+    drawProgressPips(ctx, p);
   } else if (job) {
     // loading up at the warehouse, both hands down
     body([5, -1]);

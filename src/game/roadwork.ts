@@ -8,6 +8,7 @@
 
 import { BUILDINGS } from './buildings';
 import { PLOT_SPACING, STREET_LINE_Y } from './layout';
+import { treesInTheWay } from './nature';
 import { RESOURCES, total } from './resources';
 import { siteWorkplace } from './site';
 import type { JobTicket, Workplace } from './worker';
@@ -47,13 +48,14 @@ export function roadWorkplace(world: World, b: Building, buildSpeed: number): Wo
       // one parcel at a time, in order, by one builder, with what lies on the heap
       const k = parcelsLaid(b);
       const laying = taken.some((j) => j.action === 'build');
-      if (heap() > 1e-9 && !laying && k < ROAD_PIECE) return { job: { action: 'build', target: k }, dx: parcelDx(b, k), y: ON_ROAD };
+      if (heap() > 1e-9 && !laying && k < ROAD_PIECE && !treesInTheWay(world, b).length) return { job: { action: 'build', target: k }, dx: parcelDx(b, k), y: ON_ROAD };
       // the others fetch the wood still needed, a log each (never building at the heap themselves)
       const next = base.nextJob(w, [...taken, { action: 'build', target: 0 }]);
       return next && next.job.action !== 'build' ? next : null;
     },
     begin(job) {
-      if (job.action === 'build') return heap() > 1e-9 && job.target === parcelsLaid(b) ? def.buildTime / ROAD_PIECE / buildSpeed : null;
+      // (once the trees on its way are felled: site.ts)
+      if (job.action === 'build') return heap() > 1e-9 && job.target === parcelsLaid(b) && !treesInTheWay(world, b).length ? def.buildTime / ROAD_PIECE / buildSpeed : null;
       return base.begin(job);
     },
     finish(job) {

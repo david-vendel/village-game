@@ -7,7 +7,11 @@
 // seconds into a grown tree; a woodcutter walks out to a grown tree and fells
 // it, leaving a stump that rots away after STUMP_TIME. New saplings sprout on
 // their own now and then, mostly near grown trees. Land taken by a building, a
-// field or a road is cleared of trees (clearLand).
+// field or a road is cleared of trees (clearLand), but for grown trees on the
+// land of a site being built: its builders fell those first (site.ts), and the
+// logs go into the building or onto the ground for serfs. With no grown tree
+// in reach, a woodcutter walks out and plants a sapling somewhere free round
+// about (while fewer than SAPLINGS_TENDED are growing in his reach).
 //
 // The quarries (QUARRIES) are rocky hills that come down to the tree line:
 // a stonecutter walks to the face and cuts blocks out of it, as many as
@@ -53,6 +57,10 @@ export const WOOD_REACH = 900;
 /** Seconds to fell a tree, and to cut a block of stone. */
 export const CHOP_TIME = 10;
 export const CUT_TIME = 12;
+/** Seconds to plant a sapling. */
+export const PLANT_TIME = 6;
+/** A woodcutter with nothing to fell plants saplings while fewer than this are growing in his reach. */
+export const SAPLINGS_TENDED = 8;
 
 /** Grown fraction 0..1 (a stump counts as grown: it is what is left of one). */
 export function treeGrowth(t: Tree): number {
@@ -65,24 +73,29 @@ const TRUNK_ROOM = 10;
 /** Where tree t stands on the map. */
 export const treePoint = (world: World, t: Tree): Vec => groundPoint(world, t.x, t.y);
 
+/** What takes the land within r of map point p (grid.ts), where `which` matches it. */
+function usesNear(world: World, p: Vec, r: number, which: (u: LandUse) => boolean = () => true): LandUse[] {
+  const land = landUse(world);
+  const out: LandUse[] = [];
+  for (let c = Math.floor((p.x - r) / CELL_W); c <= Math.floor((p.x + r) / CELL_W); c++) {
+    for (let row = Math.floor((p.y - r) / CELL_W); row <= Math.floor((p.y + r) / CELL_W); row++) {
+      const u = land.get(cellKey(c, row));
+      if (u && which(u)) out.push(u);
+    }
+  }
+  return out;
+}
+
+/** What a tree at map point p would be in the way of: land taken within TRUNK_ROOM, and a road's verges. */
+const inWayOf = (world: World, p: Vec) => [...usesNear(world, p, TRUNK_ROOM), ...usesNear(world, p, CELL_W, (u) => u.kind === 'road')];
+
 /**
  * Whether a tree can stand at map point p: not on land anything takes (grid.ts:
  * a road or its verges, a building or a crossroads being built, a farm's
  * field, a quarry's land), and (unless `crowd` is false) not crowding another tree.
  */
 export function treeRoom(world: World, p: Vec, crowd = true, not?: Tree): boolean {
-  const land = landUse(world);
-  /** Whether land within r of p is taken by something `which` matches. */
-  const taken = (r: number, which: (u: LandUse) => boolean) => {
-    for (let c = Math.floor((p.x - r) / CELL_W); c <= Math.floor((p.x + r) / CELL_W); c++) {
-      for (let row = Math.floor((p.y - r) / CELL_W); row <= Math.floor((p.y + r) / CELL_W); row++) {
-        const u = land.get(cellKey(c, row));
-        if (u && which(u)) return true;
-      }
-    }
-    return false;
-  };
-  if (taken(TRUNK_ROOM, () => true) || taken(CELL_W, (u) => u.kind === 'road')) return false;
+  if (inWayOf(world, p).length) return false;
   if (crowd) {
     for (const t of world.trees) {
       if (t === not) continue;
@@ -93,9 +106,45 @@ export function treeRoom(world: World, p: Vec, crowd = true, not?: Tree): boolea
   return true;
 }
 
-/** Trees are cut down wherever the land is taken (a building, a field, a road): nothing grows on top of anything. */
+/** A site being built (a building or a road piece) on this land, whose builders clear it of trees. */
+const clearedBy = (world: World, u: LandUse): Building | undefined =>
+  u.kind === 'building' ? world.buildings.find((b) => b.id === u.buildingId && b.status === 'constructing' && b.site) : undefined;
+
+/**
+ * Trees are cut down wherever the land is taken (a building, a field, a road):
+ * nothing grows on top of anything. A grown tree in the way of nothing but
+ * sites being built stands until their builders fell it (treesInTheWay).
+ */
 export function clearLand(world: World): void {
-  world.trees = world.trees.filter((t) => treeRoom(world, treePoint(world, t), false));
+  world.trees = world.trees.filter((t) => {
+    const uses = inWayOf(world, treePoint(world, t));
+    return !uses.length || (t.state === 'grown' && uses.every((u) => clearedBy(world, u)));
+  });
+}
+
+/** The grown trees standing on site b's land: its builders fell them before building there. */
+export function treesInTheWay(world: World, b: Building): Tree[] {
+  if (!b.site || b.status !== 'constructing') return [];
+  const mine = (u: LandUse) => u.kind === 'building' && u.buildingId === b.id;
+  return world.trees.filter((t) => t.state === 'grown' && usesNear(world, treePoint(world, t), TRUNK_ROOM, mine).length);
+}
+
+/** Where someone stands to fell tree t, as dx from world x and a depth y: beside the trunk, a step nearer the viewer. */
+export const chopSpot = (t: Tree, x: number) => ({ dx: t.x + CHOP_SPOT.dx - x, y: yAt(behindRoad(t.y) - 5) });
+
+/**
+ * Fell grown tree `id`, leaving a stump, or (`uproot`: clearing land to build
+ * on) nothing. Its log, or null if it no longer stands.
+ */
+export function fell(world: World, id: number, uproot = false): Load | null {
+  const t = world.trees.find((o) => o.id === id && o.state === 'grown');
+  if (!t) return null;
+  if (uproot) world.trees = world.trees.filter((o) => o !== t);
+  else {
+    t.state = 'stump';
+    t.age = 0;
+  }
+  return { resource: 'wood', amount: PILE_UNIT };
 }
 
 /**
@@ -116,6 +165,11 @@ function sprout(world: World, x: number, d: number, grown: boolean, rand: () => 
   const young = !grown || rand() < 0.2;
   world.trees.push({ id: world.nextId++, x, y: yAt(d), state: young ? 'growing' : 'grown', age: young && grown ? rand() * TREE_GROW : 0 });
   return true;
+}
+
+/** Plant a sapling at world x, d map px behind its street's road, if there is room there still. */
+export function plantSapling(world: World, x: number, d: number): boolean {
+  return sprout(world, x, d, false, () => 0);
 }
 
 /**
@@ -186,20 +240,45 @@ export function isGatherHut(type: Building['type']): type is GatherHut {
   return type in GATHER;
 }
 
-/** The woodcutter's or stonecutter's hut as a workplace for its worker. */
-export function gatherWorkplace(world: World, b: Building & { type: GatherHut }): Workplace {
+/** The woodcutter's or stonecutter's hut as a workplace for its worker (`rand` picks where saplings go). */
+export function gatherWorkplace(world: World, b: Building & { type: GatherHut }, rand: () => number): Workplace {
   const x = b.x;
   const { resource, action, seconds, door } = GATHER[b.type];
   const capacity = storageOf(b);
   const tree = (id: number) => world.trees.find((t) => t.id === id && t.state === 'grown');
+  /** The walk from world x `from` (on the road) out to world x `tx`, d behind its road: along the streets, then across. */
+  const walk = (from: number, tx: number, d: number) => streetDist(world, from, tx) + Math.abs(d - behindRoad(STAND_Y));
   const spot = (job: JobTicket) => {
+    // planting: the target is the world x, the slot the depth behind the road
+    if (job.action === 'plant') return { dx: job.target + CHOP_SPOT.dx - x, y: yAt((job.slot ?? 0) - 5) };
     if (action === 'chop') {
       const t = tree(job.target);
-      // beside the trunk, a step nearer the viewer
-      return t ? { dx: t.x + CHOP_SPOT.dx - x, y: yAt(behindRoad(t.y) - 5) } : null;
+      return t ? chopSpot(t, x) : null;
     }
     const q = QUARRIES[job.target];
     return q ? { dx: q.x + (QUARRY_SPOTS[job.slot ?? 0] ?? 0) - x, y: QUARRY_Y + 3 } : null;
+  };
+  /** A place picked at random in reach to plant a sapling: free land, clear of trees and of saplings about to go in. */
+  const plantJob = (taken: JobTicket[]): JobTicket | null => {
+    const planting = taken.filter((j) => j.action === 'plant');
+    const growing = world.trees.filter((t) => t.state === 'growing' && walk(x, t.x, behindRoad(t.y)) <= WOOD_REACH).length;
+    if (growing + planting.length >= SAPLINGS_TENDED) return null;
+    for (let tries = 0; tries < 24; tries++) {
+      const tx = Math.round(x + (rand() * 2 - 1) * WOOD_REACH);
+      const band = rand() < 0.75 ? WOODS.behind : WOODS.front;
+      const d = Math.round(band[0] + rand() * (band[1] - band[0]));
+      const street = world.streets[streetOf(tx)];
+      const { min, max } = streetRange(world, streetOf(tx));
+      if (!street || street.gone || tx < min || tx > max || walk(x, tx, d) > WOOD_REACH) continue;
+      const p = streetPoint(world, tx, d);
+      if (!treeRoom(world, p)) continue;
+      const near = (j: JobTicket) => {
+        const q = streetPoint(world, j.target, j.slot ?? 0);
+        return Math.hypot(q.x - p.x, q.y - p.y) < TREE_GAP;
+      };
+      if (!planting.some(near)) return { action: 'plant', target: tx, slot: d };
+    }
+    return null;
   };
   return {
     door,
@@ -211,13 +290,13 @@ export function gatherWorkplace(world: World, b: Building & { type: GatherHut })
       if (action === 'chop') {
         const busy = new Set(taken.map((j) => j.target));
         let best: Tree | null = null;
-        /** The walk from world x `from` (on the road) out to tree t: along the streets, then across. */
-        const walk = (from: number, t: Tree) => streetDist(world, from, t.x) + Math.abs(behindRoad(t.y) - behindRoad(STAND_Y));
+        const to = (from: number, t: Tree) => walk(from, t.x, behindRoad(t.y));
         for (const t of world.trees) {
-          if (t.state !== 'grown' || busy.has(t.id) || walk(x, t) > WOOD_REACH) continue;
-          if (!best || walk(here, t) < walk(here, best)) best = t;
+          if (t.state !== 'grown' || busy.has(t.id) || to(x, t) > WOOD_REACH) continue;
+          if (!best || to(here, t) < to(here, best)) best = t;
         }
-        if (best) job = { action, target: best.id };
+        // nothing to fell: plant a sapling somewhere round about
+        job = best ? { action, target: best.id } : plantJob(taken);
       } else {
         const q = nearestQuarry(world, x);
         const used = new Set(taken.filter((j) => j.target === q).map((j) => j.slot));
@@ -229,15 +308,15 @@ export function gatherWorkplace(world: World, b: Building & { type: GatherHut })
     },
     jobSpot: spot,
     begin(job) {
+      if (job.action === 'plant') return PLANT_TIME;
       return spot(job) ? seconds : null;
     },
     finish(job): Load | null {
-      if (action === 'chop') {
-        const t = tree(job.target);
-        if (!t) return null;
-        t.state = 'stump';
-        t.age = 0;
+      if (job.action === 'plant') {
+        plantSapling(world, job.target, job.slot ?? 0);
+        return null;
       }
+      if (action === 'chop') return fell(world, job.target);
       return { resource, amount: PILE_UNIT };
     },
     dropSpot(_job, load) {
