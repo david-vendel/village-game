@@ -31,7 +31,7 @@ import { dropOnGround, GROUND_PILE_Y } from './piles';
 import { room, type Load } from './resources';
 import { cellKey, landUse, type LandUse } from './grid';
 import { groundPoint, streetDist, streetOf, streetPoint, streetRange, type Vec, streetAt } from './streets';
-import type { JobTicket, Workplace } from './worker';
+import { currentJob, type JobTicket, type Workplace } from './worker';
 import type { Building, World } from './world';
 
 export interface Tree {
@@ -194,7 +194,7 @@ export function clearingFields(world: World, b: Building, farm: Workplace, block
   return {
     ...farm,
     nextJob(w, taken) {
-      const felling = new Set(taken.filter((j) => j.action === 'chop').map((j) => j.target));
+      const felling = new Set([...treesBeingFelled(world), ...taken.filter((j) => j.action === 'chop').map((j) => j.target)]);
       const work = taken.filter((j) => j.action !== 'chop');
       const next = farm.nextJob(w, work);
       if (next?.job.action === 'harvest') return next;
@@ -238,6 +238,16 @@ export function clearingFields(world: World, b: Building, farm: Workplace, block
 
 /** Where someone stands to fell tree t, as dx from world x and a depth y: beside the trunk, a step nearer the viewer. */
 export const chopSpot = (t: Tree, x: number) => ({ dx: t.x + CHOP_SPOT.dx - x, y: yAt(behindRoad(t.y) - 5) });
+
+/** The trees someone in the village is on their way to fell, or felling: nobody else goes for them. */
+export function treesBeingFelled(world: World): Set<number> {
+  const out = new Set<number>();
+  for (const p of world.people) {
+    const job = p.job && currentJob(p.job.worker);
+    if (job?.action === 'chop') out.add(job.target);
+  }
+  return out;
+}
 
 /**
  * The grown tree nearest world x (the walk out to it, along the streets then
@@ -421,7 +431,7 @@ export function gatherWorkplace(world: World, b: Building & { type: GatherHut },
       const here = x + w.dx;
       let job: JobTicket | null = null;
       if (action === 'chop') {
-        const busy = new Set(taken.filter((j) => j.action !== 'plant').map((j) => j.target));
+        const busy = new Set([...treesBeingFelled(world), ...taken.filter((j) => j.action !== 'plant').map((j) => j.target)]);
         let best: Tree | null = null;
         const to = (from: number, t: Tree) => walk(from, t.x, behindRoad(t.y));
         for (const t of world.trees) {

@@ -155,4 +155,26 @@ describe('woodcutter', () => {
     expect(planted.size).toBeGreaterThan(2);
     for (const x of planted) expect(Math.abs(x - hut.x)).toBeLessThanOrEqual(PLANT_NEAR.along);
   });
+
+  it("s of two huts never go for the same tree", () => {
+    const w = createWorld({ village: false });
+    setConstructionEnabled(w, false);
+    placeBuilding(w, 1000, 'house', { free: true });
+    placeBuilding(w, 1200, 'house', { free: true });
+    runFor(w, 5);
+    const huts = [placeBuilding(w, 2500, 'woodcutter', { free: true })!, placeBuilding(w, 2800, 'woodcutter', { free: true })!];
+    w.trees = [2600, 2700].map((x) => ({ id: w.nextId++, x, y: yAt(300), state: 'grown' as const, age: 0 }));
+    let cutters = 0;
+    for (let t = 0; t < 120; t += 1 / 30) {
+      update(w, 1 / 30, idle);
+      const going = w.people.flatMap((p) => {
+        const task = p.job && huts.some((h) => h.id === p.job!.buildingId) ? p.job.worker.task : null;
+        const job = task?.kind === 'job' || (task?.kind === 'walk' && task.then === 'job') ? task.job : null;
+        return job?.action === 'chop' ? [job.target] : [];
+      });
+      cutters = Math.max(cutters, going.length);
+      expect(new Set(going).size).toBe(going.length);
+    }
+    expect(cutters).toBe(2);
+  });
 });

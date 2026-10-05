@@ -36,7 +36,7 @@ import { BUILDINGS, nextUpgrade } from './buildings';
 import { materialSource, nearestPile, storeSpot, takeOut } from './economy';
 import { pileItems, siteSlot, SPOT_PILE_DX, STAND_Y, type Spot } from './layout';
 import { employees } from './people';
-import { CHOP_TIME, chopSpot, fell, nearestTree, treesInTheWay } from './nature';
+import { CHOP_TIME, chopSpot, fell, nearestTree, treesBeingFelled, treesInTheWay } from './nature';
 import { heapDx } from './roadwork';
 import { dropOnGround, pileById, pileSpot as groundSpot, takeFromPile } from './piles';
 import { streetDist } from './streets';
@@ -203,7 +203,7 @@ export function builderPositions(world: World, b: Building): number {
   const need = stillNeeded(world, b);
   const x = b.x;
   const free = freeNow(world);
-  const felling = new Set(taken.filter((j) => j.action === CHOP).map((j) => j.target));
+  const felling = new Set([...treesBeingFelled(world), ...taken.filter((j) => j.action === CHOP).map((j) => j.target)]);
   for (const r of RESOURCES) {
     const wild = r === 'wood' && fellsForWood(b) && nearestTree(world, x, felling);
     if (need[r] && (materialSource(world, r, x, free) || nearestPile(world, r, x, free) || wild)) waiting += loads(need[r]);
@@ -263,7 +263,7 @@ export function siteWorkplace(world: World, b: Building, buildSpeed: number): Wo
 
       // the land is cleared first: the nearest tree in the way nobody is felling yet
       const trees = treesInTheWay(world, b);
-      const felling = new Set(taken.filter((j) => j.action === CHOP).map((j) => j.target));
+      const felling = new Set([...treesBeingFelled(world), ...taken.filter((j) => j.action === CHOP).map((j) => j.target)]);
       let tree: { id: number; dx: number; y: number } | null = null;
       for (const t of trees) {
         const at = chopSpot(t, x);
