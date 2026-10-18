@@ -18,8 +18,8 @@
 //
 // The 3D image of this street's buildings is rendered offscreen and composited
 // into the 2D frame at the building pass (scene.ts), so 2D people still pass
-// in front of and behind it. From above (topview.ts) the same models are drawn
-// looking straight down.
+// in front of and behind it. The strategy view (strategy.ts) draws the same
+// models on the land of the map, looking down on it at an angle.
 
 import * as THREE from 'three';
 import type { BuildingType } from '../game/buildings';
@@ -671,9 +671,9 @@ export function draw3d(ctx: Ctx, buildings: Building3d[], v: View3d, opts: { cli
   return out;
 }
 
-// --- from above ---------------------------------------------------------------------------
+// --- the strategy view ---------------------------------------------------------------------
 
-/** A building seen from above: where its plot's middle (on the building line) lies on the map, and which way it faces. */
+/** A building on the map: where its plot's middle (on the building line) lies, and which way it faces. */
 export interface Top3d {
   b: Building3d;
   /** Map point of the model's origin, and the map direction of its +x (along its street) and +y (back from it). */
@@ -683,47 +683,33 @@ export interface Top3d {
   back: { x: number; y: number };
 }
 
-let topCam: THREE.OrthographicCamera | null = null;
-
 /**
- * Draw buildings from straight above into a view of the map (north up): screen = (w/2 + (p.x − cx)·S,
- * h/2 − (p.y − cy)·S). The sun casts their shadows on the ground as it does in the street.
+ * Draw the village in 3D through a camera looking down on it at an angle (strategy.ts): these
+ * buildings, and `extra` (the ground, trees, people), into ctx at w × h. three.js world here: x = map
+ * x, z = −map y (north away), y up. The sun lights it and casts shadows as it does in the street.
  */
-export function drawTop3d(ctx: Ctx, items: Top3d[], view: { cx: number; cy: number; S: number; w: number; h: number; px: number; phase: number; sunHeight: number; night: number; time: number }): void {
-  if (!items.length) return;
+export function drawStrategy3d(ctx: Ctx, items: Top3d[], extra: THREE.Object3D, cam: THREE.PerspectiveCamera, view: { cx: number; cy: number; reach: number; w: number; h: number; px: number; phase: number; sunHeight: number; night: number; time: number; fog: THREE.Fog }): void {
   if (!renderer) setup();
   const r = renderer!;
-  topCam ??= new THREE.OrthographicCamera();
   const w = Math.max(1, Math.round(view.w * view.px));
   const h = Math.max(1, Math.round(view.h * view.px));
   const size = r.getSize(new THREE.Vector2());
   if (size.x !== w || size.y !== h) r.setSize(w, h, false);
-  if (view.time !== lastTime) frame++;
+  if (view.time !== lastTime) {
+    frame++;
+    sweep();
+  }
   const dt = Math.max(0, Math.min(0.1, view.time - lastTime));
   lastTime = view.time;
-  // three.js world here: x = map x, z = −map y (north away), y up; the camera above looking down, north up
-  const halfW = view.w / 2 / view.S;
-  const halfH = view.h / 2 / view.S;
-  topCam.left = -halfW;
-  topCam.right = halfW;
-  topCam.top = halfH;
-  topCam.bottom = -halfH;
-  topCam.near = 1;
-  topCam.far = 20000;
-  topCam.position.set(view.cx, 5000, -view.cy);
-  topCam.up.set(0, 0, -1);
-  topCam.lookAt(view.cx, 0, -view.cy);
-  topCam.updateProjectionMatrix();
-  topCam.updateMatrixWorld(true);
   const style = styleNow();
-  const dir = light({ camX: view.cx, viewW: 0, top: 0, bottom: 0, pxPerU: 1, phase: view.phase, sunHeight: view.sunHeight, night: view.night, time: view.time }, view.cx, Math.max(halfW, halfH) + 400, style);
-  // from above, the slopes facing away from the sun still take the open sky's light
-  sky.intensity += 0.45;
-  // in the top view the sun's "towards the camera" is towards the south
+  const dir = light({ camX: view.cx, viewW: 0, top: 0, bottom: 0, pxPerU: 1, phase: view.phase, sunHeight: view.sunHeight, night: view.night, time: view.time }, view.cx, view.reach, style);
+  // looking down, the slopes facing away from the sun still take the open sky's light
+  sky.intensity += 0.3;
+  // the sun's "towards the camera" of the street is towards the south here
   sun.position.set(view.cx + dir.x * 3000, dir.y * 3000, -view.cy + dir.z * 3000);
   sun.target.position.set(view.cx, 0, -view.cy);
   sun.target.updateMatrixWorld();
-  const shown = new Set<THREE.Object3D>();
+  const shown = new Set<THREE.Object3D>([extra]);
   for (const it of items) {
     if (!ready3d(it.b)) continue;
     const e = entries.get(it.b.id)!;
@@ -738,7 +724,15 @@ export function drawTop3d(ctx: Ctx, items: Top3d[], view: { cx: number; cy: numb
     shown.add(e.root);
   }
   for (const c of [...scene.children]) if (c instanceof THREE.Group && !shown.has(c)) c.removeFromParent();
-  r.render(scene, topCam);
+  if (extra.parent !== scene) scene.add(extra);
+  // the land under it all takes the shadows itself, and the far land fades into the haze
+  const ground = scene.getObjectByName('ground')!;
+  ground.visible = false;
+  scene.fog = view.fog;
+  r.render(scene, cam);
+  scene.fog = null;
+  ground.visible = true;
+  extra.removeFromParent();
   ctx.drawImage(r.domElement, 0, 0, view.w, view.h);
   // back to street placement next time (place() sets the matrix from position and rotation again)
   for (const g of shown) g.matrixAutoUpdate = true;

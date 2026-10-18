@@ -68,7 +68,7 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
 | Change construction visuals (scaffolding, stages' look) | `render/construction.ts` |
 | Replace art with sprite assets | put them in `public/assets/` per `docs/art/ASSET_SPEC.md`; check with `npm run assets:check`, look at `?art=preview` |
 | Change the HUD, menu, labels, captions, button positions | `render/ui.ts` (tap areas follow automatically) |
-| Change draw order or camera framing | `render/scene.ts` |
+| Change draw order or camera framing | `render/scene.ts` (the strategy view's camera: `render/strategy.ts`) |
 | Add a building type | `game/buildings.ts` (gameplay data: cost, storage, jobs) **and** `render/buildings.ts` (art) |
 | Give a building workers | its `jobs` in `game/buildings.ts`, a `Workplace` for it (like `farmWorkplace`) returned by `workplaceOf` in `game/world.ts`, and a look for the worker in `render/` |
 | Change timings, speeds, rules (build times, grow time, store size, rider speed) | `game/buildings.ts`, `game/world.ts`, `game/farm.ts` |
@@ -270,7 +270,7 @@ renderer draws, so a layout that is right in text is right on screen.
   the camera stands beside that road. Things further off than this street's woods are drawn before
   them, nearer ones in among this street's people by screen depth.
 - `buildings.ts`: the signpost where a crossroads can be built (`drawCrossroadsSign`, drawn on
-  this street by `scene.ts`, on the others by `plane.ts`, from above by `topview.ts`), and
+  this street by `scene.ts`, on the others by `plane.ts`; the strategy view marks the place on its ground), and
   "2D picture of a 3D building" primitives (front face, shaded side face, gable
   roof with thatch/tile/slate, timber framing) and `BUILDING_ART`: per building `draw`, optional
   `behind`/`front` art, and the drawn `height`. Art split for sprites also has `body` (the static
@@ -304,8 +304,8 @@ renderer draws, so a layout that is right in text is right on screen.
   follows the game clock and casts shadows, which fade out as it sets. New models are made a few
   milliseconds' worth a frame (2D art meanwhile). `life3d.ts` turns the game state into what a
   building shows (progress, neighbours, age, door, shutters, light, fire, stock) and draws its live
-  details (smoke only while something burns, sleepers). The top view (`?view=top`, Tab) draws the
-  same models from straight above. `?view=3d` is a gallery of every building (`&hour=`, `&type=` for
+  details (smoke only while something burns, sleepers). The strategy view (`?view=top`, Tab) draws the
+  same models on the land, looked down on at an angle. `?view=3d` is a gallery of every building (`&hour=`, `&type=` for
   the construction row, `&rows=`, `&zoom=`); `?3d=0` keeps everything 2D; the frame rate shows bottom
   left (`?fps=0` hides it).
 - `sprites.ts`: `drawBuilding`, which everything that draws a finished building calls: the
@@ -323,13 +323,16 @@ renderer draws, so a layout that is right in text is right on screen.
   for a building with stage sprites, each stage's image fades in over the one before.
 - `grid.ts`: the land-grid overlay (G, or `?grid=1`) on the street being looked at: its rows of
   cells tinted by use (road, building, field, quarry) and named where the names fit; and the cells
-  the building chosen in the build menu would take, green where it fits, red where not. From above
-  (`topview.ts`) the grid covers the whole plane, with column numbers and row letters at the edges.
-- `topview.ts`: the village from above (Tab, or the small map's spot on screen), at its own zoom: the
-  plane north up around the rider, with streets, fields, the quarries' rocky land, roofs exactly on
-  their footprint cells, sites as frames filling in, the mill's sails turning, trees where they stand,
-  and people (stepping, carrying their loads), chickens and the rider moving about. With the land
-  grid on it shows every street's cells by use, the quarries' cells and each plot's lot.
+  the building chosen in the build menu would take, green where it fits, red where not. In the strategy
+  view the grid is painted on its land (`mapground.ts`), and the cell under the mouse is outlined and named.
+- `strategy.ts`: the strategy view (Tab, or the small map's spot on screen): the village in 3D, looked
+  down on at an angle by a camera that follows the rider, at its own zoom (looking down more steeply
+  and further as it zooms out), turned about the rider with Q / E or a drag; the arrow keys then point
+  on the screen. The land is `mapground.ts` (streets, fields, the quarries' rocky land, piles, the
+  crossroads' posts, the grid) painted from straight above into two textures, a sharp one near and a
+  coarse one out to the haze; on it the buildings' own 3D models (`world3d.ts` `drawStrategy3d`, lit
+  and shadowed by the sun as in the street), and trees, people (stepping, carrying their loads),
+  chickens and the rider, simply modelled there. Building names float over the roofs.
 - `ground.ts`: the ground perspective (the camera's, with the horizon on screen at `HORIZON_Y`;
   plane.ts uses the same projection for the rest of the village). Anything lying or standing on the land (fields, the land
   grid, ruts and stones in the road, the grass edge, foreground grass, the farmer, villagers and

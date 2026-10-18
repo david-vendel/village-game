@@ -5,7 +5,7 @@
 import { buildingAt, canDemolish, crossroadAt, roomToBuild, type World } from '../game/world';
 import { drawScene } from './scene';
 import { set3d } from './world3d';
-import { drawTopView } from './topview';
+import { drawStrategyView } from './strategy';
 import { drawBuildMenu, drawHud, drawToasts, drawTurnFade, type Toast } from './ui';
 
 export { artMode, loadArt, type ArtMode } from './assets';
@@ -41,9 +41,10 @@ export interface FrameView {
   toasts: Toast[];
   /** Overlay the land grid. */
   showGrid: boolean;
-  /** Show the village from above instead of from the street, at its own zoom. */
+  /** Show the strategy view (the village in 3D from above at an angle) instead of the street, at its own zoom and turn. */
   topView: boolean;
   topZoom: number;
+  topYaw: number;
   /** Where the mouse is (canvas px), if over the canvas: the grid names the cell under it, buildings show their info box. */
   hover?: { x: number; y: number } | null;
   /** Buildings in real-time 3D (else 2D art); the HUD's 2D · 3D button shows which. */
@@ -60,7 +61,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   if (v.topView) {
     ctx.setTransform(v.uiScale, 0, 0, v.uiScale, 0, 0);
-    drawTopView(ctx, world, v.uiW, v.uiH, v.topZoom, v.showGrid, v.hover ? { x: v.hover.x / v.uiScale, y: v.hover.y / v.uiScale } : null);
+    drawStrategyView(ctx, world, { uiW: v.uiW, uiH: v.uiH, px: v.uiScale, zoom: v.topZoom, yaw: v.topYaw, grid: v.showGrid, hover: v.hover ? { x: v.hover.x / v.uiScale, y: v.hover.y / v.uiScale } : null });
   } else {
   ctx.setTransform(v.worldScale, 0, 0, v.worldScale, 0, v.offsetY);
   drawScene(ctx, world, {
@@ -81,7 +82,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
 
   // screen UI, unaffected by zoom
   ctx.setTransform(v.uiScale, 0, 0, v.uiScale, 0, 0);
-  // from above a turn is just a turn: the map doesn't change, so no fade
+  // in the strategy view a turn is just a turn: the land doesn't change, so no fade
   if (!v.topView) drawTurnFade(ctx, world, v.uiW, v.uiH);
   const here = buildingAt(world, world.rider.x);
   drawHud(ctx, world, v.uiW, v.uiH, {

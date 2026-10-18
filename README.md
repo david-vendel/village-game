@@ -35,7 +35,8 @@ folder by nginx, the same way as ~/hollow. Not deployed yet.
 | Esc / ↑ | "Cancel" or tap outside | Cancel |
 | ↑ / ↓ (at a crossroads) | ▲ / ▼ buttons | Turn onto the crossing street |
 | C | Tap the Construction pill | Toggle the construction phase on/off |
-| Tab | Tap the small map | View the village from above (and back) |
+| Tab | Tap the small map | Strategy view: the village in 3D from above at an angle (and back) |
+| Q / E, drag | Drag | Turn the strategy view |
 | − / + or mouse wheel, 0 to reset | Pinch, or − / + buttons | Zoom out / in |
 
 Touch controls appear automatically on phones and tablets (or after the first

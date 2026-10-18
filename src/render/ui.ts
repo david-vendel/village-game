@@ -201,7 +201,7 @@ export interface HudState {
   canBuild: boolean;
   /** Rider stands at a crossroads. */
   canTurn: boolean;
-  /** The village is shown from above: no small map. */
+  /** The strategy view is showing: no small map. */
   topView: boolean;
 }
 
@@ -210,7 +210,7 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
   text(ctx, 'Village Crown', 16, 34, 24, GOLD, 'left', true);
   const lines = st.touch
     ? ['Hold the arrows to ride, hammer to build, upgrade or destroy', 'Pinch or tap - + to zoom']
-    : ['A D / ← → ride   S / ↓ / Space build, upgrade or destroy   W / S turn at a crossroads   Tab view from above   G grid   C construction   M sound', 'In the menu: WASD choose, Space confirm, Esc / Q close   - + zoom   V 2D / 3D'];
+    : ['A D / ← → ride   S / ↓ / Space build, upgrade or destroy   W / S turn at a crossroads   Tab strategy view   G grid   C construction   M sound', 'In the menu: WASD choose, Space confirm, Esc / Q close   - + zoom   V 2D / 3D'];
   const maxW = L.map.x - 28;
   let y = 54;
   for (const s of lines) {

@@ -16,17 +16,19 @@ export interface Controls {
   move(): MoveInput;
   /** Which on-screen ride buttons are held (for pressed styling). */
   touchHeld(): { left: boolean; right: boolean };
-  /** Whether the village is shown from above (Tab, or a tap on the small map). */
+  /** Whether the strategy view is showing (Tab, or a tap on the small map). */
   topView(): boolean;
-  /** The view from above has its own zoom, apart from the street view's. */
+  /** The strategy view has its own zoom, apart from the street view's. */
   topZoom(): number;
+  /** Its turn about the rider (radians, 0 looking north): Q / E, or a drag. */
+  topYaw(): number;
   /** Buildings in real-time 3D (true) or as 2D art: the 2D · 3D button, V, or ?3d=0 / ?3d=1. */
   view3d(): boolean;
   /** Where the mouse is over the canvas (canvas px), if it is. */
   hover(): { x: number; y: number } | null;
 }
 
-const GAME_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'Enter', 'Escape', 'Tab', 'w', 'a', 's', 'd']);
+const GAME_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'Enter', 'Escape', 'Tab', 'w', 'a', 's', 'd', 'q', 'e']);
 const ZOOM_STEP = 1.2;
 
 type Role = 'left' | 'right' | 'pinch' | 'none';
@@ -35,6 +37,9 @@ type Role = 'left' | 'right' | 'pinch' | 'none';
 const DOUBLE_TAP_MS = 300;
 const VIEW_KEY = 'village-game:view';
 const TOP_ZOOM_KEY = 'village-game:top-zoom';
+const TOP_YAW_KEY = 'village-game:top-yaw';
+/** Q / E turn the strategy view by an eighth of a turn; a drag across the whole screen turns it about once round. */
+const YAW_STEP = Math.PI / 4;
 const VIEW3D_KEY = 'village-game:view3d';
 const STYLE_KEY = 'village-game:style3d';
 const stored = (key: string): string | null => {
@@ -57,7 +62,7 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
   const keys = new Set<string>();
   const pointers = new Map<number, { role: Role; x: number; y: number }>();
   let pinch: { dist: number; zoom: number } | null = null;
-  // the view from above is a preference, not game state (game/save.ts leaves UI out), so the browser keeps it;
+  // the strategy view is a preference, not game state (game/save.ts leaves UI out), so the browser keeps it;
   // ?view=top opens on it (a link)
   let topView = new URLSearchParams(location.search).get('view') === 'top' || stored(VIEW_KEY) === 'top';
   // 2D or 3D buildings: a preference the browser keeps; the address can set it for a link
@@ -102,6 +107,11 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
     menu.toggle({ right: window.innerWidth - (r.x + r.w) * s, top: (r.y + r.h) * s + 4 });
   };
   let topZoom = Number(stored(TOP_ZOOM_KEY)) || 1;
+  let topYaw = Number(stored(TOP_YAW_KEY)) || 0;
+  const turnView = (by: number) => {
+    topYaw += by;
+    store(TOP_YAW_KEY, String(topYaw));
+  };
   const setTopView = (on: boolean) => {
     topView = on;
     store(VIEW_KEY, on ? 'top' : 'street');
@@ -164,7 +174,9 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
       else if (/^[1-9]$/.test(key)) actions.select(Number(key) - 1);
       return;
     }
-    // from above the arrows point on the map (see move), so ↓ rides rather than builds
+    if (topView && key === 'q') return turnView(-YAW_STEP);
+    if (topView && key === 'e') return turnView(YAW_STEP);
+    // in the strategy view the arrows point on the screen (see move), so ↓ rides rather than builds
     if (topView && (key === 'ArrowUp' || key === 'w' || key === 'ArrowDown' || key === 's')) return;
     // at a crossroads up and down turn onto the crossing street
     if (actions.atCrossroads() && (key === 'ArrowUp' || key === 'w')) return actions.turn('up');
@@ -261,12 +273,16 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
   canvas.addEventListener('pointermove', (e) => {
     const p = pointers.get(e.pointerId);
     if (!p) return;
+    const lastX = p.x;
     p.x = e.clientX;
     p.y = e.clientY;
     if (p.role === 'left' || p.role === 'right') {
       // sliding a thumb from one arrow to the other switches direction
       const [ux, uy] = toUi(e);
       p.role = dirAt(ux, uy) ?? p.role;
+    } else if (p.role === 'pinch' && topView && pinchPointers().length === 1) {
+      // one finger or the mouse dragged across the strategy view turns it
+      turnView(-((e.clientX - lastX) / window.innerWidth) * Math.PI * 2);
     } else if (p.role === 'pinch' && pinch) {
       const ps = pinchPointers();
       if (ps.length === 2 && pinch.dist > 0) setZoom(pinch.zoom * (Math.hypot(ps[0].x - ps[1].x, ps[0].y - ps[1].y) / pinch.dist));
@@ -298,13 +314,19 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
   const keyDown = () => keys.has('ArrowDown') || keys.has('s');
 
   /**
-   * From above (north up) the arrow keys point on the map: the rider heads the
-   * way they point along the street, and at a crossroads turns onto the
-   * crossing street when that runs the way they point.
+   * In the strategy view the arrow keys point on the screen (up is away from the
+   * camera, however it is turned): the rider heads the way they point along the
+   * street, and at a crossroads turns onto the crossing street when that runs
+   * the way they point.
    */
   function moveOnMap(): MoveInput {
-    const v = { x: (keyRight() ? 1 : 0) - (keyLeft() ? 1 : 0), y: (keyUp() ? 1 : 0) - (keyDown() ? 1 : 0) };
-    if (!v.x && !v.y) return { left: held('left'), right: held('right') };
+    const sx = (keyRight() ? 1 : 0) - (keyLeft() ? 1 : 0);
+    const sy = (keyUp() ? 1 : 0) - (keyDown() ? 1 : 0);
+    if (!sx && !sy) return { left: held('left'), right: held('right') };
+    // screen right and up → map, with the camera facing (sin yaw, cos yaw)
+    const c = Math.cos(topYaw);
+    const s = Math.sin(topYaw);
+    const v = { x: sx * c + sy * s, y: -sx * s + sy * c };
     actions.turnToward(v);
     const d = world.streets[streetOf(world.rider.x)]?.dir ?? { x: 1, y: 0 };
     const along = d.x * v.x + d.y * v.y;
@@ -319,6 +341,7 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
     touchHeld: () => ({ left: held('left'), right: held('right') }),
     topView: () => topView,
     topZoom: () => topZoom,
+    topYaw: () => topYaw,
     hover: () => hover,
     view3d: () => view3d,
   };
