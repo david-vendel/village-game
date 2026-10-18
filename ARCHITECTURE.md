@@ -336,9 +336,16 @@ renderer draws, so a layout that is right in text is right on screen.
   the building chosen in the build menu would take, green where it fits, red where not. In the strategy
   view the grid is painted on its land (`mapground.ts`), and the cell under the mouse is outlined and named.
 - `strategy.ts`: the strategy view (Tab, or the small map's spot on screen): the village in 3D, looked
-  down on at an angle by a camera that follows the rider, at its own zoom (looking down more steeply
-  and further as it zooms out), turned about the rider with Q / E or a drag; the arrow keys then point
-  on the screen. The land is `mapground.ts` (streets, fields, the quarries' rocky land, piles, the
+  down on at an angle by a camera detached from the rider (who waits): it starts over them and moves
+  freely (WASD, the arrows, a drag; F goes back to the rider; the app keeps where it looks,
+  `controls.ts`), at its own zoom (looking down more steeply and further as it zooms out), turned
+  with Q / E or a right drag. Building from it: the hammer (B) opens the build bar as a plan
+  (`openPlanMenu`); the chosen building follows the mouse as a ghost, set on the lots of the street
+  its door would face (`planAt` in `world.ts`), green or red with the reason, its door lit and an
+  arrow to its road; R (or the bar's button) turns it a quarter, and a click plans the site there.
+  Planned sites show their outline as a blueprint with a progress bar under the name; a click on a
+  building, a site or a farm's field opens its menu (`buildingOn`), which shows its progress, or
+  what it is for and who works there. The land is `mapground.ts` (streets, fields, the quarries' rocky land, piles, the
   crossroads' posts, the grid) painted from straight above into two textures, a sharp one near and a
   coarse one out to the haze; on it the buildings' own 3D models (`world3d.ts` `drawStrategy3d`, lit
   and shadowed by the sun as in the street), and trees, people (stepping, carrying their loads),

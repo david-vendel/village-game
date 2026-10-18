@@ -69,6 +69,7 @@ async function play(): Promise<void> {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
 
+    controls.frame(dt);
     update(world, dt, controls.move());
     sound.frame(world, dt);
     autosave.tick(); // every half hour of game time
@@ -88,7 +89,7 @@ async function play(): Promise<void> {
     sizePanelButtons((HUD_BUTTON * vp.uiScale) / screen.dpr);
 
     const held = controls.touchHeld();
-    renderFrame(ctx, world, { ...vp, camX, touch: screen.touch, leftHeld: held.left, rightHeld: held.right, toasts, showGrid: display.grid, topView: controls.topView(), topZoom: controls.topZoom(), topYaw: controls.topYaw(), hover: controls.hover(), buildCategory: controls.buildCategory(), view3d: art === 'auto' && controls.view3d(), fps: display.fps ? fps : undefined });
+    renderFrame(ctx, world, { ...vp, camX, touch: screen.touch, leftHeld: held.left, rightHeld: held.right, toasts, showGrid: display.grid, topView: controls.topView(), topZoom: controls.topZoom(), topYaw: controls.topYaw(), topCenter: controls.topCenter(), topGhost: controls.topGhost(), hover: controls.hover(), buildCategory: controls.buildCategory(), view3d: art === 'auto' && controls.view3d(), fps: display.fps ? fps : undefined });
     requestAnimationFrame(frame);
   }
   requestAnimationFrame(frame);
