@@ -29,3 +29,9 @@ Shared by both (edit with care, and keep changes small): `src/render/scene.ts`,
 
 The repo is public: never commit `public/showroom/` or `.art-raw/`. Both are gitignored, and some
 of that art comes from screenshots of other games.
+
+## Shipping
+
+After each piece of work, run `scripts/ship.sh "commit message"` (or `npm run ship -- "…"`): it
+commits everything, merges anything new from GitHub's `main`, builds, deploys to
+https://cellsculture.com/village-game/ and pushes.
