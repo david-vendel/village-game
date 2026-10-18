@@ -99,7 +99,7 @@ function text(ctx: Ctx, s: string, x: number, y: number, size: number, color: st
 function fitSize(ctx: Ctx, s: string, size: number, maxW: number, bold = false): number {
   ctx.font = `${bold ? 'bold ' : ''}${size}px ${SERIF}`;
   const w = ctx.measureText(s).width;
-  return w > maxW ? Math.max(8, (size * maxW) / w) : size;
+  return w > maxW ? Math.max(Math.min(8, size), (size * maxW) / w) : size;
 }
 
 function button(ctx: Ctx, r: Rect, pressed: boolean, round = false): void {
@@ -421,34 +421,38 @@ export interface BuildBarLayout {
   build: Rect | null;
 }
 
+/** How big the build bar is drawn: its sizes and fonts are this share of their full size. */
+const BAR = 0.5;
+
 export function buildBarLayout(uiW: number, uiH: number, category: number | null): BuildBarLayout {
   const n = BUILD_CATEGORIES.length;
-  const closeW = 76;
-  const catH = 40;
-  const catW = Math.min(132, (uiW - 24 - 16 - closeW - 6 * n) / n);
-  const rowW = n * (catW + 6) + closeW;
+  const gap = 6 * BAR;
+  const closeW = 76 * BAR;
+  const catH = 40 * BAR;
+  const catW = Math.min(132 * BAR, (uiW - 24 - 16 - closeW - gap * n) / n);
+  const rowW = n * (catW + gap) + closeW;
   const x0 = (uiW - rowW) / 2;
-  const catY = uiH - 12 - 8 - catH;
-  const categories = BUILD_CATEGORIES.map((_, i) => ({ x: x0 + i * (catW + 6), y: catY, w: catW, h: catH }));
-  const cancel = { x: x0 + n * (catW + 6), y: catY, w: closeW, h: catH };
+  const catY = uiH - 12 - 8 * BAR - catH;
+  const categories = BUILD_CATEGORIES.map((_, i) => ({ x: x0 + i * (catW + gap), y: catY, w: catW, h: catH }));
+  const cancel = { x: x0 + n * (catW + gap), y: catY, w: closeW, h: catH };
   let top = catY;
   const cards: Rect[] = [];
   const types = category === null ? [] : [...BUILD_CATEGORIES[category].types];
   let info: Rect | null = null;
   let build: Rect | null = null;
   if (types.length) {
-    const cardW = Math.min(112, (uiW - 40) / types.length);
-    const cardH = Math.max(76, Math.min(104, (uiH - 200) / 2));
-    const cy = catY - 10 - cardH;
-    types.forEach((_, i) => cards.push({ x: uiW / 2 - (types.length * cardW) / 2 + i * cardW + 3, y: cy, w: cardW - 6, h: cardH }));
-    const bw = 140;
-    const iw = Math.min(uiW - 40, Math.max(rowW, 520));
-    info = { x: (uiW - iw) / 2, y: cy - 10 - 40, w: iw - bw - 8, h: 40 };
-    build = { x: info.x + info.w + 8, y: info.y, w: bw, h: 40 };
+    const cardW = Math.min(112 * BAR, (uiW - 40) / types.length);
+    const cardH = BAR * Math.max(76, Math.min(104, (uiH - 200) / 2));
+    const cy = catY - 10 * BAR - cardH;
+    types.forEach((_, i) => cards.push({ x: uiW / 2 - (types.length * cardW) / 2 + i * cardW + gap / 2, y: cy, w: cardW - gap, h: cardH }));
+    const bw = 140 * BAR;
+    const iw = Math.min(uiW - 40, Math.max(rowW, 520 * BAR));
+    info = { x: (uiW - iw) / 2, y: cy - 10 * BAR - 40 * BAR, w: iw - bw - 8 * BAR, h: 40 * BAR };
+    build = { x: info.x + info.w + 8 * BAR, y: info.y, w: bw, h: 40 * BAR };
     top = info.y;
   }
-  const pw = Math.min(uiW - 8, Math.max(rowW, info ? info.w + 148 : 0, cards.length ? cards[cards.length - 1].x + cards[cards.length - 1].w - cards[0].x : 0) + 24);
-  return { panel: { x: (uiW - pw) / 2, y: top - 8, w: pw, h: uiH - 4 - (top - 8) }, categories, cancel, cards, types, info, build };
+  const pw = Math.min(uiW - 8, Math.max(rowW, info ? info.w + 148 * BAR : 0, cards.length ? cards[cards.length - 1].x + cards[cards.length - 1].w - cards[0].x : 0) + 24 * BAR);
+  return { panel: { x: (uiW - pw) / 2, y: top - 8 * BAR, w: pw, h: uiH - 4 - (top - 8 * BAR) }, categories, cancel, cards, types, info, build };
 }
 
 /** The menu at a building: a card for each thing that can be done to it, what it means, and Cancel / do it. */
@@ -593,13 +597,13 @@ export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number, 
     const any = c.types.some((t) => menu.fits[BUILDING_TYPES.indexOf(t)]);
     button(ctx, r, open);
     const label = `${i + 1}. ${c.name}`;
-    text(ctx, label, r.x + r.w / 2, r.y + r.h / 2 + 5, fitSize(ctx, label, 14, r.w - 10, open), open ? GOLD : any ? '#f3ead8' : '#8a8378', 'center', open);
+    text(ctx, label, r.x + r.w / 2, r.y + r.h / 2 + 5 * BAR, fitSize(ctx, label, 14 * BAR, r.w - 10 * BAR, open), open ? GOLD : any ? '#f3ead8' : '#8a8378', 'center', open);
   });
   button(ctx, L.cancel, false);
-  text(ctx, 'Close', L.cancel.x + L.cancel.w / 2, L.cancel.y + L.cancel.h / 2 + 5, 14, '#f3ead8', 'center', true);
+  text(ctx, 'Close', L.cancel.x + L.cancel.w / 2, L.cancel.y + L.cancel.h / 2 + 5 * BAR, 14 * BAR, '#f3ead8', 'center', true);
   if (category === null) {
     const hint = 'Choose what kind of building to put here';
-    text(ctx, hint, uiW / 2, L.panel.y - 8, 13, '#f3ead8', 'center', true);
+    text(ctx, hint, uiW / 2, L.panel.y - 8 * BAR, 13 * BAR, '#f3ead8', 'center', true);
     return;
   }
 
@@ -611,36 +615,36 @@ export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number, 
     const sel = i === menu.selection;
     ctx.save();
     ctx.fillStyle = sel ? 'rgba(232,200,114,0.22)' : 'rgba(255,240,210,0.06)';
-    roundRect(ctx, r.x, r.y, r.w, r.h, 6);
+    roundRect(ctx, r.x, r.y, r.w, r.h, 6 * BAR);
     ctx.fill();
     if (sel) {
       ctx.strokeStyle = GOLD;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2 * BAR;
       ctx.stroke();
     }
-    roundRect(ctx, r.x, r.y, r.w, r.h - 24, 6);
+    roundRect(ctx, r.x, r.y, r.w, r.h - 24 * BAR, 6 * BAR);
     ctx.clip();
     // what doesn't fit here is greyed out; what the village can't afford is shown faded
     const fits = menu.fits[i];
     if (fits && Object.keys(buildShortfall(world, type)).length) ctx.globalAlpha = 0.4;
-    const previewH = r.h - 34;
+    const previewH = r.h - 34 * BAR;
     // (a road piece is much longer than its picture)
-    const scale = Math.min(0.6, (r.w - 8) / ((type === 'road' ? 200 : def.width) * 1.3), previewH / (BUILDING_ART[type].height + 20));
-    if (fits) drawBuildingIcon(ctx, type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time);
-    else drawBuildingIconGrey(ctx, type, r.x + r.w / 2, r.y + r.h - 30, scale);
+    const scale = Math.min(0.6 * BAR, (r.w - 8 * BAR) / ((type === 'road' ? 200 : def.width) * 1.3), previewH / (BUILDING_ART[type].height + 20));
+    if (fits) drawBuildingIcon(ctx, type, r.x + r.w / 2, r.y + r.h - 30 * BAR, scale, world.time);
+    else drawBuildingIconGrey(ctx, type, r.x + r.w / 2, r.y + r.h - 30 * BAR, scale);
     ctx.restore();
-    text(ctx, def.name, r.x + r.w / 2, r.y + r.h - 8, fitSize(ctx, def.name, 12, r.w - 6, sel), !fits ? '#8a8378' : sel ? GOLD : '#f3ead8', 'center', sel);
+    text(ctx, def.name, r.x + r.w / 2, r.y + r.h - 8 * BAR, fitSize(ctx, def.name, 12 * BAR, r.w - 6 * BAR, sel), !fits ? '#8a8378' : sel ? GOLD : '#f3ead8', 'center', sel);
   });
 
   // what the chosen building is and costs, and Build (when it is one of this category's)
   const type = BUILDING_TYPES[menu.selection];
   if (!L.types.includes(type) || !L.info || !L.build) {
-    text(ctx, 'Choose a building', uiW / 2, L.info!.y + 25, 14, '#f3ead8', 'center');
+    text(ctx, 'Choose a building', uiW / 2, L.info!.y + 25 * BAR, 14 * BAR, '#f3ead8', 'center');
     return;
   }
   const def = BUILDINGS[type];
   const I = L.info;
-  text(ctx, def.purpose, I.x + I.w / 2, I.y + 15, fitSize(ctx, def.purpose, 14, I.w - 12), '#f3ead8', 'center');
+  text(ctx, def.purpose, I.x + I.w / 2, I.y + 15 * BAR, fitSize(ctx, def.purpose, 14 * BAR, I.w - 12 * BAR), '#f3ead8', 'center');
   const time = world.constructionEnabled ? `Builds in ${+(def.buildTime / world.params.buildSpeed).toFixed(1)}s` : 'Builds instantly (construction off)';
   const lack = buildShortfall(world, type);
   const cost = `Costs ${amounts(def.cost)}` + (Object.keys(lack).length ? ` — need ${amounts(lack)} more` : '');
@@ -648,10 +652,10 @@ export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number, 
   const why = whyNotBuild(world, type, menu.x);
   const size = type === 'intersection' ? 'a road across' : type === 'road' ? `the road ${w} squares on` : `${w} × ${d} squares`;
   const info = `${cost}   ·   ${time}   ·   ${size}` + (why ? `   ·   ${why}` : '');
-  text(ctx, info, I.x + I.w / 2, I.y + 34, fitSize(ctx, info, 12, I.w - 12), Object.keys(lack).length || why ? '#e89a7a' : '#cbbfa4', 'center');
+  text(ctx, info, I.x + I.w / 2, I.y + 34 * BAR, fitSize(ctx, info, 12 * BAR, I.w - 12 * BAR), Object.keys(lack).length || why ? '#e89a7a' : '#cbbfa4', 'center');
   ctx.globalAlpha = menu.fits[menu.selection] ? 1 : 0.45;
   button(ctx, L.build, true);
-  text(ctx, `Build ${def.name}`, L.build.x + L.build.w / 2, L.build.y + 26, fitSize(ctx, `Build ${def.name}`, 15, L.build.w - 12, true), GOLD, 'center', true);
+  text(ctx, `Build ${def.name}`, L.build.x + L.build.w / 2, L.build.y + 26 * BAR, fitSize(ctx, `Build ${def.name}`, 15 * BAR, L.build.w - 12 * BAR, true), GOLD, 'center', true);
   ctx.globalAlpha = 1;
 }
 
