@@ -140,13 +140,17 @@ export interface Slot {
 /** Where someone stands to reach things lying along the building line. */
 export const STAND_Y = BASE_Y + 3;
 
-/** How much of a resource one item in a pile stands for: a log, a block of stone, a sack. */
-export const PILE_UNIT = 10;
+/**
+ * How much of a resource one item in a pile stands for: one. A wood is a log,
+ * a stone a block, a grain a sheaf or a sack, a flour a sack, a bread a
+ * basket of loaves: what one person carries at a time.
+ */
+export const PILE_UNIT = 1;
 
-/** What a sack holds (grain or flour) in a workshop's store; one sack per place. */
-export const SACK = 10;
-/** Loaves in a basket; one basket per place in a store. */
-export const BASKET = 10;
+/** What a sack holds (grain or flour) in a workshop's store: one; one sack per place. */
+export const SACK = 1;
+/** What a basket of loaves holds: one bread; one basket per place in a store. */
+export const BASKET = 1;
 
 /** Items in a pile holding `amount` (a part-filled item counts). */
 export const pileItems = (amount: number) => Math.ceil(amount / PILE_UNIT - 1e-9);

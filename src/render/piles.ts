@@ -1,6 +1,6 @@
 // What lies on the ground by the road (game/piles.ts): a heap of whatever it
 // is (logs, stone blocks, sheaves, sacks of flour, baskets of bread), an item
-// for every PILE_UNIT of it, stacked in a low pyramid.
+// for every item of it (layout.ts PILE_UNIT), stacked in a low pyramid.
 
 import { pileItems } from '../game/layout';
 import type { Pile } from '../game/piles';

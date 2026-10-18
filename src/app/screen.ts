@@ -16,6 +16,8 @@ export interface Screen {
   resetZoom(): void;
   enableTouch(): void;
   resize(): void;
+  /** Called after the street view's zoom changes (keys, wheel, pinch, buttons or Settings); `chosen` is false when back on the default. */
+  onZoom: ((zoom: number, chosen: boolean) => void) | null;
   /** Keep world y `y` at the bottom of the scene (computeViewport's frameBottom); cheap when unchanged. */
   frameTo(y: number): void;
 }
@@ -30,9 +32,11 @@ export function createScreen(canvas: HTMLCanvasElement): Screen {
     vp: computeViewport(960, 540, 1),
     dpr: 1,
     touch: window.matchMedia?.('(pointer: coarse)').matches ?? false,
+    onZoom: null,
     setZoom(z) {
       userZoom = clampZoom(z, canvas.width, canvas.height, s.touch, frameBottom);
       refresh();
+      s.onZoom?.(s.vp.zoom, true);
     },
     zoomBy(factor) {
       s.setZoom(s.vp.zoom * factor);
@@ -40,6 +44,7 @@ export function createScreen(canvas: HTMLCanvasElement): Screen {
     resetZoom() {
       userZoom = null;
       refresh();
+      s.onZoom?.(s.vp.zoom, false);
     },
     enableTouch() {
       if (s.touch) return;

@@ -3,12 +3,14 @@
 // so a setting survives a reload and can be sent as a link. Same pattern as
 // ../hollow.
 
-import { GAME_EYE_HEIGHT, setCameraDistance, setCameraHeight } from '../render';
+import { BACKDROP_BEHIND, GAME_EYE_HEIGHT, setBackdropBehind, setCameraDistance, setCameraHeight, MOUNTAIN_LIFT, setMountainLift } from '../render';
 import { EYE_DIST } from '../game/layout';
 import { dayMinutes } from '../game/daynight';
 import { DEFAULT_PARAMS, type World, type WorldParams } from '../game/world';
 import { makeCollapsible } from './panel';
+import type { Screen } from './screen';
 import type { Sound } from './sound';
+import { DEFAULT_ZOOM, ZOOM_MAX } from './viewport';
 
 interface Knob {
   /** URL query name. */
@@ -22,7 +24,7 @@ interface Knob {
   render: (v: number) => string;
 }
 
-type WorldKnob = Pick<Knob, 'param' | 'min' | 'max' | 'step' | 'render'> & { key: keyof WorldParams };
+type WorldKnob = Pick<Knob, 'param' | 'min' | 'max' | 'step' | 'render'> & { key: keyof WorldParams; def?: number };
 
 const WORLD_KNOBS: WorldKnob[] = [
   { key: 'riderMaxSpeed', param: 'hspeed', min: 60, max: 600, step: 10, render: (v) => `horse speed ${v} px/s` },
@@ -36,6 +38,8 @@ const WORLD_KNOBS: WorldKnob[] = [
     min: 0.25,
     max: 20,
     step: 0.25,
+    // when playing, days pass faster than the simulation's own default (tests and scenarios keep 1)
+    def: 2.25,
     // night runs NIGHT_SPEED times faster (daynight.ts): a whole day with the default night
     render: (v) => `time speed ${v}× (day ${+dayMinutes(v, DEFAULT_PARAMS.nightHours).toFixed(1)} min)`,
   },
@@ -62,20 +66,24 @@ export interface DisplayOptions {
   viewBottom: number;
 }
 
-/** The drawing camera's distance to start with (render/ground.ts). */
-const CAMERA_DEFAULT = 600;
-/** Ground at the bottom of the screen to start with: just past the fence along the near edge of the fields in front of the road. */
-const VIEW_BOTTOM_DEFAULT = 92;
+/** The drawing camera's distance to start with (render/ground.ts): the game's own. */
+const CAMERA_DEFAULT = EYE_DIST;
+/** The drawing camera's height to start with (world units; render/ground.ts): lower than the game's own, looking along the street more. */
+const HEIGHT_DEFAULT = 177;
+/** Ground at the bottom of the screen to start with: a little past the fence along the near edge of the fields in front of the road. */
+const VIEW_BOTTOM_DEFAULT = 100;
 
-export function installTuning(world: World, sound: Sound): DisplayOptions {
+export function installTuning(world: World, sound: Sound, screen: Screen): DisplayOptions {
   let cameraNow = CAMERA_DEFAULT;
-  let heightNow = GAME_EYE_HEIGHT;
+  let heightNow = HEIGHT_DEFAULT;
+  let horizonNow = BACKDROP_BEHIND;
+  let mountainsNow = MOUNTAIN_LIFT;
   const params = new URLSearchParams(window.location.search);
   const display: DisplayOptions = { grid: params.get('grid') === '1', fps: params.get('fps') !== '0', viewBottom: VIEW_BOTTOM_DEFAULT };
   const knobs: Knob[] = [
-    ...WORLD_KNOBS.map(({ key, ...k }) => ({
+    ...WORLD_KNOBS.map(({ key, def, ...k }) => ({
       ...k,
-      def: DEFAULT_PARAMS[key],
+      def: def ?? DEFAULT_PARAMS[key],
       get: () => world.params[key],
       set: (v: number) => {
         world.params[key] = v;
@@ -101,10 +109,10 @@ export function installTuning(world: World, sound: Sound): DisplayOptions {
       // how high the drawing camera stands (render/ground.ts): higher looks down more steeply, the
       // horizon moves up and the street you ride along is drawn wider. Drawing only
       param: 'camh',
-      min: Math.round(GAME_EYE_HEIGHT * 0.75),
+      min: Math.round(GAME_EYE_HEIGHT * 0.5),
       max: Math.round(GAME_EYE_HEIGHT * 3),
-      step: 4,
-      def: GAME_EYE_HEIGHT,
+      step: 1,
+      def: HEIGHT_DEFAULT,
       get: () => heightNow,
       set: (v) => {
         heightNow = v;
@@ -125,6 +133,50 @@ export function installTuning(world: World, sound: Sound): DisplayOptions {
         display.viewBottom = v;
       },
       render: (v) => `screen bottom ${(v / 20).toFixed(1)} m before road`,
+    },
+    {
+      // where the hills, the castle and the sky meet the land (render/ground.ts backdropShift):
+      // nearer brings them down the screen; the land beyond is hidden behind them. Drawing only
+      param: 'horizon',
+      min: 300,
+      max: 4000,
+      step: 25,
+      def: BACKDROP_BEHIND,
+      get: () => horizonNow,
+      set: (v) => {
+        horizonNow = v;
+        setBackdropBehind(v);
+      },
+      render: (v) => `horizon ${(v / 20).toFixed(0)} m behind road`,
+    },
+    {
+      // the far blue mountains behind the castle's hills (render/background.ts): up or down
+      param: 'hills',
+      min: -120,
+      max: 120,
+      step: 2,
+      def: MOUNTAIN_LIFT,
+      get: () => mountainsNow,
+      set: (v) => {
+        mountainsNow = v;
+        setMountainLift(v);
+      },
+      render: (v) => `blue hills ${v > 0 ? '+' : ''}${v}`,
+    },
+    {
+      // the street view's zoom (also - + keys, the wheel, pinching; 0 goes back to the default).
+      // Narrow screens start further out (viewport.ts) and clamp to what fits
+      param: 'zoom',
+      min: 0.3,
+      max: ZOOM_MAX,
+      step: 0.01,
+      def: DEFAULT_ZOOM,
+      get: () => +screen.vp.zoom.toFixed(2),
+      set: (v) => {
+        if (v === DEFAULT_ZOOM) screen.resetZoom();
+        else screen.setZoom(v);
+      },
+      render: (v) => `zoom ${v.toFixed(2)}×  (- + keys, 0 resets)`,
     },
     {
       param: 'vol',
@@ -152,6 +204,8 @@ export function installTuning(world: World, sound: Sound): DisplayOptions {
     k.set(k.def);
     const fromUrl = Number(params.get(k.param) ?? NaN);
     if (Number.isFinite(fromUrl)) k.set(Math.min(k.max, Math.max(k.min, fromUrl)));
+    // a setting at its default needn't be in the address
+    if (params.has(k.param) && (!Number.isFinite(fromUrl) || k.get() === k.def)) setUrlParam(k.param, null);
 
     const label = document.createElement('div');
     const input = document.createElement('input');
@@ -172,7 +226,23 @@ export function installTuning(world: World, sound: Sound): DisplayOptions {
     // hand the arrow keys back to the horse once the drag ends
     input.addEventListener('change', () => input.blur());
     content.append(label, input);
+    if (k.param === 'zoom') {
+      // zooming from the keys, wheel, pinch or buttons moves the slider and the URL too
+      // (the URL a moment after the last step: browsers limit how often it may change)
+      let urlTimer = 0;
+      screen.onZoom = (z, chosen) => {
+        const v = +z.toFixed(2);
+        input.value = String(v);
+        label.textContent = k.render(v);
+        clearTimeout(urlTimer);
+        urlTimer = window.setTimeout(() => setUrlParam('zoom', chosen && v !== DEFAULT_ZOOM ? v : null), 250);
+      };
+    }
   }
+
+  // the toggles at their defaults (grid off, frame rate on) needn't be in the address either
+  if (params.get('grid') === '0') setUrlParam('grid', null);
+  if (params.get('fps') === '1') setUrlParam('fps', null);
 
   const toggle = document.createElement('label');
   toggle.style.cssText = 'display:flex;gap:6px;justify-content:flex-end;align-items:center;margin-top:6px;cursor:pointer';

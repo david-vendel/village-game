@@ -19,7 +19,8 @@
     "paint:apply": "tsx tools/paint/apply.ts",
     "paint:flux": "tsx tools/paint/flux.ts",
     "paint:showroom": "tsx tools/paint/showroom.ts",
-    "paint:tile": "tsx tools/paint/tileable.ts"
+    "paint:tile": "tsx tools/paint/tileable.ts",
+    "asset": "tsx tools/asset/run.ts"
   },
   "devDependencies": {
     "@napi-rs/canvas": "^1.0.10",

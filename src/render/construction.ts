@@ -46,6 +46,8 @@ export function drawConstruction(ctx: Ctx, type: BuildingType, a: DrawArgs, prog
 
   materials(ctx, a.x, W, a.base, a.onSite ?? {}, a.seed);
   for (const spot of a.laid ?? []) laidDown(ctx, a.x + spot.dx, a.base, spot.amounts, a.seed);
+  // a road is laid parcel by parcel into the grass, drawn with the ground (roads.ts): just its heap of wood here
+  if (type === 'road') return;
   // drawn stages (scaffolding and all) where the building's sprites have them
   if (stage !== 'done' && drawStageSprites(ctx, type, a, stage, t)) return;
 

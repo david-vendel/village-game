@@ -32,7 +32,7 @@ function arg(name: string): string | undefined {
 
 const [scene, jobFile] = process.argv.slice(2).filter((a, i, all) => !a.startsWith('--') && !all[i - 1]?.startsWith('--'));
 if (!scene || !jobFile) {
-  console.error('usage: npm run art:render -- <scene.blend|builder.py> <job.json> [--assets <folder>] [--raw <folder>]');
+  console.error('usage: npm run art:render -- <scene.blend|builder.py> <job.json> [--assets <folder>] [--raw <folder>] [--no-pack]');
   process.exit(2);
 }
 const job = JSON.parse(readFileSync(jobFile, 'utf8')) as { id: string };
@@ -54,6 +54,11 @@ const code = await new Promise<number>((done) => {
 if (code !== 0) {
   console.error(`Blender failed (exit ${code})`);
   process.exit(1);
+}
+// --no-pack: just the renders (tools/asset looks at them; they are not game sprites)
+if (process.argv.includes('--no-pack')) {
+  console.log(`rendered in ${((Date.now() - started) / 1000).toFixed(0)} s into ${raw}`);
+  process.exit(0);
 }
 console.log(`rendered in ${((Date.now() - started) / 1000).toFixed(0)} s; packing into ${assets}`);
 await packRender(raw, assets, { log: console.log });

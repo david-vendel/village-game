@@ -28,6 +28,7 @@ import { BUILDINGS } from './buildings';
 import { materialSource, nearestPile, storeSpot, takeOut } from './economy';
 import { pileItems, siteSlot, SPOT_PILE_DX, STAND_Y, type Spot } from './layout';
 import { employees } from './people';
+import { heapDx } from './roadwork';
 import { pileById, pileSpot as groundSpot, takeFromPile } from './piles';
 import { streetDist } from './streets';
 import { RESOURCES, stockOf, total, type Amounts, type Load, type Resource, type Stock } from './resources';
@@ -38,8 +39,8 @@ import type { Building, World } from './world';
 export const BUILDERS_PER_SITE = 5;
 /** Most builders pulling a building down at once. */
 export const DEMOLITION_CREW = 3;
-/** How much one builder carries per trip. */
-export const LOAD_SIZE = 10;
+/** How much one builder carries per trip: a log or a block of stone. */
+export const LOAD_SIZE = 1;
 /** Seconds of labour per build job; a building needs its buildTime of labour in all. */
 export const BUILD_CHUNK = 2;
 /** Seconds to load up at a warehouse or hut. */
@@ -92,6 +93,8 @@ const takenResource = (action: string) => MATERIALS.find((r) => action === takeA
 
 /** Where builders stand along the front of the building (dx), to lay materials down and build. */
 export function workSpots(type: Building['type']): number[] {
+  // a road piece has one heap, which moves on with the road (roadwork.ts heapDx)
+  if (type === 'road') return [0];
   const w = BUILDINGS[type].width;
   const n = Math.max(3, Math.floor(w / 30));
   return Array.from({ length: n }, (_, k) => -w / 2 + ((k + 0.5) * w) / n);
@@ -100,6 +103,7 @@ export function workSpots(type: Building['type']): number[] {
 /** Materials lying at the work spots, each at its place beside the spot (for display). */
 export function laidOut(b: Building): Array<{ dx: number; amounts: Stock }> {
   if (!b.site) return [];
+  if (b.type === 'road') return [{ dx: heapDx(b), amounts: b.site.laid[0] }];
   const spots = workSpots(b.type);
   return b.site.laid.map((amounts, k) => ({ dx: (spots[k] ?? 0) + SPOT_PILE_DX, amounts }));
 }

@@ -10,7 +10,7 @@
 import { dayPhase, sunNow } from '../game/daynight';
 import type { World } from '../game/world';
 import type { View } from './background';
-import { horizonShift, HORIZON_Y } from './ground';
+import { backdropShift, HORIZON_Y } from './ground';
 import { circle, clamp01, type Ctx, ellipse, hash, lerp, mix, shade, VIEW_H } from './util';
 
 export interface Light {
@@ -82,8 +82,8 @@ export function drawSkyBehind(ctx: Ctx, v: View, light: Light): void {
   sky.setTransform(1, 0, 0, 1, 0, 0);
   sky.clearRect(0, 0, width, height);
   sky.setTransform(ctx.getTransform());
-  // the sky meets the drawn horizon (the drawing camera's height moves it: ground.ts)
-  sky.translate(0, horizonShift());
+  // the sky meets the backdrop's hills (ground.ts backdropShift)
+  sky.translate(0, backdropShift());
   drawSky(sky, v, light);
   drawClouds(sky, v, light);
 

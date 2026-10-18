@@ -11,7 +11,7 @@ import { BUILDINGS, type BuildingType } from '../game/buildings';
 import { blockStartX, cellKey, cellName, footprintAt, landUse, streetCell, type LandUse } from '../game/grid';
 import { BLOCK, CELL_W, LOT_ROW, rowFar, rowNear } from '../game/layout';
 import { behindRoad as behindRoadGame, yAt as yAtGame } from '../game/layout';
-import { unviewY, viewY } from './ground';
+import { backdropDistance, unviewY, viewY } from './ground';
 
 /** Screen y of ground d map px behind the street line, and back: the game's depths through the drawing camera. */
 const yAt = (d: number) => viewY(yAtGame(d));
@@ -28,8 +28,13 @@ const FILL: Record<LandUse['kind'], string> = {
   quarry: 'rgba(150,150,170,0.35)',
 };
 
-/** Rows of cells drawn, near to far (row j: j cells behind the middle of the road): on to the horizon. */
-const ROWS = { near: -4, far: 80 };
+/** Rows of cells drawn, near to far (row j: j cells behind the middle of the road): on to the backdrop's hills. */
+const ROWS = {
+  near: -4,
+  get far() {
+    return Math.floor(backdropDistance() / CELL_W);
+  },
+};
 /** Lines closer together than this on screen (px) are left out, the finer ones first. */
 const MIN_GAP = 7;
 

@@ -6,10 +6,17 @@
 
 import { LANE_YS, ROAD_FAR_Y, ROAD_NEAR_Y } from '../game/layout';
 import { SIDE_ROAD_HALF } from '../game/streets';
-import { depthScale, groundTiles, groundX, horizonShift, HORIZON_Y, unviewY, viewY } from './ground';
+import { backdropShift, depthScale, groundTiles, groundX, HORIZON_Y, unviewY, viewY } from './ground';
 import { circle, type Ctx, ellipse, hash, mix, poly, rect, shade, smoke, VIEW_H } from './util';
 
 const HAZE = '#dcc9ad';
+
+/** The panel's "blue hills": how far the far blue mountains are raised (+) or lowered (-) behind the castle's hills (world units). */
+export const MOUNTAIN_LIFT = -48;
+let mountainLift = MOUNTAIN_LIFT;
+export function setMountainLift(v: number): void {
+  mountainLift = v;
+}
 
 /** Castle position in the castle layer's own coordinates. */
 const CASTLE_LAYER_X = 1050;
@@ -30,9 +37,9 @@ export interface View {
 
 /** The land, far to near. The sky goes behind it afterwards (sky.ts). */
 export function drawBackground(ctx: Ctx, v: View): void {
-  // the backdrop hangs off the horizon, which the drawing camera's height moves (ground.ts)
+  // the backdrop stands on the land some way off (ground.ts backdropShift), which the drawing camera moves
   ctx.save();
-  ctx.translate(0, horizonShift());
+  ctx.translate(0, backdropShift());
   drawMountains(ctx, v);
   drawCastleHills(ctx, v);
   drawFarHills(ctx, v);
@@ -76,6 +83,8 @@ function fillRidge(ctx: Ctx, v: View, factor: number, baseY: number, seed: numbe
 }
 
 function drawMountains(ctx: Ctx, v: View): void {
+  ctx.save();
+  ctx.translate(0, -mountainLift);
   const g = ctx.createLinearGradient(0, 180, 0, 330);
   g.addColorStop(0, '#9aa6c2');
   g.addColorStop(1, '#c3bdbf');
@@ -84,6 +93,7 @@ function drawMountains(ctx: Ctx, v: View): void {
   ctx.globalAlpha = 0.35;
   fillRidge(ctx, v, 0.05, HORIZON_Y + 5, 4.1, 30, '#b4b8cc');
   ctx.globalAlpha = 1;
+  ctx.restore();
 }
 
 /** Height bump that raises the castle hill in the castle layer. */
@@ -158,13 +168,13 @@ function drawPlane(ctx: Ctx, v: View): void {
   g.addColorStop(1, '#7f9148');
   ctx.fillStyle = g;
   // on down past the street, whatever the horizon's shift (the street's own ground is drawn over it)
-  ctx.fillRect(-10, HORIZON_Y - 1, v.width + 20, Math.max(VIEW_H, v.bottom) - horizonShift() - HORIZON_Y + 2);
+  ctx.fillRect(-10, HORIZON_Y - 1, v.width + 20, Math.max(VIEW_H, v.bottom) - backdropShift() - HORIZON_Y + 2);
 }
 
 /** Haze over everything far off: thickest at the horizon. */
 export function drawHaze(ctx: Ctx, v: View): void {
   ctx.save();
-  ctx.translate(0, horizonShift());
+  ctx.translate(0, backdropShift());
   const g = ctx.createLinearGradient(0, HORIZON_Y, 0, 400);
   g.addColorStop(0, 'rgba(220,201,173,0.75)');
   g.addColorStop(0.35, 'rgba(220,201,173,0.3)');

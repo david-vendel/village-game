@@ -17,6 +17,9 @@ build watchtower next
 build market next
 build farm next
 build warehouse next
+# the street laid on a piece, for the stonecutter going up at its old end
+ride s0:240
+lay road 1
 construction on
 build house at s0:166
 build tavern at s0:178

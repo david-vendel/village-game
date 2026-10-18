@@ -69,6 +69,7 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
 | Replace art with sprite assets | put them in `public/assets/` per `docs/art/ASSET_SPEC.md`; check with `npm run assets:check`, look at `?art=preview` |
 | Change the HUD, menu, labels, captions, button positions | `render/ui.ts` (tap areas follow automatically) |
 | Change draw order or camera framing | `render/scene.ts` (the strategy view's camera: `render/strategy.ts`) |
+| Change what advanced graphics (the Menu switch: 3D buildings, showroom) draws, or add to it | `app/graphics.ts` (the switch and its Menu rows), `render/scene3d.ts` (its part of each frame); see CLAUDE.md |
 | Add a building type | `game/buildings.ts` (gameplay data: cost, storage, jobs) **and** `render/buildings.ts` (art) |
 | Give a building workers | its `jobs` in `game/buildings.ts`, a `Workplace` for it (like `farmWorkplace`) returned by `workplaceOf` in `game/world.ts`, and a look for the worker in `render/` |
 | Change timings, speeds, rules (build times, grow time, store size, rider speed) | `game/buildings.ts`, `game/world.ts`, `game/farm.ts` |
@@ -176,7 +177,7 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
 - Every building type says where its door is (`BuildingDef.door`, or null for none): the 2D art draws it
   there, a 3D model's and a sprite's `door` point must match it (tests/doors.test.ts, the asset
   validator), and people go in and out there (workplaces, a new house's villagers).
-- `streets.ts`: the street network. A crossroads (the `intersection` building, 10 wood) opens a
+- `streets.ts`: the street network. A crossroads (the `intersection` building, 1 wood) opens a
   new street across its own at right angles. Crossroads go only where their road runs down a line
   of the road grid (`ROAD_GRID` in `layout.ts`, `onRoadGrid` in `grid.ts`): squares 27 cells
   (nine blocks) across, with roads down the columns 27n + 2 (the block starting at cell 27n + 1
@@ -184,8 +185,17 @@ they lie to the place they will lie. Keep it that way when adding a mechanic.
   (`crossroadsPlaces` in `grid.ts`) is kept for it: a signpost stands there, no other building
   goes over the land its road would take (`keptLand`) and no field is sown there, so the build
   menu opened there offers just the crossroads. It opens a new street, crossing it at the new street's middle plot
-  (`CROSS_PLOT`). Each street is still a line with its own stretch of world x (street i starts at
-  i × `STREET_STRIDE`, plot k of street i is `plots[i × PLOTS_PER_STREET + k]`), so one x says where
+  (`CROSS_PLOT`). A new street runs only one block past its crossroads each way at first (`STREET_STUB`), so it
+  never ends at the crossroads. A street's road runs to the outer edge of its last parcel (block of three
+  cells, a plot) and the rider stops in the middle of it (`rideRange`). That last parcel is kept for the
+  **road** building (3 wood; nothing else is built there): it lays the street on `ROAD_PIECE` (9) parcels
+  (`roadEnd`, `whyNoRoad` in `world.ts`), one parcel at a time by one builder, who puts the wood in a heap
+  at the end of the road and walks on parcel by parcel (`roadwork.ts`); each parcel is road, and ridden
+  on, as soon as it is laid (`syncRoads`), and saves keep each street's ends. A road piece never goes
+  onto another road, a crossroads (built or being built), a building or the rocks, nor within a cell of
+  grass of one, so roads never run into each other. A street can reach plots `PLOT_FIRST`..`PLOT_LAST`
+  (below 0 only the main street, which runs on west into negative x). Each street is still a line with its own stretch of world x (street i starts at
+  i × `STREET_STRIDE`, plot k of street i is `plots[i × PLOTS_PER_STREET + k − PLOT_FIRST]`), so one x says where
   anything is. On the map all streets lie on one 250 px grid, so they meet at plots: a new street is
   laid out plot by plot both ways (`layStreet` in `world.ts`); meeting a street that crosses its way
   it joins it if that plot is free (a crossroads is made there, `Building.junction`, and it runs on

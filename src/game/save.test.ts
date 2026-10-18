@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { loadWorld, SAVE_VERSION, saveWorld } from './save';
+import { streetRange } from './streets';
 import { createWorld, placeBuilding, update, type World } from './world';
 
 const idle = { left: false, right: false };
@@ -18,7 +19,7 @@ function roundTrip(world: World): World {
 function busyWorld(): World {
   const w = createWorld();
   run(w, 20, { left: false, right: true });
-  placeBuilding(w, 3412.5, 'farm', { free: true }); // under construction
+  placeBuilding(w, 3487.5, 'farm', { free: true }); // under construction
   placeBuilding(w, 2662.5, 'mill', { instant: true, free: true });
   run(w, 5);
   w.events.length = 0;
@@ -26,6 +27,19 @@ function busyWorld(): World {
 }
 
 describe('save games', () => {
+  it('keeps the road laid on past where a street began, and a road piece being laid', () => {
+    const w = createWorld();
+    w.buildings.find((b) => b.type === 'warehouse')!.stock.wood = 30;
+    placeBuilding(w, 2087.5, 'intersection', { instant: true });
+    for (let i = 0; i < 3; i++) placeBuilding(w, streetRange(w, 1).max, 'road', { instant: true });
+    placeBuilding(w, streetRange(w, 1).min, 'road', { instant: true });
+    const piece = placeBuilding(w, streetRange(w, 1).max, 'road')!;
+    const back = roundTrip(w);
+    expect(back.streets.map((s) => [s.lo, s.hi])).toEqual(w.streets.map((s) => [s.lo, s.hi]));
+    expect(back.plots.map((p) => !!p.off)).toEqual(w.plots.map((p) => !!p.off));
+    expect(back.buildings.find((b) => b.id === piece.id)?.status).toBe('constructing');
+  });
+
   it('a loaded world equals the saved one', () => {
     const w = busyWorld();
     expect(roundTrip(w)).toEqual(w);
@@ -94,7 +108,7 @@ describe('save games', () => {
     const r = loadWorld(s);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
-    const b = placeBuilding(r.world, 412.5, 'well')!;
+    const b = placeBuilding(r.world, 487.5, 'well')!;
     expect(r.world.buildings.filter((x) => x.id === b.id)).toHaveLength(1);
   });
 });

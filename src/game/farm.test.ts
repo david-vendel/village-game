@@ -7,7 +7,7 @@ import { HOME, SHEAF_SLOTS } from './layout';
 import { employees } from './people';
 import { stockOf } from './resources';
 import { createWorker, LUNCH_AT, MIDDAY, updateWorker } from './worker';
-import { createWorld, placeBuilding, update } from './world';
+import { createWorld, placeBuilding, plotOf, update } from './world';
 
 const CAPACITY = BUILDINGS.farm.storage.grain!;
 
@@ -148,7 +148,7 @@ describe('farms in the world', () => {
 
   it('a farm hires a farmer once finished: a free farmer, else someone looking for work (builders never farm)', () => {
     const w = createWorld();
-    const b = placeBuilding(w, 412.5, 'farm')!;
+    const b = placeBuilding(w, 487.5, 'farm')!;
     expect(b.farm).toBeUndefined();
     tick(w, 1);
     expect(employees(w, b).every((p) => p.job!.role === 'builder')).toBe(true);
@@ -160,7 +160,7 @@ describe('farms in the world', () => {
     expect(farmer.profession).toBe('farmer');
     expect(farmer.seeker).toBeUndefined();
     const empty = createWorld({ village: false });
-    const lonely = placeBuilding(empty, 412.5, 'farm', { instant: true, free: true })!;
+    const lonely = placeBuilding(empty, 487.5, 'farm', { instant: true, free: true })!;
     tick(empty, 1);
     expect(employees(empty, lonely)).toHaveLength(0);
   });
@@ -240,7 +240,7 @@ describe('construction by builders', () => {
     w.buildings.find((b) => b.type === 'warehouse')!.stock = stockOf(BUILDINGS.farm.cost);
     expect(placeBuilding(w, 2162.5, 'farm')).not.toBeNull();
     expect(placeBuilding(w, 2662.5, 'house')).toBeNull(); // the wood is promised to the farm
-    expect(w.plots[36].buildingId).toBeNull();
+    expect(plotOf(w, 0, 36).buildingId).toBeNull();
   });
 
   it('empty-handed people walk faster than loaded ones', () => {

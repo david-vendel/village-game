@@ -13,7 +13,7 @@ function at(world: World, hour: number): World {
 }
 
 function finished(world: World, type: Building['type']): Building {
-  const b = placeBuilding(world, 412.5, type, { free: true })!;
+  const b = placeBuilding(world, 487.5, type, { free: true })!;
   b.status = 'done';
   b.progress = 1;
   return b;
@@ -53,7 +53,7 @@ describe('hearths', () => {
 
   it('nothing burns in a building still going up', () => {
     const w = createWorld({ village: false });
-    const b = placeBuilding(w, 412.5, 'house', { free: true })!;
+    const b = placeBuilding(w, 487.5, 'house', { free: true })!;
     expect(hearthOf(at(w, 12), b).hearth).toBe(0);
   });
 });

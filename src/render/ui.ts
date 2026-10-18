@@ -210,7 +210,7 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
   text(ctx, 'Village Crown', 16, 34, 24, GOLD, 'left', true);
   const lines = st.touch
     ? ['Hold the arrows to ride, hammer to build, upgrade or destroy', 'Pinch or tap - + to zoom']
-    : ['A D / ← → ride   S / ↓ / Space build, upgrade or destroy   W / S turn at a crossroads   Tab strategy view   G grid   C construction   M sound', 'Building: 1–5 or click a kind, A D choose, Space build, Esc back   - + zoom   V 2D / 3D'];
+    : ['A D / ← → ride   S / ↓ / Space build, upgrade or destroy   W / S turn at a crossroads   Tab strategy view   G grid   C construction   M sound', 'Building: 1–5 or click a kind, A D choose, Space build, Esc back   - + zoom'];
   const maxW = L.map.x - 28;
   let y = 54;
   for (const s of lines) {
@@ -397,7 +397,7 @@ export interface MenuLayout {
 export const BUILD_CATEGORIES: ReadonlyArray<{ name: string; types: readonly BuildingType[] }> = [
   { name: 'Resources', types: ['woodcutter', 'stonecutter', 'well'] },
   { name: 'Food', types: ['farm', 'mill', 'bakery'] },
-  { name: 'Logistics', types: ['warehouse', 'market', 'intersection'] },
+  { name: 'Logistics', types: ['warehouse', 'market', 'road', 'intersection'] },
   { name: 'Industry', types: ['blacksmith'] },
   { name: 'Village', types: ['house', 'tavern', 'chapel', 'watchtower'] },
 ];
@@ -624,7 +624,8 @@ export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number, 
     const fits = menu.fits[i];
     if (fits && Object.keys(buildShortfall(world, type)).length) ctx.globalAlpha = 0.4;
     const previewH = r.h - 34;
-    const scale = Math.min(0.6, (r.w - 8) / (def.width * 1.3), previewH / (BUILDING_ART[type].height + 20));
+    // (a road piece is much longer than its picture)
+    const scale = Math.min(0.6, (r.w - 8) / ((type === 'road' ? 200 : def.width) * 1.3), previewH / (BUILDING_ART[type].height + 20));
     if (fits) drawBuildingIcon(ctx, type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time);
     else drawBuildingIconGrey(ctx, type, r.x + r.w / 2, r.y + r.h - 30, scale);
     ctx.restore();
@@ -645,7 +646,7 @@ export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number, 
   const cost = `Costs ${amounts(def.cost)}` + (Object.keys(lack).length ? ` — need ${amounts(lack)} more` : '');
   const { w, d } = sizeOf(type);
   const why = whyNotBuild(world, type, menu.x);
-  const size = type === 'intersection' ? 'a road across' : `${w} × ${d} squares`;
+  const size = type === 'intersection' ? 'a road across' : type === 'road' ? `the road ${w} squares on` : `${w} × ${d} squares`;
   const info = `${cost}   ·   ${time}   ·   ${size}` + (why ? `   ·   ${why}` : '');
   text(ctx, info, I.x + I.w / 2, I.y + 34, fitSize(ctx, info, 12, I.w - 12), Object.keys(lack).length || why ? '#e89a7a' : '#cbbfa4', 'center');
   ctx.globalAlpha = menu.fits[menu.selection] ? 1 : 0.45;

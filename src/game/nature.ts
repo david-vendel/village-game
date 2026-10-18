@@ -21,7 +21,7 @@
 
 import { storageOf } from './buildings';
 import { putAway, storeSpot } from './economy';
-import { behindRoad, CELL_W, CHOP_SPOT, PILE_UNIT, QUARRIES, QUARRY_SPOTS, QUARRY_W, QUARRY_Y, STAND_Y, STONECUTTER_DOOR, WOODCUTTER_DOOR, yAt } from './layout';
+import { behindRoad, CELL_W, CHOP_SPOT, QUARRIES, QUARRY_SPOTS, QUARRY_W, QUARRY_Y, STAND_Y, STONECUTTER_DOOR, PILE_UNIT, WOODCUTTER_DOOR, yAt } from './layout';
 import { room, type Load } from './resources';
 import { cellKey, landUse, type LandUse } from './grid';
 import { groundPoint, streetDist, streetOf, streetPoint, streetRange, type Vec } from './streets';
