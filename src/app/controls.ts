@@ -6,7 +6,8 @@
 import { canChoose } from '../game/world';
 import { streetOf } from '../game/streets';
 import type { MoveInput, World } from '../game/world';
-import { buildingMenuLayout, DEFAULT_STYLE_3D, hit, hudLayout, menuLayout, setShowroom, setStyle3d, STYLES_3D } from '../render';
+import { BUILD_CATEGORIES, buildBarLayout, buildingMenuLayout, categoryOf, DEFAULT_STYLE_3D, hit, hudLayout, setShowroom, setStyle3d, STYLES_3D } from '../render';
+import { BUILDING_TYPES } from '../game/buildings';
 import type { Actions } from './actions';
 import { installMenu } from './menu';
 import type { Screen } from './screen';
@@ -26,6 +27,8 @@ export interface Controls {
   view3d(): boolean;
   /** Where the mouse is over the canvas (canvas px), if it is. */
   hover(): { x: number; y: number } | null;
+  /** The build bar's open category, if one is. */
+  buildCategory(): number | null;
 }
 
 const GAME_KEYS = new Set(['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' ', 'Enter', 'Escape', 'Tab', 'w', 'a', 's', 'd', 'q', 'e']);
@@ -164,11 +167,10 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
       return;
     }
 
+    if (world.menu?.kind === 'build') return buildBarKey(key);
     if (world.menu) {
-      if (key === 'ArrowLeft' || key === 'a') actions.moveSelection(-1);
-      else if (key === 'ArrowRight' || key === 'd') actions.moveSelection(1);
-      else if (key === 'ArrowUp' || key === 'w') moveMenuRow(-1);
-      else if (key === 'ArrowDown' || key === 's') moveMenuRow(1);
+      if (key === 'ArrowLeft' || key === 'a' || key === 'ArrowUp' || key === 'w') actions.moveSelection(-1);
+      else if (key === 'ArrowRight' || key === 'd' || key === 'ArrowDown' || key === 's') actions.moveSelection(1);
       else if (key === 'Enter' || key === ' ') actions.confirm();
       else if (key === 'Escape' || key === 'q') actions.closeBuildMenu();
       else if (/^[1-9]$/.test(key)) actions.select(Number(key) - 1);
@@ -189,25 +191,68 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
     if (sprinting === 'right' && !keyRight()) sprinting = null;
   });
 
-  /** Move the menu selection to the card straight above/below (the grid's shape comes from the drawn layout). */
-  function moveMenuRow(delta: -1 | 1): void {
-    if (!world.menu) return;
-    // a building's menu is a single row
-    if (world.menu.kind === 'building') return actions.moveSelection(delta);
-    const { cards } = menuLayout(screen.vp.uiW, screen.vp.uiH);
-    const cur = cards[world.menu.selection];
-    const rows = [...new Set(cards.map((c) => c.y))].sort((a, b) => a - b);
-    const mid = (c: { x: number; w: number }) => c.x + c.w / 2;
+  // --- The build bar (render/ui.ts buildBarLayout) ------------------------------------
+
+  /** The open category, forgotten whenever another menu opens. */
+  let category: number | null = null;
+  let categoryMenu: World['menu'] = null;
+  const buildCategory = () => {
+    if (world.menu !== categoryMenu) {
+      categoryMenu = world.menu;
+      category = null;
+    }
+    return world.menu?.kind === 'build' ? category : null;
+  };
+  /** Open category i, choosing the first of its buildings that fits here. */
+  const openCategory = (i: number) => {
+    buildCategory();
+    category = i;
     const menu = world.menu;
-    // the nearest card that can be chosen in the next row that has one (rows of only greyed-out cards are jumped)
-    for (let r = rows.indexOf(cur.y) + delta; r >= 0 && r < rows.length; r += delta) {
-      let best = -1;
-      cards.forEach((c, i) => {
-        if (c.y === rows[r] && canChoose(menu, i) && (best < 0 || Math.abs(mid(c) - mid(cur)) < Math.abs(mid(cards[best]) - mid(cur)))) best = i;
-      });
-      if (best >= 0) return actions.select(best);
+    if (!menu) return;
+    const first = BUILD_CATEGORIES[i].types.map((t) => BUILDING_TYPES.indexOf(t)).find((k) => canChoose(menu, k));
+    if (first !== undefined) actions.select(first);
+  };
+  const chosenCategory = () => (world.menu ? categoryOf(BUILDING_TYPES[world.menu.selection]) : 0);
+
+  /**
+   * Keys in the build bar: 1–5 open a category, ← → choose among the buildings (opening the
+   * chosen one's category), ↑ / Enter open the chosen one's category and then Enter builds it,
+   * ↓ / Esc close the category row and then the bar.
+   */
+  function buildBarKey(key: string): void {
+    const open = buildCategory();
+    if (key === 'ArrowLeft' || key === 'a' || key === 'ArrowRight' || key === 'd') {
+      actions.moveSelection(key === 'ArrowLeft' || key === 'a' ? -1 : 1);
+      category = chosenCategory();
+    } else if (/^[1-9]$/.test(key) && Number(key) <= BUILD_CATEGORIES.length) openCategory(Number(key) - 1);
+    else if (key === 'ArrowUp' || key === 'w') category = chosenCategory();
+    else if (key === 'Enter' || key === ' ') {
+      if (open !== null && open === chosenCategory()) actions.confirm();
+      else category = chosenCategory();
+    } else if (key === 'ArrowDown' || key === 's' || key === 'Escape' || key === 'q') {
+      if (open !== null) category = null;
+      else actions.closeBuildMenu();
     }
   }
+
+  /** A tap or click with the build bar open. */
+  function buildBarTap(ux: number, uy: number): void {
+    const menu = world.menu;
+    if (menu?.kind !== 'build') return;
+    const L = buildBarLayout(screen.vp.uiW, screen.vp.uiH, buildCategory());
+    const cat = L.categories.findIndex((r) => hit(r, ux, uy));
+    const card = L.cards.findIndex((r) => hit(r, ux, uy));
+    if (cat >= 0) {
+      if (cat === category) category = null;
+      else openCategory(cat);
+    } else if (card >= 0) {
+      const i = BUILDING_TYPES.indexOf(L.types[card]);
+      if (i === menu.selection) actions.confirm();
+      else actions.select(i);
+    } else if (L.build && hit(L.build, ux, uy)) actions.confirm();
+    else if (hit(L.cancel, ux, uy) || !hit(L.panel, ux, uy)) actions.closeBuildMenu();
+  }
+
   window.addEventListener('blur', () => {
     keys.clear();
     pointers.clear();
@@ -238,8 +283,9 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
     const { uiW, uiH } = screen.vp;
     let role: Role = 'none';
 
-    if (world.menu) {
-      const M = world.menu.kind === 'build' ? menuLayout(uiW, uiH) : buildingMenuLayout(uiW, uiH, world.menu.options.length);
+    if (world.menu?.kind === 'build') buildBarTap(ux, uy);
+    else if (world.menu) {
+      const M = buildingMenuLayout(uiW, uiH, world.menu.options.length);
       const card = M.cards.findIndex((r) => hit(r, ux, uy));
       if (card >= 0) {
         if (card === world.menu.selection) actions.confirm();
@@ -344,6 +390,7 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
     topZoom: () => topZoom,
     topYaw: () => topYaw,
     hover: () => hover,
+    buildCategory,
     view3d: () => view3d,
   };
 }

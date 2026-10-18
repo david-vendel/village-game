@@ -344,11 +344,12 @@ renderer draws, so a layout that is right in text is right on screen.
   scythe, carry), and the sheaf store.
 - `horse.ts`: rider with a 4-beat walk and a diagonal trot, plus idle animation. `people.ts`:
   villagers and chickens.
-- `ui.ts`: HUD, touch buttons (with ▲ ▼ to turn at a crossroads), the village map in the top right
-  corner (streets and building icons, north up, the rider as a gold arrow), build menu, labels,
-  progress bars and toasts, plus
-  `hudLayout`/`menuLayout`, which return the rectangles used both for drawing and for tap
-  hit-testing.
+- `ui.ts`: HUD, the hammer button and touch buttons (with ▲ ▼ to turn at a crossroads), the village
+  map in the top right corner (streets and building icons, north up, the rider as a gold arrow), the
+  build bar along the bottom (a row of categories, `BUILD_CATEGORIES`, and above it the open one's
+  buildings, what the chosen one costs and Build; the open category is the app's, `controls.ts`), a
+  building's menu, labels, progress bars and toasts, plus `hudLayout`/`buildBarLayout`/
+  `buildingMenuLayout`, which return the rectangles used both for drawing and for tap hit-testing.
 - `util.ts`: drawing helpers (shapes, colour mixing, smoke, hashing).
 
 ### `src/app`: input and screen

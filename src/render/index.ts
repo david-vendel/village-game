@@ -16,7 +16,7 @@ export { setShowroom } from './showroom';
 export { setStyle as setStyle3d, STYLES as STYLES_3D, DEFAULT_STYLE as DEFAULT_STYLE_3D } from './build3d/style';
 export { cameraX } from './scene';
 export { galloping, STRIDE as HORSE_STRIDE, strideAt } from './horse';
-export { buildingMenuLayout, hit, HUD_BUTTON, hudLayout, menuLayout, type Rect, type Toast } from './ui';
+export { BUILD_CATEGORIES, buildBarLayout, buildingMenuLayout, categoryOf, hit, HUD_BUTTON, hudLayout, type Rect, type Toast } from './ui';
 
 /** Everything the renderer needs besides the world: where the camera is and how the screen is scaled. */
 export interface FrameView {
@@ -49,6 +49,8 @@ export interface FrameView {
   hover?: { x: number; y: number } | null;
   /** Buildings in real-time 3D (else 2D art); the HUD's 2D · 3D button shows which. */
   view3d: boolean;
+  /** The build bar's open category (BUILD_CATEGORIES), or none yet. */
+  buildCategory: number | null;
   /** Frames per second and the slowest frame (ms) lately, shown when given (the panel's "frame rate"). */
   fps?: { fps: number; worstMs: number };
 }
@@ -94,7 +96,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
     topView: v.topView,
   });
   drawToasts(ctx, v.toasts, world.time, v.uiW);
-  drawBuildMenu(ctx, world, v.uiW, v.uiH);
+  drawBuildMenu(ctx, world, v.uiW, v.uiH, v.buildCategory);
   if (v.fps) drawFps(ctx, v.fps, v.uiH);
 }
 

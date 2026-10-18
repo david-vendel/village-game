@@ -6,7 +6,7 @@
 //   in world coordinates, scaled by `k` around their anchor so they stay
 //   readable when zoomed out.
 
-import { BUILDINGS, BUILDING_TYPES, ROLES, type Role, storageOf } from '../game/buildings';
+import { BUILDINGS, BUILDING_TYPES, type BuildingType, ROLES, type Role, storageOf } from '../game/buildings';
 import { clock } from '../game/daynight';
 import { buildShortfall, upgradeShortfall, villageStock } from '../game/economy';
 import { demolitionWork } from '../game/demolition';
@@ -210,7 +210,7 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
   text(ctx, 'Village Crown', 16, 34, 24, GOLD, 'left', true);
   const lines = st.touch
     ? ['Hold the arrows to ride, hammer to build, upgrade or destroy', 'Pinch or tap - + to zoom']
-    : ['A D / ← → ride   S / ↓ / Space build, upgrade or destroy   W / S turn at a crossroads   Tab strategy view   G grid   C construction   M sound', 'In the menu: WASD choose, Space confirm, Esc / Q close   - + zoom   V 2D / 3D'];
+    : ['A D / ← → ride   S / ↓ / Space build, upgrade or destroy   W / S turn at a crossroads   Tab strategy view   G grid   C construction   M sound', 'Building: 1–5 or click a kind, A D choose, Space build, Esc back   - + zoom   V 2D / 3D'];
   const maxW = L.map.x - 28;
   let y = 54;
   for (const s of lines) {
@@ -393,37 +393,62 @@ export interface MenuLayout {
   infoY: number;
 }
 
-export function menuLayout(uiW: number, uiH: number): MenuLayout {
-  const n = BUILDING_TYPES.length;
-  const cols = Math.min(n, Math.max(3, Math.floor((uiW - 40) / 100)));
-  const rows = Math.ceil(n / cols);
-  const cardW = Math.min(104, (uiW - 40) / cols);
-  const chrome = 44 + 60 + 58; // title + info + buttons
-  const cardH = Math.max(70, Math.min(108, (uiH - 24 - chrome - (rows - 1) * 8) / rows));
-  const pw = cols * cardW + 24;
-  const ph = chrome + rows * cardH + (rows - 1) * 8;
-  const px = (uiW - pw) / 2;
-  const py = Math.max(12, uiH - ph - 12);
+/** The build bar's groups of buildings, left to right; a building type is in one. */
+export const BUILD_CATEGORIES: ReadonlyArray<{ name: string; types: readonly BuildingType[] }> = [
+  { name: 'Resources', types: ['woodcutter', 'stonecutter', 'well'] },
+  { name: 'Food', types: ['farm', 'mill', 'bakery'] },
+  { name: 'Logistics', types: ['warehouse', 'market', 'intersection'] },
+  { name: 'Industry', types: ['blacksmith'] },
+  { name: 'Village', types: ['house', 'tavern', 'chapel', 'watchtower'] },
+];
+
+/** Which of BUILD_CATEGORIES a building type is in. */
+export const categoryOf = (type: BuildingType) => BUILD_CATEGORIES.findIndex((c) => c.types.includes(type));
+
+/**
+ * The build bar along the bottom of the screen: a row of categories with Close at its end and,
+ * once a category is open, a row of its buildings above it (`cards`, with `types` saying which
+ * each is) and above them what the chosen one is and costs, with Build.
+ */
+export interface BuildBarLayout {
+  panel: Rect;
+  categories: Rect[];
+  cancel: Rect;
+  cards: Rect[];
+  types: BuildingType[];
+  /** The line about the chosen building, and Build beside it (open category only). */
+  info: Rect | null;
+  build: Rect | null;
+}
+
+export function buildBarLayout(uiW: number, uiH: number, category: number | null): BuildBarLayout {
+  const n = BUILD_CATEGORIES.length;
+  const closeW = 76;
+  const catH = 40;
+  const catW = Math.min(132, (uiW - 24 - 16 - closeW - 6 * n) / n);
+  const rowW = n * (catW + 6) + closeW;
+  const x0 = (uiW - rowW) / 2;
+  const catY = uiH - 12 - 8 - catH;
+  const categories = BUILD_CATEGORIES.map((_, i) => ({ x: x0 + i * (catW + 6), y: catY, w: catW, h: catH }));
+  const cancel = { x: x0 + n * (catW + 6), y: catY, w: closeW, h: catH };
+  let top = catY;
   const cards: Rect[] = [];
-  for (let i = 0; i < n; i++) {
-    const c = i % cols;
-    const r = Math.floor(i / cols);
-    // centre a partial last row
-    const inRow = r === rows - 1 ? n - r * cols : cols;
-    const rowX = px + 12 + ((cols - inRow) * cardW) / 2;
-    cards.push({ x: rowX + c * cardW + 3, y: py + 44 + r * (cardH + 8), w: cardW - 6, h: cardH });
+  const types = category === null ? [] : [...BUILD_CATEGORIES[category].types];
+  let info: Rect | null = null;
+  let build: Rect | null = null;
+  if (types.length) {
+    const cardW = Math.min(112, (uiW - 40) / types.length);
+    const cardH = Math.max(76, Math.min(104, (uiH - 200) / 2));
+    const cy = catY - 10 - cardH;
+    types.forEach((_, i) => cards.push({ x: uiW / 2 - (types.length * cardW) / 2 + i * cardW + 3, y: cy, w: cardW - 6, h: cardH }));
+    const bw = 140;
+    const iw = Math.min(uiW - 40, Math.max(rowW, 520));
+    info = { x: (uiW - iw) / 2, y: cy - 10 - 40, w: iw - bw - 8, h: 40 };
+    build = { x: info.x + info.w + 8, y: info.y, w: bw, h: 40 };
+    top = info.y;
   }
-  const infoY = py + 44 + rows * cardH + (rows - 1) * 8 + 24;
-  const bw = Math.min(150, (pw - 36) / 2);
-  const by = py + ph - 50;
-  return {
-    panel: { x: px, y: py, w: pw, h: ph },
-    cards,
-    build: { x: uiW / 2 + 6, y: by, w: bw, h: 38 },
-    cancel: { x: uiW / 2 - 6 - bw, y: by, w: bw, h: 38 },
-    titleY: py + 30,
-    infoY,
-  };
+  const pw = Math.min(uiW - 8, Math.max(rowW, info ? info.w + 148 : 0, cards.length ? cards[cards.length - 1].x + cards[cards.length - 1].w - cards[0].x : 0) + 24);
+  return { panel: { x: (uiW - pw) / 2, y: top - 8, w: pw, h: uiH - 4 - (top - 8) }, categories, cancel, cards, types, info, build };
 }
 
 /** The menu at a building: a card for each thing that can be done to it, what it means, and Cancel / do it. */
@@ -554,22 +579,36 @@ function drawBuildingMenu(ctx: Ctx, world: World, uiW: number, uiH: number): voi
   text(ctx, act, M.build.x + M.build.w / 2, M.build.y + 25, fitSize(ctx, act, 15, M.build.w - 12, true), GOLD, 'center', true);
 }
 
-export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number): void {
+export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number, category: number | null = null): void {
   if (world.menu?.kind === 'building') return drawBuildingMenu(ctx, world, uiW, uiH);
   const menu = world.menu;
   if (!menu) return;
-  const menuX = menu.x;
-  const M = menuLayout(uiW, uiH);
+  const L = buildBarLayout(uiW, uiH, category);
+  panel(ctx, L.panel.x, L.panel.y, L.panel.w, L.panel.h, 0.88);
 
-  ctx.fillStyle = 'rgba(20,14,8,0.35)';
-  ctx.fillRect(0, 0, uiW, uiH);
-  panel(ctx, M.panel.x, M.panel.y, M.panel.w, M.panel.h, 0.9);
-  text(ctx, 'What shall we build?', uiW / 2, M.titleY, 17, GOLD, 'center', true);
+  // the categories: the open one lit, those with nothing that fits here dimmed
+  BUILD_CATEGORIES.forEach((c, i) => {
+    const r = L.categories[i];
+    const open = i === category;
+    const any = c.types.some((t) => menu.fits[BUILDING_TYPES.indexOf(t)]);
+    button(ctx, r, open);
+    const label = `${i + 1}. ${c.name}`;
+    text(ctx, label, r.x + r.w / 2, r.y + r.h / 2 + 5, fitSize(ctx, label, 14, r.w - 10, open), open ? GOLD : any ? '#f3ead8' : '#8a8378', 'center', open);
+  });
+  button(ctx, L.cancel, false);
+  text(ctx, 'Close', L.cancel.x + L.cancel.w / 2, L.cancel.y + L.cancel.h / 2 + 5, 14, '#f3ead8', 'center', true);
+  if (category === null) {
+    const hint = 'Choose what kind of building to put here';
+    text(ctx, hint, uiW / 2, L.panel.y - 8, 13, '#f3ead8', 'center', true);
+    return;
+  }
 
-  M.cards.forEach((r, i) => {
-    const type = BUILDING_TYPES[i];
+  // the open category's buildings
+  L.cards.forEach((r, k) => {
+    const type = L.types[k];
+    const i = BUILDING_TYPES.indexOf(type);
     const def = BUILDINGS[type];
-    const sel = i === world.menu!.selection;
+    const sel = i === menu.selection;
     ctx.save();
     ctx.fillStyle = sel ? 'rgba(232,200,114,0.22)' : 'rgba(255,240,210,0.06)';
     roundRect(ctx, r.x, r.y, r.w, r.h, 6);
@@ -589,25 +628,30 @@ export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number):
     if (fits) drawBuildingIcon(ctx, type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time);
     else drawBuildingIconGrey(ctx, type, r.x + r.w / 2, r.y + r.h - 30, scale);
     ctx.restore();
-    const label = `${i + 1}. ${def.name}`;
-    text(ctx, label, r.x + r.w / 2, r.y + r.h - 8, fitSize(ctx, label, 12, r.w - 6, sel), !fits ? '#8a8378' : sel ? GOLD : '#f3ead8', 'center', sel);
+    text(ctx, def.name, r.x + r.w / 2, r.y + r.h - 8, fitSize(ctx, def.name, 12, r.w - 6, sel), !fits ? '#8a8378' : sel ? GOLD : '#f3ead8', 'center', sel);
   });
 
-  const def = BUILDINGS[BUILDING_TYPES[menu.selection]];
-  text(ctx, def.purpose, uiW / 2, M.infoY, fitSize(ctx, def.purpose, 14, M.panel.w - 24), '#f3ead8', 'center');
+  // what the chosen building is and costs, and Build (when it is one of this category's)
+  const type = BUILDING_TYPES[menu.selection];
+  if (!L.types.includes(type) || !L.info || !L.build) {
+    text(ctx, 'Choose a building', uiW / 2, L.info!.y + 25, 14, '#f3ead8', 'center');
+    return;
+  }
+  const def = BUILDINGS[type];
+  const I = L.info;
+  text(ctx, def.purpose, I.x + I.w / 2, I.y + 15, fitSize(ctx, def.purpose, 14, I.w - 12), '#f3ead8', 'center');
   const time = world.constructionEnabled ? `Builds in ${+(def.buildTime / world.params.buildSpeed).toFixed(1)}s` : 'Builds instantly (construction off)';
-  const lack = buildShortfall(world, def.type);
+  const lack = buildShortfall(world, type);
   const cost = `Costs ${amounts(def.cost)}` + (Object.keys(lack).length ? ` — need ${amounts(lack)} more` : '');
-  const { w, d } = sizeOf(def.type);
-  const why = whyNotBuild(world, def.type, menuX);
-  const size = def.type === 'intersection' ? 'a road across' : `${w} × ${d} squares`;
+  const { w, d } = sizeOf(type);
+  const why = whyNotBuild(world, type, menu.x);
+  const size = type === 'intersection' ? 'a road across' : `${w} × ${d} squares`;
   const info = `${cost}   ·   ${time}   ·   ${size}` + (why ? `   ·   ${why}` : '');
-  text(ctx, info, uiW / 2, M.infoY + 20, fitSize(ctx, info, 12, M.panel.w - 24), Object.keys(lack).length || why ? '#e89a7a' : '#cbbfa4', 'center');
-
-  button(ctx, M.cancel, false);
-  text(ctx, 'Cancel', M.cancel.x + M.cancel.w / 2, M.cancel.y + 25, 15, '#f3ead8', 'center', true);
-  button(ctx, M.build, true);
-  text(ctx, `Build ${def.name}`, M.build.x + M.build.w / 2, M.build.y + 25, fitSize(ctx, `Build ${def.name}`, 15, M.build.w - 12, true), GOLD, 'center', true);
+  text(ctx, info, I.x + I.w / 2, I.y + 34, fitSize(ctx, info, 12, I.w - 12), Object.keys(lack).length || why ? '#e89a7a' : '#cbbfa4', 'center');
+  ctx.globalAlpha = menu.fits[menu.selection] ? 1 : 0.45;
+  button(ctx, L.build, true);
+  text(ctx, `Build ${def.name}`, L.build.x + L.build.w / 2, L.build.y + 26, fitSize(ctx, `Build ${def.name}`, 15, L.build.w - 12, true), GOLD, 'center', true);
+  ctx.globalAlpha = 1;
 }
 
 // --- World-anchored labels ------------------------------------------------------------
