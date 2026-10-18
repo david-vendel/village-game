@@ -254,10 +254,11 @@ export function installControls(world: World, screen: Screen, actions: Actions, 
       else if (hit(L.menu, ux, uy)) toggleMenu(L.menu);
       else if (hit(L.map, ux, uy)) setTopView(!topView);
       else if (hit(L.zoomIn, ux, uy)) zoomBy(ZOOM_STEP);
+      else if (hit(L.build, ux, uy)) actions.openBuildMenu();
       else if (dir) role = dir;
       else if (screen.touch && actions.atCrossroads() && hit(L.turnUp, ux, uy)) actions.turn('up');
       else if (screen.touch && actions.atCrossroads() && hit(L.turnDown, ux, uy)) actions.turn('down');
-      else if (screen.touch && hit(L.build, ux, uy)) actions.openBuildMenu();
+
       else role = 'pinch';
     }
     pointers.set(e.pointerId, { role, x: e.clientX, y: e.clientY });

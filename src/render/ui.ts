@@ -240,15 +240,18 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
   // Menu: just the word, like New village
   text(ctx, 'Menu', L.menu.x + L.menu.w / 2, L.menu.y + L.menu.h - 3.5, 9, GOLD, 'center', true);
 
+  // the hammer: build, upgrade or destroy here (a tap or a click)
+  if (!world.menu) {
+    ctx.globalAlpha = st.canBuild ? 1 : 0.4;
+    button(ctx, L.build, false, true);
+    hammerIcon(ctx, L.build.x + L.build.w / 2, L.build.y + L.build.h / 2, L.build.w * 0.5);
+    ctx.globalAlpha = 1;
+  }
   if (st.touch && !world.menu) {
     button(ctx, L.left, st.leftHeld);
     arrowIcon(ctx, L.left, -1);
     button(ctx, L.right, st.rightHeld);
     arrowIcon(ctx, L.right, 1);
-    ctx.globalAlpha = st.canBuild ? 1 : 0.4;
-    button(ctx, L.build, false, true);
-    hammerIcon(ctx, L.build.x + L.build.w / 2, L.build.y + L.build.h / 2, L.build.w * 0.5);
-    ctx.globalAlpha = 1;
     if (st.canTurn) {
       for (const [r, dir] of [[L.turnUp, -1], [L.turnDown, 1]] as const) {
         button(ctx, r, false);
