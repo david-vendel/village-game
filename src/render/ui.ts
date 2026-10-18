@@ -423,6 +423,8 @@ export interface BuildBarLayout {
 
 /** How big the build bar is drawn: its sizes and fonts are this share of their full size. */
 const BAR = 0.5;
+/** How big the building pictures on its cards are, likewise. */
+const BAR_IMG = 1;
 
 export function buildBarLayout(uiW: number, uiH: number, category: number | null): BuildBarLayout {
   const n = BUILD_CATEGORIES.length;
@@ -441,8 +443,8 @@ export function buildBarLayout(uiW: number, uiH: number, category: number | null
   let info: Rect | null = null;
   let build: Rect | null = null;
   if (types.length) {
-    const cardW = Math.min(112 * BAR, (uiW - 40) / types.length);
-    const cardH = BAR * Math.max(76, Math.min(104, (uiH - 200) / 2));
+    const cardW = Math.min(112 * BAR_IMG, (uiW - 40) / types.length);
+    const cardH = 24 * BAR + (BAR_IMG * Math.max(76, Math.min(104, (uiH - 200) / 2)) - 24 * BAR_IMG);
     const cy = catY - 10 * BAR - cardH;
     types.forEach((_, i) => cards.push({ x: uiW / 2 - (types.length * cardW) / 2 + i * cardW + gap / 2, y: cy, w: cardW - gap, h: cardH }));
     const bw = 140 * BAR;
@@ -627,11 +629,11 @@ export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number, 
     // what doesn't fit here is greyed out; what the village can't afford is shown faded
     const fits = menu.fits[i];
     if (fits && Object.keys(buildShortfall(world, type)).length) ctx.globalAlpha = 0.4;
-    const previewH = r.h - 34 * BAR;
+    const previewH = r.h - 24 * BAR - 10 * BAR_IMG;
     // (a road piece is much longer than its picture)
-    const scale = Math.min(0.6 * BAR, (r.w - 8 * BAR) / ((type === 'road' ? 200 : def.width) * 1.3), previewH / (BUILDING_ART[type].height + 20));
-    if (fits) drawBuildingIcon(ctx, type, r.x + r.w / 2, r.y + r.h - 30 * BAR, scale, world.time);
-    else drawBuildingIconGrey(ctx, type, r.x + r.w / 2, r.y + r.h - 30 * BAR, scale);
+    const scale = Math.min(0.6 * BAR_IMG, (r.w - 8 * BAR_IMG) / ((type === 'road' ? 200 : def.width) * 1.3), previewH / (BUILDING_ART[type].height + 20));
+    if (fits) drawBuildingIcon(ctx, type, r.x + r.w / 2, r.y + r.h - 24 * BAR - 6 * BAR_IMG, scale, world.time);
+    else drawBuildingIconGrey(ctx, type, r.x + r.w / 2, r.y + r.h - 24 * BAR - 6 * BAR_IMG, scale);
     ctx.restore();
     text(ctx, def.name, r.x + r.w / 2, r.y + r.h - 8 * BAR, fitSize(ctx, def.name, 12 * BAR, r.w - 6 * BAR, sel), !fits ? '#8a8378' : sel ? GOLD : '#f3ead8', 'center', sel);
   });
