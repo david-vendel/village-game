@@ -1,30 +1,22 @@
-// The village from above (Tab): the plane itself, north up, centred on the
-// rider. Streets, fields, the quarries' rocky land, every building's roof on
-// its lot, trees, and people and the rider moving about, all simply drawn.
-// Positions come straight from the game's map (game/streets.ts groundPoint).
+// The land of the village from straight above, north up: grass, streets,
+// fields, the quarries' rocky land, the crossroads' posts, what lies on the
+// ground, and a flat roof on the lot of any building with no 3D model. The
+// strategy view (strategy.ts) paints it into textures and lays them on its
+// ground, under the 3D buildings, trees and people. Positions come straight
+// from the game's map (game/streets.ts groundPoint).
 
 import { roadShown } from './roads';
-import { BUILDINGS, type BuildingType } from '../game/buildings';
+import type { BuildingType } from '../game/buildings';
 import { CELL_W, FIELD_ROWS, QUARRIES, quarryLand, ROAD_HALF, rowFar, rowNear, type FieldZone } from '../game/layout';
-import { cellName, crossroadsPlaces, footprintOf, landUse, type LandUse } from '../game/grid';
+import { crossroadsPlaces, footprintOf, landUse, type LandUse } from '../game/grid';
 import { LINE_ALPHA, lineLevel, showLevel } from './grid';
-import { treeGrowth } from '../game/nature';
 import { GROUND_PILE_Y } from '../game/piles';
 import type { Load } from '../game/resources';
 import { backOf, groundPoint, mapPoint, streetOf, streetPoint, streetStart, type Vec, streetAt } from '../game/streets';
-import { getBuilding, type World } from '../game/world';
-import { outdoors } from '../game/people';
-import { doorProgress } from './farm';
-import { figureOf, outfitOf } from './figure';
+import type { World } from '../game/world';
 import { circle, type Ctx, ellipse, hash, line, mix, poly, shade } from './util';
-import { BASE_Y, behindRoad } from '../game/layout';
-import { building3d } from './life3d';
-import { lightAt } from './sky';
-import { drawTop3d, has3d, ready3d, type Top3d } from './world3d';
 
-const SERIF = 'Georgia, "Times New Roman", serif';
-
-/** Roof colours by building (the top view's only clue to what a building is, with its name). */
+/** Roof colours by building, for one drawn flat (no 3D model). */
 const ROOF: Record<BuildingType, string> = {
   warehouse: '#8a6a44',
   house: '#a0563a',
@@ -59,13 +51,26 @@ const ROOF: Record<BuildingType, string> = {
   road: '#a8875b',
 };
 
-const RESOURCE_COLOUR: Record<Load['resource'], string> = { wood: '#7b5634', stone: '#a89c88', planks: '#c9a06a', grain: '#d8b850', flour: '#f1ece0', bread: '#c58a46', water: '#5d86a8', hay: '#cdb860', milk: '#f4f1e8', wool: '#ece6d6', eggs: '#e8dcc4', meat: '#b5523b', cheese: '#e8c35a', smokedmeat: '#7a3424', cloth: '#6a7fa8', hides: '#8a5a34', tallow: '#efe6c8', leather: '#a8703a', candles: '#f4ecd2', harness: '#6b4226', horse: '#8a4a26', ale: '#8a5a30', pastries: '#d89a4a', iron: '#5c6168', tools: '#8a8f96', salt: '#f7f7f2', firewood: '#9a6a3a' };
+export const RESOURCE_COLOUR: Record<Load['resource'], string> = { wood: '#7b5634', stone: '#a89c88', planks: '#c9a06a', grain: '#d8b850', flour: '#f1ece0', bread: '#c58a46', water: '#5d86a8', hay: '#cdb860', milk: '#f4f1e8', wool: '#ece6d6', eggs: '#e8dcc4', meat: '#b5523b', cheese: '#e8c35a', smokedmeat: '#7a3424', cloth: '#6a7fa8', hides: '#8a5a34', tallow: '#efe6c8', leather: '#a8703a', candles: '#f4ecd2', harness: '#6b4226', horse: '#8a4a26', ale: '#8a5a30', pastries: '#d89a4a', iron: '#5c6168', tools: '#8a8f96', salt: '#f7f7f2', firewood: '#9a6a3a' };
 
-export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zoom: number, showGrid: boolean, hover: { x: number; y: number } | null = null): void {
+/** The colour of the open land. */
+export const GRASS = '#7f9148';
+
+/** What a canvas of w × h shows: map point (cx, cy) in its middle, S canvas px per map px; and the land grid over it or not. */
+export interface GroundView {
+  cx: number;
+  cy: number;
+  S: number;
+  w: number;
+  h: number;
+  grid: boolean;
+}
+
+/** Paint the land into ctx: canvas = (w/2 + (p.x − cx)·S, h/2 − (p.y − cy)·S). Buildings `modelled` in 3D are left off. */
+export function paintGround(ctx: Ctx, world: World, view: GroundView, modelled: (type: BuildingType) => boolean): void {
   const time = world.time;
-  // map px per screen unit: about 1400 map px across the shorter side at zoom 1
-  const S = (Math.min(uiW, uiH) / 1400) * zoom * 1.6;
-  const c = mapPoint(world, world.rider.x);
+  const { S, w: uiW, h: uiH } = view;
+  const c = { x: view.cx, y: view.cy };
   const sx = (p: Vec) => uiW / 2 + (p.x - c.x) * S;
   const sy = (p: Vec) => uiH / 2 - (p.y - c.y) * S;
   const shape = (pts: Vec[], fill: string, stroke?: string, lw = 1) => {
@@ -80,13 +85,29 @@ export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zo
   };
 
   // the land
-  ctx.fillStyle = '#7f9148';
+  ctx.fillStyle = GRASS;
   ctx.fillRect(0, 0, uiW, uiH);
+  // broad patches of lusher and drier grass, fixed to the ground
+  const P = 260;
+  for (let i = Math.floor((c.x - uiW / 2 / S) / P) - 1; i < (c.x + uiW / 2 / S) / P + 1; i++) {
+    for (let j = Math.floor((c.y - uiH / 2 / S) / P) - 1; j < (c.y + uiH / 2 / S) / P + 1; j++) {
+      const p = { x: (i + hash(i * 31 + j, 21)) * P, y: (j + hash(j * 37 + i, 22)) * P };
+      const r = (130 + hash(i + j * 7, 23) * 150) * S;
+      const k = hash(i * 13 + j, 24);
+      const g = ctx.createRadialGradient(sx(p), sy(p), 0, sx(p), sy(p), r);
+      const tint = k < 0.5 ? `rgba(92,118,52,${0.35 * (0.5 - k) * 2})` : `rgba(168,160,86,${0.3 * (k - 0.5) * 2})`;
+      g.addColorStop(0, tint);
+      g.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = g;
+      ctx.fillRect(sx(p) - r, sy(p) - r, 2 * r, 2 * r);
+    }
+  }
   // a little texture: tufts fixed to the ground
   const T = 60;
   const x0 = Math.floor((c.x - uiW / 2 / S) / T) - 1;
   const y0 = Math.floor((c.y - uiH / 2 / S) / T) - 1;
-  for (let i = x0; i < x0 + uiW / S / T + 3; i++) {
+  // (left out when painted too small to see)
+  for (let i = x0; S > 0.25 && i < x0 + uiW / S / T + 3; i++) {
     for (let j = y0; j < y0 + uiH / S / T + 3; j++) {
       if (hash(i * 7919 + j, 3) < 0.6) continue;
       const p = { x: i * T + hash(i, j) * T, y: j * T + hash(j, i) * T };
@@ -151,36 +172,9 @@ export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zo
     }
   }
 
-  /** A building's name on the ground in front of it. */
-  const label = (b: { type: BuildingType }, x: number, front: number) => {
-    if (S <= 0.32) return;
-    const p = lot(x, front - 14);
-    ctx.font = `${Math.round(Math.max(9, 11 * Math.min(1.4, S * 1.6)))}px ${SERIF}`;
-    ctx.textAlign = 'center';
-    ctx.fillStyle = 'rgba(30,22,12,0.85)';
-    ctx.fillText(BUILDINGS[b.type].name, sx(p), sy(p) + 4);
-  };
-  // buildings with a 3D model: the model itself from straight above, its shadow on the ground
-  const tops: Top3d[] = [];
-  for (const b of world.buildings) {
-    if (b.type === 'intersection' || !has3d(b.type)) continue;
-    const s = streetAt(world, streetOf(b.x));
-    if (!s) continue;
-    const o = lot(b.x, behindRoad(BASE_Y));
-    if (Math.abs(sx(o) - uiW / 2) > uiW / 2 + 300 * S || Math.abs(sy(o) - uiH / 2) > uiH / 2 + 300 * S) continue;
-    const m = building3d(world, b);
-    if (!ready3d(m)) continue;
-    tops.push({ b: m, ox: o.x, oy: o.y, along: s.dir, back: backOf(s.dir) });
-  }
-  const in3d = new Set(tops.map((t) => t.b.id));
-  if (tops.length) {
-    const light = lightAt(world);
-    drawTop3d(ctx, tops, { cx: c.x, cy: c.y, S, w: uiW, h: uiH, px: ctx.getTransform().a, phase: light.phase, sunHeight: light.sun, night: light.night, time });
-  }
-
   // buildings: a roof on the lot behind the road; sites are open frames filling in
   for (const b of world.buildings) {
-    if (b.type === 'intersection') continue;
+    if (b.type === 'intersection' || b.type === 'road' || modelled(b.type)) continue;
     const x = b.x;
     const f = footprintOf(b);
     if (!f) continue;
@@ -191,10 +185,6 @@ export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zo
     const deep = rowFar(f.j1) - front;
     const corners = [lot(x0, front), lot(x1, front), lot(x1, front + deep), lot(x0, front + deep)];
     const roof = ROOF[b.type];
-    if (in3d.has(b.id)) {
-      label(b, x, front);
-      continue;
-    }
     // shadow to the north-east
     shape(corners.map((p) => ({ x: p.x + 6, y: p.y + 6 })), 'rgba(30,24,12,0.25)');
     if (b.status !== 'done') {
@@ -228,7 +218,6 @@ export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zo
       }
       if (b.type === 'well') circle(ctx, sx(lot(x, front + deep / 2)), sy(lot(x, front + deep / 2)), Math.min(12, deep / 3) * S, '#3a4a5a');
     }
-    label(b, x, front);
   }
   // the crossroads' fingerposts
   for (const b of world.buildings) {
@@ -245,45 +234,6 @@ export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zo
     circle(ctx, sx(p), sy(p), Math.max(1.5, 4 * S), '#6b4c30');
   }
 
-  // trees: crowns from above, a shadow under each; stumps
-  for (const t of world.trees) {
-    const p = groundPoint(world, t.x, t.y);
-    const X = sx(p);
-    const Y = sy(p);
-    if (X < -40 || X > uiW + 40 || Y < -40 || Y > uiH + 40) continue;
-    if (t.state === 'stump') {
-      circle(ctx, X, Y, Math.max(1, 4 * S), '#c9a577');
-      continue;
-    }
-    const r = (10 + hash(t.id, 92) * 10) * (0.3 + 0.7 * treeGrowth(t)) * S;
-    circle(ctx, X + r * 0.35, Y + r * 0.35, r, 'rgba(30,40,16,0.35)');
-    circle(ctx, X, Y, r, '#4e6533');
-    circle(ctx, X - r * 0.3, Y - r * 0.3, r * 0.55, '#6c8543');
-  }
-
-  // people: a body in their clothes and a head, stepping as they walk, with whatever they carry
-  const person = (p: Vec, top: string, skin: string, heading: number, step: number, walking: boolean, load: Load | null) => {
-    const X = sx(p);
-    const Y = sy(p);
-    if (X < -20 || X > uiW + 20 || Y < -20 || Y > uiH + 20) return;
-    const k = Math.max(0.6, S * 1.4);
-    const fx = Math.cos(heading);
-    const fy = Math.sin(heading);
-    if (walking) {
-      // feet stepping forward and back
-      const swing = Math.sin(step) * 3.5 * k;
-      circle(ctx, X - fy * 2 * k + fx * swing, Y + fx * 2 * k + fy * swing, 1.4 * k, '#3a2a1c');
-      circle(ctx, X + fy * 2 * k - fx * swing, Y - fx * 2 * k - fy * swing, 1.4 * k, '#3a2a1c');
-    }
-    ellipse(ctx, X, Y, 4.2 * k, 3 * k, top, heading + Math.PI / 2);
-    circle(ctx, X + fx * 0.6 * k, Y + fy * 0.6 * k, 2.3 * k, skin);
-    if (load) circle(ctx, X + fx * 4 * k, Y + fy * 4 * k, 2.2 * k, RESOURCE_COLOUR[load.resource]);
-  };
-  /** Screen heading of something facing `facing` along the street at world x. */
-  const headingAt = (x: number, facing: number) => {
-    const d = (streetAt(world, streetOf(x)) ?? world.streets[0]).dir;
-    return Math.atan2(-d.y * facing, d.x * facing);
-  };
   // what lies on the ground by the road: a little heap, bigger the more there is
   for (const pile of world.piles) {
     const p = groundPoint(world, pile.x, GROUND_PILE_Y);
@@ -291,53 +241,7 @@ export function drawTopView(ctx: Ctx, world: World, uiW: number, uiH: number, zo
     circle(ctx, sx(p), sy(p), r + Math.max(0.6, S), 'rgba(40,28,16,0.45)');
     circle(ctx, sx(p), sy(p), r, RESOURCE_COLOUR[pile.resource]);
   }
-  for (const p of world.people) {
-    const o = outfitOf(figureOf(p));
-    const b = p.job && getBuilding(world, p.job.buildingId);
-    if (p.job && b) {
-      const w = p.job.worker;
-      if (doorProgress(w) >= 1) continue; // indoors
-      const x = b.x + w.dx;
-      person(groundPoint(world, x, w.y), o.top, o.skin, headingAt(x, w.facing), w.stride * 0.25, w.task.kind === 'walk', w.carrying);
-    } else if (!p.job && outdoors(p)) {
-      const s = p.stroll;
-      person(groundPoint(world, s.x, s.y), o.top, o.skin, headingAt(s.x, s.dir), time * s.speed * 0.2 + p.seed, s.idle <= 0, null);
-    }
-  }
-  for (const a of world.animals) {
-    const p = groundPoint(world, a.stroll.x, a.stroll.y);
-    const hop = a.stroll.idle <= 0 ? Math.abs(Math.sin(time * 8 + a.seed)) * 1.5 : 0;
-    circle(ctx, sx(p), sy(p) - hop, Math.max(1.2, 2.6 * S), hash(a.seed, 3) < 0.5 ? '#efe9dc' : '#a86a3a');
-  }
-
-  // the rider: the horse along the street, legs going, the king on its back
-  const r = world.rider;
-  const rp = groundPoint(world, r.x, 474);
-  const h = headingAt(r.x, r.facing);
-  const k = Math.max(0.8, S * 1.3);
-  const X = sx(rp);
-  const Y = sy(rp);
-  const fx = Math.cos(h);
-  const fy = Math.sin(h);
-  const moving = Math.abs(r.vx) > 5;
-  for (let i = 0; i < 4; i++) {
-    const along = (i < 2 ? 7 : -7) * k + (moving ? Math.sin(r.gait / 8 + i * 1.6) * 3 * k : 0);
-    const side = (i % 2 ? 3 : -3) * k;
-    circle(ctx, X + fx * along - fy * side, Y + fy * along + fx * side, 1.5 * k, '#2a221c');
-  }
-  ellipse(ctx, X, Y, 11 * k, 4.2 * k, '#8b5a34', h);
-  ellipse(ctx, X + fx * 12 * k, Y + fy * 12 * k, 4 * k, 2.4 * k, '#6b4226', h);
-  ellipse(ctx, X - fx * 1 * k, Y - fy * 1 * k, 4.5 * k, 4 * k, '#9a2a2e', h);
-  circle(ctx, X, Y, 2.8 * k, '#e3b893');
-  circle(ctx, X, Y, 1.6 * k, '#e8c14a');
-
-  if (showGrid) drawGrid(ctx, world, sx, sy, S, uiW, uiH, hover);
-
-  ctx.font = `bold 13px ${SERIF}`;
-  ctx.textAlign = 'center';
-  ctx.fillStyle = 'rgba(243,234,216,0.9)';
-  ctx.fillText('The village from above — Tab, or tap “Back to the street”, to return', uiW / 2, uiH - 14);
-  ctx.textAlign = 'left';
+  if (view.grid) drawGrid(ctx, world, sx, sy, S, uiW, uiH);
 }
 
 const GRID_FILL: Record<LandUse['kind'], string> = {
@@ -350,10 +254,9 @@ const GRID_FILL: Record<LandUse['kind'], string> = {
 /**
  * The land grid from above (G): the whole plane in cells, north up, in light
  * lines (every tenth a little stronger, and fewer of them as it zooms out),
- * every cell taken by something tinted by what takes it, and the name of the
- * cell under the mouse.
+ * every cell taken by something tinted by what takes it.
  */
-function drawGrid(ctx: Ctx, world: World, sx: (p: Vec) => number, sy: (p: Vec) => number, S: number, uiW: number, uiH: number, hover: { x: number; y: number } | null): void {
+function drawGrid(ctx: Ctx, world: World, sx: (p: Vec) => number, sy: (p: Vec) => number, S: number, uiW: number, uiH: number): void {
   const px = CELL_W * S;
   // the cells on screen
   const at = (X: number, Y: number) => ({ x: (X - sx({ x: 0, y: 0 })) / S, y: -(Y - sy({ x: 0, y: 0 })) / S });
@@ -385,23 +288,6 @@ function drawGrid(ctx: Ctx, world: World, sx: (p: Vec) => number, sy: (p: Vec) =
     if (!showLevel(level, px)) continue;
     const Y = Math.round(sy({ x: 0, y: r * CELL_W })) + 0.5;
     line(ctx, 0, Y, uiW, Y, colour(level), 1);
-  }
-  // the cell under the mouse: outlined, with its name
-  if (hover) {
-    const p = at(hover.x, hover.y);
-    const c = Math.floor(p.x / CELL_W);
-    const r = Math.floor(p.y / CELL_W);
-    ctx.strokeStyle = '#fff4dc';
-    ctx.lineWidth = 1.5;
-    ctx.strokeRect(sx({ x: c * CELL_W, y: 0 }), sy({ x: 0, y: (r + 1) * CELL_W }), px, px);
-    const name = cellName(c, r);
-    ctx.font = 'bold 11px ui-monospace, Menlo, monospace';
-    ctx.textAlign = 'center';
-    const w = ctx.measureText(name).width + 8;
-    ctx.fillStyle = 'rgba(30,22,12,0.7)';
-    ctx.fillRect(hover.x - w / 2, hover.y - 26, w, 15);
-    ctx.fillStyle = '#fff4dc';
-    ctx.fillText(name, hover.x, hover.y - 15);
   }
   ctx.restore();
 }

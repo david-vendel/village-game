@@ -3,6 +3,7 @@ import { CROSS_PLOT, plotX, rideRange, streetRange } from './streets';
 import { CELL_W } from './layout';
 import { describe, expect, it } from 'vitest';
 import { BUILDINGS, BUILDING_TYPES } from './buildings';
+import { whyLocked } from './castle';
 import {
   closeMenu,
   confirmMenu,
@@ -23,7 +24,12 @@ import {
   WORLD_WIDTH,
   type World,
   plotOf,
+  planAt,
+  facingOf,
+  buildingOn,
+  openPlanMenu,
 } from './world';
+import { mapPoint, streetPoint } from './streets';
 
 const idle = { left: false, right: false };
 
@@ -302,5 +308,39 @@ describe('streets', () => {
     const h = placeBuilding(w, plotX(2, 42) - 25, 'house')!;
     runFor(w, 90, { left: false, right: false });
     expect(h.status).toBe('done');
+  });
+});
+
+describe('placing from above (the strategy view)', () => {
+  it('sets a building on the lots of the street its door faces, under the point', () => {
+    const w = emptyWorld();
+    const front = facingOf(w.streets[0]);
+    // a point on the lots behind the main street, at x = 1000
+    const p = streetPoint(w, 1000, 3 * CELL_W);
+    const at = planAt(w, 'house', p, front)!;
+    expect(at.street).toBe(0);
+    expect(at.why).toBeNull();
+    expect(Math.abs(at.x - 1000)).toBeLessThanOrEqual(1.5 * CELL_W);
+    // turned away from the road, it has no street to face there
+    expect(planAt(w, 'house', p, (front + 2) % 4)).toBeNull();
+    // too far from the road too
+    expect(planAt(w, 'house', streetPoint(w, 1000, 20 * CELL_W), front)).toBeNull();
+  });
+
+  it('builds what is planned there, and finds it by its land', () => {
+    const w = emptyWorld();
+    const p = streetPoint(w, 1000, 3 * CELL_W);
+    const at = planAt(w, 'house', p, facingOf(w.streets[0]))!;
+    const b = placeBuilding(w, at.want, 'house', { free: true })!;
+    expect(b.x).toBe(at.x);
+    expect(buildingOn(w, p)).toBe(b);
+    expect(buildingOn(w, mapPoint(w, 1000))).toBeUndefined(); // the road
+    expect(planAt(w, 'house', p, facingOf(w.streets[0]))!.why).toMatch(/in the way/);
+  });
+
+  it('opens a build menu where anything not locked can be chosen', () => {
+    const w = emptyWorld();
+    openPlanMenu(w);
+    expect(w.menu?.kind === 'build' && w.menu.plan && w.menu.fits.every((f, i) => f === !whyLocked(w, BUILDING_TYPES[i]))).toBe(true);
   });
 });

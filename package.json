@@ -21,7 +21,8 @@
     "paint:flux": "tsx tools/paint/flux.ts",
     "paint:showroom": "tsx tools/paint/showroom.ts",
     "paint:tile": "tsx tools/paint/tileable.ts",
-    "asset": "tsx tools/asset/run.ts"
+    "asset": "tsx tools/asset/run.ts",
+    "ship": "bash scripts/ship.sh"
   },
   "devDependencies": {
     "@napi-rs/canvas": "^1.0.10",

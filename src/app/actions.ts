@@ -17,16 +17,21 @@ import {
   whyNotDemolish,
   getBuilding,
   moveMenu,
+  openBuildingMenu,
   openMenu,
+  openPlanMenu,
+  placeBuilding,
   selectMenu,
   setConstructionEnabled,
   turnAtCrossroads,
   turnAround,
-  turnToward,
   upgradeBuilding,
+  buildingOn,
+  planAt,
   type World,
 } from '../game/world';
-import type { Vec } from '../game/streets';
+import type { BuildingType } from '../game/buildings';
+import { fromStreet, streetOf, type Vec } from '../game/streets';
 import type { Sound } from './sound';
 
 export type Notify = (text: string) => void;
@@ -45,10 +50,14 @@ export interface Actions {
   atCrossroads(): boolean;
   /** Turn onto the street crossing this one: up (away from the viewer) or down (towards them). */
   turn(way: 'up' | 'down'): void;
-  /** At a crossroads, turn onto the crossing street if it runs along map direction v (the view from above). */
-  turnToward(v: Vec): void;
   /** Turn around on the street: look (and build) across the road, or back. */
   turnAround(): void;
+  /** The strategy view's build bar: choose a building, then place it on the land (plan). */
+  openPlanMenu(): void;
+  /** Plan a building of this type where the player clicked (map point p), its door facing FACINGS[facing] (game/world.ts planAt); returns whether it was placed. */
+  plan(type: BuildingType, p: Vec, facing: number): boolean;
+  /** Open the menu of the building on the land at map point p (clicked in the strategy view), if one is there. */
+  openBuildingMenuAt(p: Vec): void;
 }
 
 export function createActions(world: World, notify: Notify, _isTouch: () => boolean, sound: Sound): Actions {
@@ -89,8 +98,34 @@ export function createActions(world: World, notify: Notify, _isTouch: () => bool
     turn(way) {
       if (turnAtCrossroads(world, way)) sound.ui('menuMove');
     },
-    turnToward(v) {
-      if (turnToward(world, v)) sound.ui('menuMove');
+    openPlanMenu() {
+      openPlanMenu(world);
+      sound.ui('menuOpen');
+    },
+    plan(type, p, facing) {
+      const name = BUILDINGS[type].name;
+      const at = planAt(world, type, p, facing);
+      const why = at ? at.why : 'Its door must face a road: place it by one, or turn it with R';
+      if (why || !at) {
+        sound.ui('denied');
+        notify(`No room for a ${name} here: ${why!.toLowerCase()}`);
+        return false;
+      }
+      const lack = buildShortfall(world, type);
+      if (Object.keys(lack).length) {
+        sound.ui('denied');
+        notify(`Not enough for a ${name}: need ${needText(lack)}`);
+        return false;
+      }
+      closeMenu(world);
+      const b = placeBuilding(world, at.want, type);
+      if (!b) return false;
+      notify(b.status === 'done' ? `${name} built` : `Construction of the ${name} is planned`);
+      return true;
+    },
+    openBuildingMenuAt(p) {
+      const b = buildingOn(world, p);
+      if (b && openBuildingMenu(world, b, fromStreet(world, streetOf(b.x), p).x)) sound.ui('menuOpen');
     },
     turnAround() {
       if (turnAround(world)) sound.ui('menuMove');
@@ -146,7 +181,8 @@ export function createActions(world: World, notify: Notify, _isTouch: () => bool
         return;
       }
       const m = world.menu;
-      if (m?.kind !== 'build') return;
+      // (a plan, from the strategy view, is placed with a click on the land: plan)
+      if (m?.kind !== 'build' || m.plan) return;
       // the menu stays open when the village can't pay, so another choice is one key away
       const type = BUILDING_TYPES[m.selection];
       const locked = whyLocked(world, type);

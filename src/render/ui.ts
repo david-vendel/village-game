@@ -6,7 +6,7 @@
 //   in world coordinates, scaled by `k` around their anchor so they stay
 //   readable when zoomed out.
 
-import { BUILDINGS, BUILDING_TYPES, HAS_FIRE, nameOf, nextUpgrade, ROLES, type Role, storageOf } from '../game/buildings';
+import { BUILDINGS, BUILDING_TYPES, type BuildingType, HAS_FIRE, nameOf, nextUpgrade, ROLES, type Role, storageOf } from '../game/buildings';
 import { stillAsked, upgradeLocked, whyLocked } from '../game/castle';
 import { thirsty } from '../game/livestock';
 import { merchantHere } from '../game/market';
@@ -163,7 +163,7 @@ function text(ctx: Ctx, s: string, x: number, y: number, size: number, color: st
 function fitSize(ctx: Ctx, s: string, size: number, maxW: number, bold = false): number {
   ctx.font = `${bold ? 'bold ' : ''}${size}px ${SERIF}`;
   const w = ctx.measureText(s).width;
-  return w > maxW ? Math.max(8, (size * maxW) / w) : size;
+  return w > maxW ? Math.max(Math.min(8, size), (size * maxW) / w) : size;
 }
 
 function button(ctx: Ctx, r: Rect, pressed: boolean, round = false): void {
@@ -287,7 +287,7 @@ export interface HudState {
   canBuild: boolean;
   /** Rider stands at a crossroads. */
   canTurn: boolean;
-  /** The village is shown from above: no small map. */
+  /** The strategy view is showing: no small map. */
   topView: boolean;
   /** Turned around on the street, looking across the road. */
   across: boolean;
@@ -298,7 +298,7 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
   text(ctx, 'Village Crown', 16, 34, 24, GOLD, 'left', true);
   const lines = st.touch
     ? ['Hold the arrows to ride, hammer to build, upgrade or destroy, ↻ to turn around and build across the road', 'Pinch or tap - + to zoom']
-    : ['A D / ← → ride   S / ↓ / Space build, upgrade or destroy   W / S turn at a crossroads   R turn around (build across the road)   Tab view from above   G grid   C construction   M sound', 'In the menu: WASD choose, Space confirm, Esc / Q close   - + zoom'];
+    : ['A D / ← → ride   S / ↓ / Space build, upgrade or destroy   W / S turn at a crossroads   R turn around (build across the road)   Tab strategy view   G grid   C construction   M sound', 'Building: 1–6 or click a kind, A D choose, Space build, Esc back   - + zoom'];
   const maxW = L.map.x - 28;
   let y = 54;
   for (const s of lines) {
@@ -338,6 +338,13 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
   // Menu: just the word, like New village
   text(ctx, 'Menu', L.menu.x + L.menu.w / 2, L.menu.y + L.menu.h - 3.5, 9, GOLD, 'center', true);
 
+  // the hammer: build, upgrade or destroy here (a tap or a click)
+  if (!world.menu) {
+    ctx.globalAlpha = st.canBuild ? 1 : 0.4;
+    button(ctx, L.build, false, true);
+    hammerIcon(ctx, L.build.x + L.build.w / 2, L.build.y + L.build.h / 2, L.build.w * 0.5);
+    ctx.globalAlpha = 1;
+  }
   if (st.touch && !world.menu) {
     button(ctx, L.left, st.leftHeld);
     arrowIcon(ctx, L.left, -1);
@@ -345,10 +352,6 @@ export function drawHud(ctx: Ctx, world: World, uiW: number, uiH: number, st: Hu
     arrowIcon(ctx, L.right, 1);
     button(ctx, L.turnAround, st.across);
     turnAroundIcon(ctx, L.turnAround);
-    ctx.globalAlpha = st.canBuild ? 1 : 0.4;
-    button(ctx, L.build, false, true);
-    hammerIcon(ctx, L.build.x + L.build.w / 2, L.build.y + L.build.h / 2, L.build.w * 0.5);
-    ctx.globalAlpha = 1;
     if (st.canTurn) {
       for (const [r, dir] of [[L.turnUp, -1], [L.turnDown, 1]] as const) {
         button(ctx, r, false);
@@ -487,40 +490,74 @@ export interface MenuLayout {
   build: Rect;
   cancel: Rect;
   titleY: number;
+  /** The top of the building menu's status band (STATUS_H high). */
+  statusY: number;
   infoY: number;
 }
 
-export function menuLayout(uiW: number, uiH: number): MenuLayout {
-  const n = BUILDING_TYPES.length;
-  const cols = Math.min(n, Math.max(3, Math.floor((uiW - 40) / 100)));
-  const rows = Math.ceil(n / cols);
-  const cardW = Math.min(104, (uiW - 40) / cols);
-  const chrome = 44 + 60 + 58; // title + info + buttons
-  const cardH = Math.max(70, Math.min(108, (uiH - 24 - chrome - (rows - 1) * 8) / rows));
-  const pw = cols * cardW + 24;
-  const ph = chrome + rows * cardH + (rows - 1) * 8;
-  const px = (uiW - pw) / 2;
-  const py = Math.max(12, uiH - ph - 12);
+/** The build bar's groups of buildings, left to right; a building type is in one. */
+export const BUILD_CATEGORIES: ReadonlyArray<{ name: string; types: readonly BuildingType[] }> = [
+  { name: 'Resources', types: ['woodcutter', 'stonecutter', 'well', 'sawmill'] },
+  { name: 'Food', types: ['farm', 'mill', 'bakery', 'brewery', 'pastrycook', 'dairy', 'smokehouse'] },
+  { name: 'Animals', types: ['chickenfarm', 'cowfarm', 'sheepfarm', 'horsefarm', 'stable'] },
+  { name: 'Logistics', types: ['warehouse', 'storehouse', 'market', 'road', 'intersection'] },
+  { name: 'Industry', types: ['blacksmith', 'weaver', 'tannery', 'chandler', 'saddler'] },
+  { name: 'Village', types: ['house', 'tavern', 'chapel', 'watchtower', 'reeve'] },
+];
+
+/** Which of BUILD_CATEGORIES a building type is in. */
+export const categoryOf = (type: BuildingType) => BUILD_CATEGORIES.findIndex((c) => c.types.includes(type));
+
+/**
+ * The build bar along the bottom of the screen: a row of categories with Close at its end and,
+ * once a category is open, a row of its buildings above it (`cards`, with `types` saying which
+ * each is) and above them what the chosen one is and costs, with Build.
+ */
+export interface BuildBarLayout {
+  panel: Rect;
+  categories: Rect[];
+  cancel: Rect;
+  cards: Rect[];
+  types: BuildingType[];
+  /** The line about the chosen building, and Build beside it (open category only). */
+  info: Rect | null;
+  build: Rect | null;
+}
+
+/** How big the build bar is drawn: its sizes and fonts are this share of their full size. */
+const BAR = 0.5;
+/** How big the building pictures on its cards are, likewise. */
+const BAR_IMG = 1;
+
+export function buildBarLayout(uiW: number, uiH: number, category: number | null): BuildBarLayout {
+  const n = BUILD_CATEGORIES.length;
+  const gap = 6 * BAR;
+  const closeW = 76 * BAR;
+  const catH = 40 * BAR;
+  const catW = Math.min(132 * BAR, (uiW - 24 - 16 - closeW - gap * n) / n);
+  const rowW = n * (catW + gap) + closeW;
+  const x0 = (uiW - rowW) / 2;
+  const catY = uiH - 12 - 8 * BAR - catH;
+  const categories = BUILD_CATEGORIES.map((_, i) => ({ x: x0 + i * (catW + gap), y: catY, w: catW, h: catH }));
+  const cancel = { x: x0 + n * (catW + gap), y: catY, w: closeW, h: catH };
+  let top = catY;
   const cards: Rect[] = [];
-  for (let i = 0; i < n; i++) {
-    const c = i % cols;
-    const r = Math.floor(i / cols);
-    // centre a partial last row
-    const inRow = r === rows - 1 ? n - r * cols : cols;
-    const rowX = px + 12 + ((cols - inRow) * cardW) / 2;
-    cards.push({ x: rowX + c * cardW + 3, y: py + 44 + r * (cardH + 8), w: cardW - 6, h: cardH });
+  const types = category === null ? [] : [...BUILD_CATEGORIES[category].types];
+  let info: Rect | null = null;
+  let build: Rect | null = null;
+  if (types.length) {
+    const cardW = Math.min(112 * BAR_IMG, (uiW - 40) / types.length);
+    const cardH = 24 * BAR + (BAR_IMG * Math.max(76, Math.min(104, (uiH - 200) / 2)) - 24 * BAR_IMG);
+    const cy = catY - 10 * BAR - cardH;
+    types.forEach((_, i) => cards.push({ x: uiW / 2 - (types.length * cardW) / 2 + i * cardW + gap / 2, y: cy, w: cardW - gap, h: cardH }));
+    const bw = 140 * BAR;
+    const iw = Math.min(uiW - 40, Math.max(rowW, 520 * BAR));
+    info = { x: (uiW - iw) / 2, y: cy - 10 * BAR - 40 * BAR, w: iw - bw - 8 * BAR, h: 40 * BAR };
+    build = { x: info.x + info.w + 8 * BAR, y: info.y, w: bw, h: 40 * BAR };
+    top = info.y;
   }
-  const infoY = py + 44 + rows * cardH + (rows - 1) * 8 + 24;
-  const bw = Math.min(150, (pw - 36) / 2);
-  const by = py + ph - 50;
-  return {
-    panel: { x: px, y: py, w: pw, h: ph },
-    cards,
-    build: { x: uiW / 2 + 6, y: by, w: bw, h: 38 },
-    cancel: { x: uiW / 2 - 6 - bw, y: by, w: bw, h: 38 },
-    titleY: py + 30,
-    infoY,
-  };
+  const pw = Math.min(uiW - 8, Math.max(rowW, info ? info.w + 148 * BAR : 0, cards.length ? cards[cards.length - 1].x + cards[cards.length - 1].w - cards[0].x : 0) + 24 * BAR);
+  return { panel: { x: (uiW - pw) / 2, y: top - 8 * BAR, w: pw, h: uiH - 4 - (top - 8 * BAR) }, categories, cancel, cards, types, info, build };
 }
 
 /** The menu at a building: a card for each thing that can be done to it, what it means, and Cancel / do it. */
@@ -529,10 +566,10 @@ export function buildingMenuLayout(uiW: number, uiH: number, n: number): MenuLay
   const cardH = 108;
   const pw = Math.min(uiW - 24, Math.max(340, n * cardW + 24));
   const w = Math.min(cardW, (pw - 24) / n);
-  const ph = 44 + cardH + 60 + 58;
+  const ph = 44 + STATUS_H + cardH + 60 + 58;
   const px = (uiW - pw) / 2;
   const py = Math.max(12, uiH - ph - 12);
-  const cards = Array.from({ length: n }, (_, i) => ({ x: uiW / 2 - (n * w) / 2 + i * w + 3, y: py + 44, w: w - 6, h: cardH }));
+  const cards = Array.from({ length: n }, (_, i) => ({ x: uiW / 2 - (n * w) / 2 + i * w + 3, y: py + 44 + STATUS_H, w: w - 6, h: cardH }));
   const bw = Math.min(150, (pw - 36) / 2);
   const by = py + ph - 50;
   return {
@@ -541,9 +578,13 @@ export function buildingMenuLayout(uiW: number, uiH: number, n: number): MenuLay
     build: { x: uiW / 2 + 6, y: by, w: bw, h: 38 },
     cancel: { x: uiW / 2 - 6 - bw, y: by, w: bw, h: 38 },
     titleY: py + 30,
-    infoY: py + 44 + cardH + 24,
+    statusY: py + 44,
+    infoY: py + 44 + STATUS_H + cardH + 24,
   };
 }
+
+/** The building menu's band under its title: what the building is doing (being built, how far, by whom). */
+const STATUS_H = 44;
 
 const OPTION_NAME: Record<BuildingOption, string> = { upgrade: 'Upgrade', demolishSection: 'Destroy this section', demolish: 'Destroy' };
 
@@ -560,6 +601,7 @@ function drawBuildingMenu(ctx: Ctx, world: World, uiW: number, uiH: number): voi
   panel(ctx, M.panel.x, M.panel.y, M.panel.w, M.panel.h, 0.9);
   const title = `The ${nameOf(b)}`;
   text(ctx, title, uiW / 2, M.titleY, 17, GOLD, 'center', true);
+  drawBuildingStatus(ctx, world, b, uiW / 2, M.statusY, M.panel.w - 32);
 
   menu.options.forEach((option, i) => {
     const r = M.cards[i];
@@ -650,61 +692,130 @@ function drawBuildingMenu(ctx: Ctx, world: World, uiW: number, uiH: number): voi
   text(ctx, act, M.build.x + M.build.w / 2, M.build.y + 25, fitSize(ctx, act, 15, M.build.w - 12, true), GOLD, 'center', true);
 }
 
-export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number): void {
+/**
+ * What a building is doing, in the menu's status band: being built (its stage, a progress bar,
+ * the materials brought and its builders), being pulled down, or standing (what it is for, and
+ * who works there).
+ */
+function drawBuildingStatus(ctx: Ctx, world: World, b: Building, cx: number, y: number, w: number): void {
+  const def = BUILDINGS[b.type];
+  const builders = employees(world, b).filter((p) => p.job!.role === 'builder').length;
+  const crew = builders ? `${builders} builder${builders > 1 ? 's' : ''} at work` : 'no builders free yet';
+  const bar = (share: number, colour: string, under = 0) => {
+    const bw = Math.min(260, w);
+    ctx.fillStyle = '#3a2e22';
+    ctx.fillRect(cx - bw / 2, y + 18, bw, 8);
+    if (under) {
+      ctx.fillStyle = 'rgba(232,200,114,0.3)';
+      ctx.fillRect(cx - bw / 2, y + 18, bw * under, 8);
+    }
+    ctx.fillStyle = colour;
+    ctx.fillRect(cx - bw / 2, y + 18, bw * Math.max(0, Math.min(1, share)), 8);
+  };
+  if (b.status === 'constructing' || b.site) {
+    const { stage } = constructionStage(b.progress);
+    const what = upgrading(b) && def.upgrade ? `Upgrading to a ${def.upgrade.name}` : STAGE_LABEL[stage];
+    text(ctx, `${what} — ${Math.round(b.progress * 100)}%`, cx, y + 12, 13, '#f3ead8', 'center', true);
+    bar(b.progress, GOLD, materialsAllow(b));
+    const cost = siteWork(b).cost;
+    const materials = RESOURCES.filter((r) => cost[r])
+      .map((r) => `${r} ${b.site?.delivered?.[r] ?? 0}/${cost[r]}`)
+      .join(' · ');
+    const line = `${materials ? `Brought: ${materials}  ·  ` : ''}${crew}`;
+    text(ctx, line, cx, y + 40, fitSize(ctx, line, 11, w), '#cbbfa4', 'center');
+  } else if (b.status === 'demolishing') {
+    text(ctx, 'Being pulled down', cx, y + 12, 13, '#f3ead8', 'center', true);
+    bar(b.demolition ? 1 - b.progress / b.demolition.from : 1, '#d07a5a');
+    text(ctx, crew, cx, y + 40, 11, '#cbbfa4', 'center');
+  } else {
+    text(ctx, def.purpose, cx, y + 14, fitSize(ctx, def.purpose, 13, w), '#f3ead8', 'center');
+    const staff = ROLES.filter((role) => jobsOf(b)[role]).map((role) => {
+      const n = employees(world, b).filter((p) => p.job!.role === role).length;
+      return `${ROLE_NAME[role]} ${n}/${jobsOf(b)[role]}`;
+    });
+    const storage = storageOf(b);
+    const stored = RESOURCES.filter((r) => storage[r]).map((r) => `${r} ${Math.round(b.stock[r])}/${storage[r]}`);
+    const line = [...staff, ...stored].join(' · ') || 'Standing';
+    text(ctx, line, cx, y + 34, fitSize(ctx, line, 11, w), '#cbbfa4', 'center');
+  }
+}
+
+export function drawBuildMenu(ctx: Ctx, world: World, uiW: number, uiH: number, category: number | null = null): void {
   if (world.menu?.kind === 'building') return drawBuildingMenu(ctx, world, uiW, uiH);
   const menu = world.menu;
   if (!menu) return;
-  const menuX = menu.x;
-  const M = menuLayout(uiW, uiH);
+  const L = buildBarLayout(uiW, uiH, category);
+  panel(ctx, L.panel.x, L.panel.y, L.panel.w, L.panel.h, 0.88);
 
-  ctx.fillStyle = 'rgba(20,14,8,0.35)';
-  ctx.fillRect(0, 0, uiW, uiH);
-  panel(ctx, M.panel.x, M.panel.y, M.panel.w, M.panel.h, 0.9);
-  text(ctx, 'What shall we build?', uiW / 2, M.titleY, 17, GOLD, 'center', true);
+  // the categories: the open one lit, those with nothing that fits here dimmed
+  BUILD_CATEGORIES.forEach((c, i) => {
+    const r = L.categories[i];
+    const open = i === category;
+    const any = c.types.some((t) => menu.fits[BUILDING_TYPES.indexOf(t)]);
+    button(ctx, r, open);
+    const label = `${i + 1}. ${c.name}`;
+    text(ctx, label, r.x + r.w / 2, r.y + r.h / 2 + 5 * BAR, fitSize(ctx, label, 14 * BAR, r.w - 10 * BAR, open), open ? GOLD : any ? '#f3ead8' : '#8a8378', 'center', open);
+  });
+  button(ctx, L.cancel, false);
+  text(ctx, 'Close', L.cancel.x + L.cancel.w / 2, L.cancel.y + L.cancel.h / 2 + 5 * BAR, 14 * BAR, '#f3ead8', 'center', true);
+  if (category === null) {
+    const hint = menu.plan ? 'Choose what kind of building to plan' : 'Choose what kind of building to put here';
+    text(ctx, hint, uiW / 2, L.panel.y - 8 * BAR, 13 * BAR, '#f3ead8', 'center', true);
+    return;
+  }
 
-  M.cards.forEach((r, i) => {
-    const type = BUILDING_TYPES[i];
+  // the open category's buildings
+  L.cards.forEach((r, k) => {
+    const type = L.types[k];
+    const i = BUILDING_TYPES.indexOf(type);
     const def = BUILDINGS[type];
-    const sel = i === world.menu!.selection;
+    const sel = i === menu.selection;
     ctx.save();
     ctx.fillStyle = sel ? 'rgba(232,200,114,0.22)' : 'rgba(255,240,210,0.06)';
-    roundRect(ctx, r.x, r.y, r.w, r.h, 6);
+    roundRect(ctx, r.x, r.y, r.w, r.h, 6 * BAR);
     ctx.fill();
     if (sel) {
       ctx.strokeStyle = GOLD;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2 * BAR;
       ctx.stroke();
     }
-    roundRect(ctx, r.x, r.y, r.w, r.h - 24, 6);
+    roundRect(ctx, r.x, r.y, r.w, r.h - 24 * BAR, 6 * BAR);
     ctx.clip();
     // what doesn't fit here is greyed out; what the village can't afford is shown faded
     const fits = menu.fits[i];
     if (fits && Object.keys(buildShortfall(world, type)).length) ctx.globalAlpha = 0.4;
-    const previewH = r.h - 34;
+    const previewH = r.h - 24 * BAR - 10 * BAR_IMG;
     // (a road piece is much longer than its picture)
-    const scale = Math.min(0.6, (r.w - 8) / ((type === 'road' ? 200 : def.width) * 1.3), previewH / (BUILDING_ART[type].height + 20));
-    if (fits) drawBuildingIcon(ctx, type, r.x + r.w / 2, r.y + r.h - 30, scale, world.time);
-    else drawBuildingIconGrey(ctx, type, r.x + r.w / 2, r.y + r.h - 30, scale);
+    const scale = Math.min(0.6 * BAR_IMG, (r.w - 8 * BAR_IMG) / ((type === 'road' ? 200 : def.width) * 1.3), previewH / (BUILDING_ART[type].height + 20));
+    if (fits) drawBuildingIcon(ctx, type, r.x + r.w / 2, r.y + r.h - 24 * BAR - 6 * BAR_IMG, scale, world.time);
+    else drawBuildingIconGrey(ctx, type, r.x + r.w / 2, r.y + r.h - 24 * BAR - 6 * BAR_IMG, scale);
     ctx.restore();
-    const label = `${i + 1}. ${def.name}`;
-    text(ctx, label, r.x + r.w / 2, r.y + r.h - 8, fitSize(ctx, label, 12, r.w - 6, sel), !fits ? '#8a8378' : sel ? GOLD : '#f3ead8', 'center', sel);
+    text(ctx, def.name, r.x + r.w / 2, r.y + r.h - 8 * BAR, fitSize(ctx, def.name, 12 * BAR, r.w - 6 * BAR, sel), !fits ? '#8a8378' : sel ? GOLD : '#f3ead8', 'center', sel);
   });
 
-  const def = BUILDINGS[BUILDING_TYPES[menu.selection]];
-  text(ctx, def.purpose, uiW / 2, M.infoY, fitSize(ctx, def.purpose, 14, M.panel.w - 24), '#f3ead8', 'center');
+  // what the chosen building is and costs, and Build (when it is one of this category's)
+  const type = BUILDING_TYPES[menu.selection];
+  if (!L.types.includes(type) || !L.info || !L.build) {
+    text(ctx, 'Choose a building', uiW / 2, L.info!.y + 25 * BAR, 14 * BAR, '#f3ead8', 'center');
+    return;
+  }
+  const def = BUILDINGS[type];
+  const I = L.info;
+  text(ctx, def.purpose, I.x + I.w / 2, I.y + 15 * BAR, fitSize(ctx, def.purpose, 14 * BAR, I.w - 12 * BAR), '#f3ead8', 'center');
   const time = world.constructionEnabled ? `Builds in ${+(def.buildTime / world.params.buildSpeed).toFixed(1)}s` : 'Builds instantly (construction off)';
-  const lack = buildShortfall(world, def.type);
+  const lack = buildShortfall(world, type);
   const cost = `Costs ${amounts(def.cost)}` + (Object.keys(lack).length ? ` — need ${amounts(lack)} more` : '');
-  const { w, d } = sizeOf(def.type);
-  const why = whyNotBuild(world, def.type, menuX) ?? whyLocked(world, def.type);
-  const size = def.type === 'intersection' ? 'a road across' : def.type === 'road' ? `the road ${w} squares on` : `${w} × ${d} squares`;
-  const info = `${cost}   ·   ${time}   ·   ${size}` + (why ? `   ·   ${why}` : '');
-  text(ctx, info, uiW / 2, M.infoY + 20, fitSize(ctx, info, 12, M.panel.w - 24), Object.keys(lack).length || why ? '#e89a7a' : '#cbbfa4', 'center');
-
-  button(ctx, M.cancel, false);
-  text(ctx, 'Cancel', M.cancel.x + M.cancel.w / 2, M.cancel.y + 25, 15, '#f3ead8', 'center', true);
-  button(ctx, M.build, true);
-  text(ctx, `Build ${def.name}`, M.build.x + M.build.w / 2, M.build.y + 25, fitSize(ctx, `Build ${def.name}`, 15, M.build.w - 12, true), GOLD, 'center', true);
+  const { w, d } = sizeOf(type);
+  // from above it is placed with the mouse, and the Build button turns it instead
+  const why = (menu.plan ? null : whyNotBuild(world, type, menu.x)) ?? whyLocked(world, type);
+  const size = type === 'intersection' ? 'a road across' : type === 'road' ? `the road ${w} squares on` : `${w} × ${d} squares`;
+  const info = `${cost}   ·   ${time}   ·   ${size}` + (why ? `   ·   ${why}` : '') + (menu.plan ? '   ·   Click the land to place it' : '');
+  text(ctx, info, I.x + I.w / 2, I.y + 34 * BAR, fitSize(ctx, info, 12 * BAR, I.w - 12 * BAR), Object.keys(lack).length || why ? '#e89a7a' : '#cbbfa4', 'center');
+  ctx.globalAlpha = menu.fits[menu.selection] ? 1 : 0.45;
+  button(ctx, L.build, true);
+  const act = menu.plan ? 'Turn it (R)' : `Build ${def.name}`;
+  text(ctx, act, L.build.x + L.build.w / 2, L.build.y + 26 * BAR, fitSize(ctx, act, 15 * BAR, L.build.w - 12 * BAR, true), GOLD, 'center', true);
+  ctx.globalAlpha = 1;
 }
 
 // --- World-anchored labels ------------------------------------------------------------

@@ -16,15 +16,15 @@ import { clockRate, timeOfDay } from './daynight';
 import { buildShortfall, putAway, takeFromWarehouses, upgradeShortfall, WAREHOUSE_START, warehouses } from './economy';
 import { createFarm, DEFAULT_WORK, farmWorkplace, updateCrops, type FarmState } from './farm';
 import { farmFieldSpots, syncFarmFields } from './land';
-import { BASE_Y, BLOCK, CELL_W, FIRST_PLOT_X, FRONT_LIMIT, PLOT_SPACING, ROAD_GRID, STREET_BAND_HALF, STREET_LENGTH, yAt } from './layout';
-import { alongCell, baseLand, blockStartX, cellKey, fieldCell, footprintAt, footprintOf, landUse, onRoadGrid, roadBlocked, roadInWay, siteX, sizeOfBuilding, streetCell, whyNotHere } from './grid';
+import { BASE_Y, BLOCK, CELL_W, FIRST_PLOT_X, FRONT_LIMIT, LOT_ROW, PLOT_SPACING, ROAD_GRID, STREET_BAND_HALF, STREET_LENGTH, yAt } from './layout';
+import { alongCell, baseLand, blockStartX, cellKey, cellOf, fieldCell, footprintAt, footprintOf, landUse, onRoadGrid, roadBlocked, roadInWay, siteX, sizeOf, sizeOfBuilding, streetCell, whyNotHere } from './grid';
 import { clearingFields, clearLand, plantWoods, gatherWorkplace, isGatherHut, setRoadToOpen, treeOnCell, updateForest, type Tree } from './nature';
 import { employees, laneY, nameFor, openings, release, staffBuildings, updateStrolls, type Animal, type Look, type Person } from './people';
 import { builderPositions, builders, createSite, siteWork, siteWorkplace, upgrading, type Site } from './site';
 import { demolitionWork, demolitionWorkplace, dropAll, materialsIn, tearDown, type Demolition } from './demolition';
 import { dropOnGround, type Pile } from './piles';
 import { RESOURCES, stockOf, type Resource, type Stock } from './resources';
-import { CROSS_PLOT, fromStreet, groundPoint, mainStreet, newStreet, plotPoint, lowestPlot, plotX, PLOT_FIRST, PLOT_LAST, PLOTS_PER_STREET, acrossX, isTwin, onRoadX, rideRange, roadOf, STREET_END_RUN, streetOf, streetRange, streetsAt, streetStart, turnFacing, type Junction, type Street, type Vec, streetAt } from './streets';
+import { backOf, CROSS_PLOT, fromStreet, groundPoint, mainStreet, newStreet, plotPoint, lowestPlot, plotX, PLOT_FIRST, PLOT_LAST, PLOTS_PER_STREET, acrossX, isTwin, onRoadX, rideRange, roadOf, STREET_END_RUN, streetOf, streetRange, streetsAt, streetStart, turnFacing, type Junction, type Street, type Vec, streetAt } from './streets';
 import { findPath, terrainSpeed } from './paths';
 import { mealsOf, sendToEat, updateHunger, updateVisits } from './hunger';
 import { serfPositions, transportHub, transportWorkplace, unplannedBoard, type ErrandBoard } from './transport';
@@ -160,7 +160,8 @@ export type BuildingOption = 'upgrade' | 'demolishSection' | 'demolish';
 /** The menu open where the rider is: what to build there (at world x), or what to do with the building there. */
 export type BuildMenu =
   /** fits: which of BUILDING_TYPES fit where the rider is, worked out once as the menu opens; only those can be chosen. */
-  | { kind: 'build'; x: number; selection: number; fits: boolean[] }
+  /** plan: opened in the strategy view, not where the rider is: the building chosen is placed where the player clicks on the land (planAt). */
+  | { kind: 'build'; x: number; selection: number; fits: boolean[]; plan?: true }
   | { kind: 'building'; buildingId: number; options: BuildingOption[]; selection: number; x: number };
 
 export interface GameEvent {
@@ -561,6 +562,13 @@ export function buildingAt(world: World, x: number): Building | undefined {
   if (plot && plot.buildingId !== null && Math.abs(plot.x - x) <= 1.5 * CELL_W) return getBuilding(world, plot.buildingId);
   const street = streetOf(x);
   return world.buildings.find((b) => b.type !== 'intersection' && streetOf(b.x) === street && Math.abs(b.x - x) <= (sizeOfBuilding(b).w * CELL_W) / 2);
+}
+
+/** The building on the land at map point p: whose lot it is on, or whose field (unless only lots are asked for; the strategy view's click). */
+export function buildingOn(world: World, p: Vec, fields = true): Building | undefined {
+  const c = cellOf(p);
+  const use = landUse(world).get(cellKey(c.c, c.r));
+  return use?.kind === 'building' || (fields && use?.kind === 'field') ? getBuilding(world, use.buildingId) : undefined;
 }
 
 /** Whether a building can be upgraded now: finished, with an upgrade it hasn't had, and not already being upgraded. */
@@ -1132,9 +1140,7 @@ export function openMenu(world: World): boolean {
   const x = world.rider.x;
   const b = buildingAt(world, x);
   if (b) {
-    if (!canDemolish(b)) return false;
-    const options: BuildingOption[] = [...(canUpgrade(b) ? ['upgrade' as const] : []), ...((b.size ?? 1) > 1 ? ['demolishSection' as const] : []), 'demolish'];
-    world.menu = { kind: 'building', buildingId: b.id, options, selection: 0, x };
+    if (!openBuildingMenu(world, b, x)) return false;
   } else {
     const fits = BUILDING_TYPES.map((t) => !whyNotBuild(world, t, x) && !whyLocked(world, t));
     if (!fits.includes(true)) return false;
@@ -1142,6 +1148,66 @@ export function openMenu(world: World): boolean {
   }
   world.rider.vx = 0;
   return true;
+}
+
+/** Open building b's menu (upgrade it, pull it or the section at world x down); false if nothing can be done to it. */
+export function openBuildingMenu(world: World, b: Building, x = b.x): boolean {
+  if (!canDemolish(b)) return false;
+  const options: BuildingOption[] = [...(canUpgrade(b) ? ['upgrade' as const] : []), ...((b.size ?? 1) > 1 ? ['demolishSection' as const] : []), 'demolish'];
+  world.menu = { kind: 'building', buildingId: b.id, options, selection: 0, x };
+  return true;
+}
+
+/** Open the build menu of the strategy view: anything can be chosen, and is then placed on the land (planAt). */
+export function openPlanMenu(world: World): void {
+  const fits = BUILDING_TYPES.map((t) => !whyLocked(world, t));
+  world.menu = { kind: 'build', x: world.rider.x, selection: fits[world.lastSelection] ? world.lastSelection : Math.max(0, fits.indexOf(true)), fits, plan: true };
+}
+
+/** The four ways a building can be turned when placed from above: its door facing south, west, north or east (map). */
+export const FACINGS: readonly Vec[] = [
+  { x: 0, y: -1 },
+  { x: -1, y: 0 },
+  { x: 0, y: 1 },
+  { x: 1, y: 0 },
+];
+
+/** Which of FACINGS a building on street s faces: its door looks onto the road, away from its lot. */
+export function facingOf(s: Street): number {
+  const b = backOf(s.dir);
+  return FACINGS.findIndex((f) => Math.round(f.x) === -Math.round(b.x) && Math.round(f.y) === -Math.round(b.y));
+}
+
+/**
+ * Where a building of this type goes when the player points at map point p
+ * with its door facing FACINGS[facing] (the strategy view): on the lots of
+ * the nearest street it would face, so its door opens onto that road. `want`
+ * is the x to build it at (placeBuilding), `x` where it stands, and `why` why
+ * it can't, or null. A road piece or a crossroads goes on whichever street p
+ * is by. Null when no street that way is near.
+ */
+export function planAt(world: World, type: BuildingType, p: Vec, facing: number): { street: number; want: number; x: number; why: string | null } | null {
+  const free = type === 'road' || type === 'intersection';
+  const { w, d } = sizeOf(type);
+  // the lot's rows, behind the road (px), and how far off them p may be
+  const front = (LOT_ROW - 0.5) * CELL_W;
+  const lo = free ? -2.5 * CELL_W : -1.5 * CELL_W;
+  const hi = front + (free ? 3 : d + 4) * CELL_W;
+  let best: { street: number; at: number; score: number } | null = null;
+  for (const s of world.streets) {
+    if (s.gone || (!free && facingOf(s) !== facing)) continue;
+    const f = fromStreet(world, s.index, p);
+    if (f.d < lo || f.d > hi) continue;
+    const { min, max } = streetRange(world, s.index);
+    if (f.x < min - w * CELL_W || f.x > max + w * CELL_W) continue;
+    const score = Math.abs(f.d - (front + (d * CELL_W) / 2));
+    if (!best || score < best.score) best = { street: s.index, at: f.x, score };
+  }
+  if (!best) return null;
+  // p is about the middle of the building: it starts at the block of its first cells
+  const want = free ? best.at : best.at - ((w - BLOCK) / 2) * CELL_W;
+  const x = placeAt(world, type, want);
+  return { street: best.street, want, x: x ?? want, why: x === null ? 'No room here' : whyNotBuild(world, type, want) ?? whyLocked(world, type) };
 }
 
 const menuSize = (menu: BuildMenu) => (menu.kind === 'build' ? BUILDING_TYPES.length : menu.options.length);

@@ -6,7 +6,7 @@ import { buildingAt, canDemolish, crossroadAt, roomToBuild, type World } from '.
 import { isTwin, streetOf } from '../game/streets';
 import { drawScene } from './scene';
 import { set3d } from './world3d';
-import { drawTopView } from './topview';
+import { drawStrategyView, type StrategyView } from './strategy';
 import { drawBuildMenu, drawHud, drawToasts, drawTurnFade, type Toast } from './ui';
 
 export { artMode, loadArt, type ArtMode } from './assets';
@@ -17,8 +17,9 @@ export { showGallery3d } from './gallery3d';
 export { setShowroom } from './showroom';
 export { setStyle as setStyle3d, STYLES as STYLES_3D, DEFAULT_STYLE as DEFAULT_STYLE_3D } from './build3d/style';
 export { cameraX } from './scene';
+export { strategyDistance, strategyGround, strategyPick } from './strategy';
 export { galloping, STRIDE as HORSE_STRIDE, strideAt } from './horse';
-export { buildingMenuLayout, hit, HUD_BUTTON, hudLayout, menuLayout, type Rect, type Toast } from './ui';
+export { BUILD_CATEGORIES, buildBarLayout, buildingMenuLayout, categoryOf, hit, HUD_BUTTON, hudLayout, type Rect, type Toast } from './ui';
 
 /** Everything the renderer needs besides the world: where the camera is and how the screen is scaled. */
 export interface FrameView {
@@ -43,13 +44,19 @@ export interface FrameView {
   toasts: Toast[];
   /** Overlay the land grid. */
   showGrid: boolean;
-  /** Show the village from above instead of from the street, at its own zoom. */
+  /** Show the strategy view (the village in 3D from above at an angle) instead of the street, at its own zoom and turn. */
   topView: boolean;
   topZoom: number;
+  topYaw: number;
+  /** In the strategy view: the map point the camera looks at, and the building being placed. */
+  topCenter: StrategyView['center'];
+  topGhost: StrategyView['ghost'];
   /** Where the mouse is (canvas px), if over the canvas: the grid names the cell under it, buildings show their info box. */
   hover?: { x: number; y: number } | null;
   /** Buildings in real-time 3D (else 2D art); the HUD's 2D · 3D button shows which. */
   view3d: boolean;
+  /** The build bar's open category (BUILD_CATEGORIES), or none yet. */
+  buildCategory: number | null;
   /** Frames per second and the slowest frame (ms) lately, shown when given (the panel's "frame rate"). */
   fps?: { fps: number; worstMs: number };
 }
@@ -62,7 +69,7 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
   ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
   if (v.topView) {
     ctx.setTransform(v.uiScale, 0, 0, v.uiScale, 0, 0);
-    drawTopView(ctx, world, v.uiW, v.uiH, v.topZoom, v.showGrid, v.hover ? { x: v.hover.x / v.uiScale, y: v.hover.y / v.uiScale } : null);
+    drawStrategyView(ctx, world, { uiW: v.uiW, uiH: v.uiH, px: v.uiScale, center: v.topCenter, zoom: v.topZoom, yaw: v.topYaw, grid: v.showGrid, hover: v.hover ? { x: v.hover.x / v.uiScale, y: v.hover.y / v.uiScale } : null, ghost: v.topGhost, hint: strategyHint(world, v) });
   } else {
   ctx.setTransform(v.worldScale, 0, 0, v.worldScale, 0, v.offsetY);
   drawScene(ctx, world, {
@@ -83,21 +90,31 @@ export function renderFrame(ctx: CanvasRenderingContext2D, world: World, v: Fram
 
   // screen UI, unaffected by zoom
   ctx.setTransform(v.uiScale, 0, 0, v.uiScale, 0, 0);
-  // from above a turn is just a turn: the map doesn't change, so no fade
+  // in the strategy view a turn is just a turn: the land doesn't change, so no fade
   if (!v.topView) drawTurnFade(ctx, world, v.uiW, v.uiH);
   const here = buildingAt(world, world.rider.x);
   drawHud(ctx, world, v.uiW, v.uiH, {
     touch: v.touch,
     leftHeld: v.leftHeld,
     rightHeld: v.rightHeld,
-    canBuild: here ? canDemolish(here) : roomToBuild(world, world.rider.x),
+    // in the strategy view anything can be chosen, and placed on the land
+    canBuild: v.topView || (here ? canDemolish(here) : roomToBuild(world, world.rider.x)),
     canTurn: !world.menu && !!crossroadAt(world),
     topView: v.topView,
     across: isTwin(streetOf(world.rider.x)),
   });
   drawToasts(ctx, v.toasts, world.time, v.uiW);
-  drawBuildMenu(ctx, world, v.uiW, v.uiH);
+  drawBuildMenu(ctx, world, v.uiW, v.uiH, v.buildCategory);
   if (v.fps) drawFps(ctx, v.fps, v.uiH);
+}
+
+/** The strategy view's bottom line: how to place the building chosen, or how to move about. */
+function strategyHint(world: World, v: FrameView): string {
+  if (v.topGhost) return v.touch ? 'Tap the land to show it there, tap again to plan it · the button turns it · drag to move' : 'Click the land to plan it · R turns it · WASD or drag to move · Esc to cancel';
+  if (world.menu) return '';
+  return v.touch
+    ? 'Drag to move · pinch to zoom · tap a building for its menu · the hammer to build'
+    : 'WASD or drag to move · Q / E or right drag to turn · wheel to zoom · click a building for its menu · B to build · F: to the rider · Tab: the street';
 }
 
 /** The frame-rate readout, bottom left. */

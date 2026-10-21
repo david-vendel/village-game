@@ -64,3 +64,8 @@ Check here first instead of searching. All of these are already installed:
 Shells: the Bash tool is Git Bash; PowerShell 5.1 is there too (no `&&`). A dev server started in
 the background can outlive its task: free a port with
 `Get-NetTCPConnection -LocalPort <port>` and stop its owning process.
+## Shipping
+
+After each piece of work, run `scripts/ship.sh "commit message"` (or `npm run ship -- "…"`): it
+commits everything, merges anything new from GitHub's `main`, builds, deploys to
+https://cellsculture.com/village-game/ and pushes.
